@@ -61,11 +61,6 @@ COPY biomeroworker/patch_biomero_runtime.py /tmp/patch_biomero_runtime.py
 COPY biomeroworker/patches /tmp/patches
 RUN /opt/omero/web/venv3/bin/python /tmp/patch_biomero_runtime.py
 
-# Keep proxied Metabase links inside the public OMERO origin.
-COPY web/patch_biomero_web_runtime.py /tmp/patch_biomero_web_runtime.py
-COPY web/patches /tmp/patches
-RUN /opt/omero/web/venv3/bin/python /tmp/patch_biomero_web_runtime.py
-
 # Install OMERO.biomero from main branch on GitHub (commented out for release):
 # ADD "https://api.github.com/repos/NL-BioImaging/OMERO.biomero/commits/main" /latest_commit_biomero
 # RUN git clone -b main https://github.com/NL-BioImaging/OMERO.biomero.git /opt/omero/web/OMERO.biomero \
