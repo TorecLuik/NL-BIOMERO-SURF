@@ -202,6 +202,22 @@ where dc.dashboard_id=6
 order by dc.id;
 ```
 
-## Runtime Web Patch
+## Runtime Web Patch (removed)
 
-`web/patch_biomero_web_runtime.py` patches pinned OMERO.biomero bundle files so Metabase links rendered as `localhost` or `127.0.0.1` stay under the public OMERO origin when embedded behind a reverse proxy. Remove this only when upstream OMERO.biomero handles proxied Metabase dashboard links.
+There is no longer a web runtime patch. `web/patch_biomero_web_runtime.py` used to rewrite Metabase links rendered as `localhost` or `127.0.0.1` so they stayed under the public OMERO origin behind a reverse proxy.
+
+OMERO.biomero 1.6.1 ships that behavior itself, so the patch was removed in the 2026-09 rebuild. The shipped bundle contains the equivalent rewrite:
+
+```javascript
+const t = new URL(n.href);
+["localhost","127.0.0.1"].includes(t.hostname)
+  ? (window.top.location.href = window.location.origin + t.pathname + t.search + t.hash, e.preventDefault())
+  : t.hostname === window.location.hostname && (window.top.location.href = n.href, e.preventDefault())
+```
+
+If proxied dashboard links break again, check the shipped bundle before reintroducing any patch:
+
+```bash
+docker compose exec -T omeroweb sh -c \
+  'grep -l "127.0.0.1" /opt/omero/web/venv3/lib/python3.12/site-packages/omero_biomero/static/omero_biomero/assets/main.*.js'
+```

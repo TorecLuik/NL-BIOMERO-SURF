@@ -216,3 +216,126 @@ BIOMERO importer picking up files under /data
 Metabase dashboard embedding in OMERO.web
 OMERO.insight connectivity on 4063/4064
 ```
+
+---
+
+# Status Quo (2026-09-15) — Start Here
+
+Everything in the plan above is done. This section is the handoff: what exists
+now, what is verified, and what is still open. Read this first when picking the
+work back up.
+
+## Where Things Are
+
+```text
+branch   prod-rebuild-2026-09   (pushed to origin)
+tag      prod-known-good-2026-09-15 -> a8b76d3c   rollback point, on spider-review
+backup   /data/storage_hpc/biomero-backup-2026-09-15
+stack    /home/sloev/local-share/opt/omero/NL-BIOMERO  (dev VM, running)
+```
+
+The dev VM stack is up on the new versions and can be left running or taken
+down with `docker compose down`; the named volumes persist either way.
+
+## Current Pins
+
+```text
+BIOMERO_VERSION           2.8.2      (was v2.5.3 in .env.shared, 2.7.0 in the running image)
+OMERO_BIOMERO_VERSION     1.6.1      (was 1.3.2)
+BIOMERO_IMPORTER_VERSION  1.4.2      (was 1.2.1)
+OMERO_FORMS_VERSION       2.3.1      (was 2.2.0)
+omero-server base         5.6.18     (worker was 5.6.17)
+omero-web-standalone base 5.33.1     (was 5.31.1)
+```
+
+Note `BIOMERO_VERSION` no longer carries a `v` prefix; it is passed straight to
+pip and PyPI versions are unprefixed.
+
+## What Is Verified
+
+Built, started, and exercised against live Spider on the dev VM:
+
+```text
+both images build from a clean checkout
+all 8 services start and stay up
+both Postgres databases accept queries
+OMERO.web login page responds on :4080
+worker reaches Spider Slurm from inside the container
+SlurmClient.from_config() loads every retired patch as upstream config
+generated Slurm params are correct and never mix --gres with --gpus
+three real Spider jobs COMPLETED: full A100, MIG, CPU-only
+```
+
+## What Is NOT Verified
+
+These need real images, a browser, or a fresh VM:
+
+```text
+end-to-end workflow run with results imported back into OMERO
+BIOMERO importer picking up files under /data
+Metabase dashboard embedding in OMERO.web
+OMERO.insight connectivity on 4063/4064
+bootstrap-prod.sh run on a genuinely bare VM (only exercised here, where
+  Docker, the repo, and the secrets already existed)
+```
+
+The last one matters most: the script's value is precisely that it works on a
+machine where nothing is set up yet, and that path has not been executed.
+
+## Open Item: Secrets Are Not Backed Up
+
+The backup contains databases, Metabase H2, and stack configs. It does **not**
+contain the runtime secret files, because the automated snapshot was blocked by
+a credential-safety guard:
+
+```text
+.env         deployment env with secrets   PRESENT on this VM, not backed up
+.env.keys    dotenvx private keys          PRESENT on this VM, not backed up
+.ssh/        Spider SSH key material       PRESENT on this VM, not backed up
+web/slurm-config.ini                       regenerable from the template
+```
+
+`.env` is the critical one here, because `.env.secrets` does **not** exist on
+this VM. The dotenvx re-render path in `deploy-local-stack.sh` is guarded on
+both `.env.shared` and `.env.secrets` being present, so on this machine it never
+runs and the live `.env` is the only copy of the deployment secrets. Losing it
+means reconstructing every secret by hand.
+
+`.env.keys` holds the dotenvx private keys. It is only useful together with an
+`.env.secrets`; keep it anyway, since it is what makes the encrypted-secrets
+workflow usable again if `.env.secrets` is restored from elsewhere.
+
+Archive all three by hand, encrypted, somewhere outside this VM. Everything else
+in the repo is reproducible; these files are not.
+
+## Known Quirks Worth Remembering
+
+**The previous prod image did not match `.env.shared`.** The running image
+contained biomero 2.7.0 and importer 1.3.0, while the tracked `.env.shared` said
+2.5.3 and 1.2.1. The local ignored `.env` was the real source of truth. Both
+files now carry the same pins; keep them in sync.
+
+**`pip check` fails in the worker image by design.** `biomero-importer` pins
+`ezomero==3.2.3` and `biomero[full]` pins `ezomero==1.1.1`, so the Dockerfile
+installs them in two separate pip runs and lets BIOMERO's pin win. Safe because
+the importer only calls `ezimport`, `get_group_id` and `post_map_annotation`,
+all present in 1.1.1, and calls `ezimport` with keyword arguments. The old
+known-good image had the same mismatch. Upstream aligns both on 3.2.3 in the 2.9
+line.
+
+**GPU overrides must use `_job_gres`, not `_job_gpus`.** Upstream fills `--gres`
+and `--gpus` gaps independently, so a workflow setting only `_job_gpus` still
+inherits the global MIG `--gres` and emits both flags, which Spider rejects.
+
+## Suggested Next Steps
+
+1. Archive the secret files listed above. Nothing else should start before this.
+2. Run an end-to-end workflow with real images and confirm results import back
+   into OMERO.
+3. Check Metabase embedding and the importer `/data` path in a browser.
+4. Provision the replacement prod VM and run `scripts/bootstrap-prod.sh` on it
+   from a bare state, which is the real test of the reproducibility work.
+5. If all of that passes, merge `prod-rebuild-2026-09`.
+
+If something regresses, roll back with `git checkout prod-known-good-2026-09-15`
+and the restore commands in the backup `MANIFEST.md`.

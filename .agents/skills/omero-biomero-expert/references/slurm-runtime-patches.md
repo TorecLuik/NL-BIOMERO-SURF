@@ -48,15 +48,12 @@ SPIDER_PROJECT
 spider.surf.nl
 /project/<project>/Share/biomero
 BIOMERO_GPU_PARTITION
-BIOMERO_GPUS
 BIOMERO_GPU_GRES
-BIOMERO_FORCE_GPU_WORKFLOWS
-BIOMERO_FORCE_GPU_ALL_WORKFLOWS
 ```
 
 For Spider, `slurm_conversion_partition` is intentionally blank. CPU-only workflows, conversions, and image-pull jobs should omit `--partition` so Spider routes them to the normal/default partition. Effective GPU jobs use explicit `slurm-config.ini`/UI workflow resources when present and fall back to env GPU defaults otherwise.
-Per-workflow env overrides use the uppercased workflow key with non-alphanumeric characters replaced by underscores, for example `BIOMERO_GPU_PARTITION_CELLPOSE` or `BIOMERO_GPU_GRES_FRACTAL_CELLPOSE_SAM_BIAFLOWS`.
-When a workflow is GPU-effective, GPU Slurm params are normalized so `--gres` and `--gpus` are never emitted together. Explicit UI/INI `*_job_partition`, `*_job_gres`, and `*_job_gpus` settings take precedence; env fills missing defaults and acts as a guardrail for known GPU-capable workflows that would otherwise run on CPU.
+Per-workflow GPU policy lives in `slurm-config.ini` as `<workflow>_use_gpu` and `<workflow>_job_<flag>`. The old `BIOMERO_*_<WORKFLOW_KEY>` env overrides were retired with the runtime patch and are no longer read.
+Explicit `<workflow>_job_*` settings take precedence; `BIOMERO_GPU_PARTITION` and `BIOMERO_GPU_GRES` are fallbacks that only fill flags a workflow has not already set.
 
 ## Runtime Patch File
 
@@ -120,22 +117,35 @@ permission denied
 
 ## GPU Behavior
 
-Effective GPU workflows are controlled by global defaults and optional per-workflow overrides:
+GPU-native workflows are marked per workflow in `slurm-config.ini`; the env vars are global fallbacks only:
 
 ```text
-BIOMERO_FORCE_GPU_WORKFLOWS=cellpose,stardist,stardist5d,fractal-cellpose-sam-biaflows,deconvolve_plate
-BIOMERO_GPU_PARTITION=gpu_a100_mig
-BIOMERO_GPU_GRES=gpu:a100_3g.20gb:1
-BIOMERO_GPUS=
-BIOMERO_GPU_PARTITION_DECONVOLVE_PLATE=gpu_a100_22c
-BIOMERO_GPU_GRES_DECONVOLVE_PLATE=none
-BIOMERO_GPUS_DECONVOLVE_PLATE=1
-BIOMERO_FORCE_GPU_ALL_WORKFLOWS=false
+slurm-config.ini
+  cellpose_use_gpu = True
+  cellpose_job_partition = gpu_a100_22c
+  cellpose_job_gres = gpu:a100:1
+  deconvolve_plate_use_gpu = True
+  deconvolve_plate_job_partition = gpu_a100_22c
+  deconvolve_plate_job_gres = gpu:a100:1
+
+.env / .env.shared
+  BIOMERO_INJECT_GPU_FLAG=true
+  BIOMERO_GPU_PARTITION=gpu_a100_mig
+  BIOMERO_GPU_GRES=gpu:a100_3g.20gb:1
 ```
 
-If a request explicitly sets device `cpu` or disables `use_gpu`, it should not receive GPU Slurm params. Otherwise GPU-native workflows default to `use_gpu=true`.
-UI/INI workflow settings such as `cellpose_job_partition`, `cellpose_job_gres`, and `cellpose_job_gpus` take precedence when explicitly configured. If both GRES and GPUS are present, GRES wins because Spider rejects `--gres` and `--gpus` together. When no explicit UI/INI GPU resource is present, `BIOMERO_GPU_GRES...` is emitted as `--gres=...` instead of `--gpus=...`. Use `none`, `false`, or `off` on a workflow-specific `BIOMERO_GPU_GRES_<WORKFLOW_KEY>` to clear an inherited global GRES and fall back to that workflow's `BIOMERO_GPUS_<WORKFLOW_KEY>`. This keeps common GPU workflows on MIG while leaving heavier workflows, such as `deconvolve_plate`, on full A100.
-Set `BIOMERO_FORCE_GPU_ALL_WORKFLOWS=true` only as an emergency/admin override to request the global GPU default for every workflow. It is useful when a workflow internally detects GPUs but has no `use_gpu` parameter; it is wasteful for CPU-only work and still respects explicit `device=cpu` or `use_gpu=false`.
+If a request explicitly sets device `cpu` or passes `use_gpu=false`, it does not receive GPU Slurm params. Otherwise the workflow's `<workflow>_use_gpu` value decides.
+
+Use `_job_gres` rather than `_job_gpus` for full-A100 overrides. Upstream fills `--gres` and `--gpus` gaps independently, so a workflow that sets only `_job_gpus` still inherits the global MIG `--gres` and emits both flags, which Spider rejects.
+
+Verify the effective parameters without submitting anything:
+
+```bash
+docker compose exec -T biomeroworker /opt/omero/server/venv3/bin/python -c "
+from biomero import SlurmClient
+c = SlurmClient.from_config()
+print(c.get_workflow_command('cellpose', 'latest', 'testdata', {})[0])"
+```
 
 ## Spider MIG Resources
 
