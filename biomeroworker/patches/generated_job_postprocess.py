@@ -1,15 +1,9 @@
 def _nl_biomero_normalize_generated_job_script(job_script: str) -> str:
-    """Add output verification to BIOMERO descriptor-generated Slurm scripts.
+    """Add output verification to a BIOMERO descriptor-generated Slurm script.
 
-    This helper is injected into ``biomero.slurm_client`` and handles the path
-    where BIOMERO builds a Slurm script directly from workflow descriptors
-    instead of cloning ``slurm_script_repo``. Keep it small: custom Git
-    repositories are used as provided and are not modified by NL-BIOMERO.
-
-    Upstream BIOMERO now emits the env-file loader itself when
-    ``env_file_submission`` is enabled, and the ``--nv`` GPU flag when
-    ``inject_gpu_flag`` is enabled, so this only adds ``set -eo pipefail`` and
-    the output check that upstream does not provide.
+    Injected into ``biomero.slurm_client``. Handles the path where BIOMERO
+    builds a script from workflow descriptors. Keep it small: a custom
+    ``slurm_script_repo`` is used as provided and is not modified.
     """
     if "set -eo pipefail" not in job_script:
         lines = job_script.splitlines(keepends=True)

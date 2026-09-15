@@ -56,7 +56,7 @@ RUN test -n "$OMERO_BIOMERO_VERSION" || (echo "OMERO_BIOMERO_VERSION build arg i
     && /opt/omero/web/venv3/bin/omero-biomero-setup
 
 # OMERO.biomero submits analyzer jobs from the web process, so the web image
-# needs the same BIOMERO Slurm compatibility patch as the worker image.
+# needs the same output-verification patch as the worker image.
 COPY biomeroworker/patch_biomero_runtime.py /tmp/patch_biomero_runtime.py
 COPY biomeroworker/patches /tmp/patches
 RUN /opt/omero/web/venv3/bin/python /tmp/patch_biomero_runtime.py

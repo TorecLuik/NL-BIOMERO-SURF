@@ -26,3 +26,6 @@ docs/_build_local/
 docs/venv/
 
 .analyzed
+
+__pycache__/
+*.pyc

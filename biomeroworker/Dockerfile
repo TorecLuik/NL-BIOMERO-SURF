@@ -42,31 +42,24 @@ RUN yum -y install ack
 
 # Install the importer first and BIOMERO second, in two separate pip runs.
 #
-# These two packages pin incompatible ezomero versions: biomero-importer wants
-# ezomero==3.2.3 while biomero[full] wants ezomero==1.1.1. A single pip install
-# fails outright with ResolutionImpossible, so the order here is deliberate and
-# lets BIOMERO's pin win, leaving ezomero 1.1.1 installed.
+# These packages pin incompatible ezomero versions: biomero-importer wants
+# ezomero==3.2.3, biomero[full] wants ezomero==1.1.1. A single pip install fails
+# with ResolutionImpossible, so the order is deliberate and lets BIOMERO's pin
+# win, leaving ezomero 1.1.1 installed.
 #
-# That is safe for the importer: it only calls ezomero.ezimport,
-# ezomero.get_group_id and ezomero.post_map_annotation, all of which exist in
-# 1.1.1, and it calls ezimport with keyword arguments, so the ln_s parameter
-# that 3.x drops is not a positional-argument hazard. `pip check` therefore
-# reports this as an unsatisfied requirement by design. The same tolerated
-# mismatch exists in the previous known-good production image.
+# Safe for the importer: it calls only ezomero.ezimport, ezomero.get_group_id
+# and ezomero.post_map_annotation, all present in 1.1.1, and calls ezimport with
+# keyword arguments, so the ln_s parameter absent in 3.x is not a positional
+# hazard. `pip check` reports the mismatch by design.
 #
-# Upstream resolves this in the 2.9 line, where biomero also moves to
-# ezomero==3.2.3; revisit this block when adopting biomero 2.9.
-#
-# The old "force zarr < 3" reason for splitting the installs is obsolete:
-# biomero-importer now requires zarr >= 3, biomero[full] pins zarr 3.1.5, and
-# omero-cli-zarr 0.8.0 no longer constrains zarr.
+# BIOMERO 2.9 moves to ezomero==3.2.3; collapse these into one pip run when
+# adopting it.
 RUN $VIRTUAL_ENV/bin/python -m pip install --upgrade pip \
     && $VIRTUAL_ENV/bin/python -m pip install biomero-importer==${BIOMERO_IMPORTER_VERSION} \
     && $VIRTUAL_ENV/bin/python -m pip install "biomero[full]==${BIOMERO_VERSION}"
 
-# Apply small compatibility patches after installing BIOMERO.
-# See patch_biomero_runtime.py for the Slurm/BIOMERO
-# runtime issues this keeps reproducible across image rebuilds.
+# Add workflow output verification to BIOMERO's generated Slurm job scripts.
+# See patch_biomero_runtime.py.
 COPY biomeroworker/patch_biomero_runtime.py /tmp/patch_biomero_runtime.py
 COPY biomeroworker/patches /tmp/patches
 RUN $VIRTUAL_ENV/bin/python /tmp/patch_biomero_runtime.py

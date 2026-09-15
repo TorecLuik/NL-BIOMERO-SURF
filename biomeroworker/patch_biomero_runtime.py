@@ -1,30 +1,20 @@
 """
-Compatibility patch for the BIOMERO version pinned by this deployment.
+Adds workflow output verification to BIOMERO's generated Slurm job scripts.
 
-Most of what this file used to patch is now supported by upstream BIOMERO and
-is configured in ``slurm-config.ini`` instead. See
-``setup_docs/patch_retirement_2026-09.md`` for the full mapping. What upstream
-now covers directly:
+A workflow container can print a Python traceback, exit zero, and leave
+`data/out` empty. Without a check, BIOMERO proceeds into import and hangs around
+90%. This injects `_nl_biomero_verify_outputs` so the job fails immediately
+instead.
 
-- `7z`/`7za` fallback                  -> ``slurm_zip_cmd``
-- idempotent remote `mkdir -p`         -> upstream default
-- per-job env files + script sourcing  -> ``env_file_submission``
-- conditional `--nv` and GPU resources -> ``inject_gpu_flag``, ``gpu_partition``,
-                                          ``gpu_gres``, ``gpu_gpus``
-- blank conversion partition handling  -> upstream truthiness check
-- pulls via Slurm, bounded resources   -> ``slurm_image_pull_via_sbatch``,
-                                          ``image_pull_cpus``, ``image_pull_mem``
-- project-local Apptainer temp/cache   -> ``apptainer_tmpdir``,
-                                          ``apptainer_cachedir``
+Applied in both the worker and web images, because OMERO.biomero submits
+analyzer jobs from the web process. Running it twice is a no-op.
 
-What remains here is the behavior upstream does not provide:
+Everything else this deployment needs is upstream BIOMERO configuration; see
+setup_docs/deployment.md. Do not add patches here for behavior that a
+slurm-config.ini or BIOMERO_* setting already provides.
 
-- Some workflow containers print a Python traceback but still exit zero and
-  leave `data/out` empty. Generated scripts verify that output files were
-  produced before BIOMERO enters the import stage, so failures surface
-  immediately instead of hanging later during import.
-
-Remove this when upstream BIOMERO verifies workflow outputs itself.
+If this fails after a BIOMERO upgrade, check whether upstream verifies outputs
+itself and delete this file rather than re-anchoring the patch.
 """
 
 from pathlib import Path
