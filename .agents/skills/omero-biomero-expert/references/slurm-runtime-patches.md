@@ -1,6 +1,42 @@
 # Slurm Runtime Patches
 
-This deployment carries compatibility patches for the pinned BIOMERO version and Spider/SURF Slurm behavior. Treat them as intentional runtime shims, not accidental local hacks.
+As of the 2026-09 rebuild (BIOMERO 2.8.2), almost all of the old runtime patches
+are retired. Upstream BIOMERO now supports these behaviors as configuration.
+See `setup_docs/patch_retirement_2026-09.md` for the full mapping.
+
+Only one patch remains: `biomeroworker/patches/generated_job_postprocess.py`
+appends `set -eo pipefail` and `_nl_biomero_verify_outputs` to
+descriptor-generated job scripts, because upstream still lets a workflow exit
+zero with an empty `data/out` and hang later during import.
+
+The Metabase link patch in `web/` is also gone; OMERO.biomero 1.6.1 ships the
+same localhost-rewrite behavior itself.
+
+## Upstream Settings That Replaced Patches
+
+```text
+BIOMERO_INJECT_GPU_FLAG        conditional --nv and GPU sbatch resources
+BIOMERO_GPU_PARTITION          fallback GPU partition
+BIOMERO_GPU_GRES               fallback --gres
+BIOMERO_ENV_FILE_SUBMISSION    per-job env files, sourced by generated scripts
+BIOMERO_IMAGE_PULL_VIA_SBATCH  run image pulls as Slurm jobs
+BIOMERO_PULL_CPUS/MEM          bound pull job resources
+BIOMERO_APPTAINER_TMPDIR       project-local Apptainer temp
+BIOMERO_APPTAINER_CACHEDIR     project-local Apptainer cache
+BIOMERO_SLURM_ZIP_CMD          7z/7za selection (default auto-detects both)
+```
+
+GPU policy is per workflow in `slurm-config.ini`:
+
+```text
+<workflow>_use_gpu = True      mark a workflow GPU-native
+<workflow>_job_<flag> = value  becomes --<flag>=value, wins over env fallbacks
+```
+
+Use `_job_gres` rather than `_job_gpus` for full-A100 overrides. Upstream fills
+`--gres` and `--gpus` gaps independently, so a workflow setting only
+`_job_gpus` still inherits the global MIG `--gres` and emits both flags, which
+Spider rejects.
 
 ## Spider Policy
 
