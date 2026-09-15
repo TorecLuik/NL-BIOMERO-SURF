@@ -40,9 +40,28 @@ ENV PATH="$PATH:/opt/bioformats2raw-0.12.0-rc1/bin"
 ## Add BIOMERO Omero Slurm Client
 RUN yum -y install ack
 
-# force zarr < 3 for compatibility w/ omero-cli-zarr by installing biomero AFTER the importer
+# Install the importer first and BIOMERO second, in two separate pip runs.
+#
+# These two packages pin incompatible ezomero versions: biomero-importer wants
+# ezomero==3.2.3 while biomero[full] wants ezomero==1.1.1. A single pip install
+# fails outright with ResolutionImpossible, so the order here is deliberate and
+# lets BIOMERO's pin win, leaving ezomero 1.1.1 installed.
+#
+# That is safe for the importer: it only calls ezomero.ezimport,
+# ezomero.get_group_id and ezomero.post_map_annotation, all of which exist in
+# 1.1.1, and it calls ezimport with keyword arguments, so the ln_s parameter
+# that 3.x drops is not a positional-argument hazard. `pip check` therefore
+# reports this as an unsatisfied requirement by design. The same tolerated
+# mismatch exists in the previous known-good production image.
+#
+# Upstream resolves this in the 2.9 line, where biomero also moves to
+# ezomero==3.2.3; revisit this block when adopting biomero 2.9.
+#
+# The old "force zarr < 3" reason for splitting the installs is obsolete:
+# biomero-importer now requires zarr >= 3, biomero[full] pins zarr 3.1.5, and
+# omero-cli-zarr 0.8.0 no longer constrains zarr.
 RUN $VIRTUAL_ENV/bin/python -m pip install --upgrade pip \
-    && $VIRTUAL_ENV/bin/python -m pip install --ignore-requires-python biomero-importer==${BIOMERO_IMPORTER_VERSION} \
+    && $VIRTUAL_ENV/bin/python -m pip install biomero-importer==${BIOMERO_IMPORTER_VERSION} \
     && $VIRTUAL_ENV/bin/python -m pip install "biomero[full]==${BIOMERO_VERSION}"
 
 # Apply small compatibility patches after installing BIOMERO.
