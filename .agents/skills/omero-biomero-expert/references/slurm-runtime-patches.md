@@ -101,6 +101,134 @@ If a request explicitly sets device `cpu` or disables `use_gpu`, it should not r
 UI/INI workflow settings such as `cellpose_job_partition`, `cellpose_job_gres`, and `cellpose_job_gpus` take precedence when explicitly configured. If both GRES and GPUS are present, GRES wins because Spider rejects `--gres` and `--gpus` together. When no explicit UI/INI GPU resource is present, `BIOMERO_GPU_GRES...` is emitted as `--gres=...` instead of `--gpus=...`. Use `none`, `false`, or `off` on a workflow-specific `BIOMERO_GPU_GRES_<WORKFLOW_KEY>` to clear an inherited global GRES and fall back to that workflow's `BIOMERO_GPUS_<WORKFLOW_KEY>`. This keeps common GPU workflows on MIG while leaving heavier workflows, such as `deconvolve_plate`, on full A100.
 Set `BIOMERO_FORCE_GPU_ALL_WORKFLOWS=true` only as an emergency/admin override to request the global GPU default for every workflow. It is useful when a workflow internally detects GPUs but has no `use_gpu` parameter; it is wasteful for CPU-only work and still respects explicit `device=cpu` or `use_gpu=false`.
 
+## Spider MIG Resources
+
+Current Spider A100 MIG capacity, verified on 2026-06-24:
+
+```text
+gpu_a100_mig  | gpu:a100_3g.20gb:4 | wn-ga-[01-03]
+gpu_a100_22c  | gpu:a100:2         | wn-gb-[01-05]
+```
+
+MIG node limits:
+
+```text
+MIG slices per node: 4
+CPUs per MIG node: 14
+RAM per MIG node: about 224 GiB
+Slurm default CPU per GPU/MIG: DefCpuPerGPU=3
+```
+
+Use `*_job_gres` for MIG, not `*_job_gpus`:
+
+```ini
+workflow_job_partition = gpu_a100_mig
+workflow_job_gres = gpu:a100_3g.20gb:1
+workflow_job_cpus-per-task = 3
+```
+
+Do not configure both `*_job_gres` and `*_job_gpus` for the same workflow. Spider rejects mixed `--gres` and `--gpus`; the runtime patch normalizes this, and explicit GRES wins.
+
+`*_job_mem` is system RAM, not VRAM. MIG VRAM comes from the GRES profile. `gpu:a100_3g.20gb:1` gives one CUDA device with about 20 GB VRAM. `gpu:a100_3g.20gb:2` gives two separate about-20 GB CUDA devices, not one combined 40 GB device.
+
+CPU requests are node-level, not per MIG slice:
+
+```text
+1 MIG: normal 3-4 CPUs, practical max 14 CPUs
+2 MIGs: normal 6-8 CPUs, practical max 14 CPUs
+3 MIGs: normal about 9 CPUs, practical max 14 CPUs
+4 MIGs: normal 12 CPUs, practical max 14 CPUs
+```
+
+Observed scheduler behavior:
+
+```text
+--gres=gpu:a100_3g.20gb:4 --cpus-per-task=16  -> rejected
+--gres=gpu:a100_3g.20gb:4 --cpus-per-task=14  -> accepted
+--gres=gpu:a100_3g.20gb:2 --cpus-per-task=8   -> completed; allocation had cpu=9, gres/gpu=2
+```
+
+Requesting 2 MIGs does not double the requested CPU count. Do not assume 8 CPUs plus 2 MIGs becomes 16 CPUs.
+
+CPU-only workflows can be scheduled on MIG nodes, but if they request `gpu:a100_3g.20gb:N` they reserve GPU capacity while using only CPU. Prefer leaving CPU-only workflows without a GPU partition/GRES unless intentionally using MIG nodes for spare CPU capacity.
+
+## Workflow GPU/MIG Compatibility
+
+Compatibility checks from source inspection and Slurm smoke tests on 2026-06-24:
+
+| Workflow | Type | Generally GPU runnable | MIG compatible | Operational implication |
+| --- | --- | --- | --- | --- |
+| `deconvolve_plate` | GPU | Yes | Yes | Runs on MIG correctly. Real BIOMERO/Slurm jobs completed on `gpu:a100_3g.20gb:1` and `:2`. |
+| `segmentation_cellpose4` | GPU | Yes | Yes | Runs on MIG. Torch 2.5.1 sees `NVIDIA A100-PCIE-40GB MIG 3g.20gb`; Cellpose4 CLI completed on one MIG and wrote masks. |
+| `cellpose` classic | GPU | Yes, full GPU only | No | Classic container is not MIG-compatible: Torch reports CUDA but `torch.cuda.device_count()` is 0 under MIG. Keep on full A100 if GPU is needed. |
+| `stardist` | GPU-intended | No, current container | No | Current container does not use GPU on MIG or full A100. TF 1.15 sees `libcuda`/A100 but cannot register GPU because CUDA 10/cuDNN 7 libraries are missing. Treat as CPU-only until rebuilt. |
+| `stardist5d` | GPU-intended | No, current container | No | Same as `stardist`; TF1 stack cannot load required CUDA 10/cuDNN 7 libs. Treat as CPU-only until rebuilt. |
+| `fractal-cellpose-sam-biaflows` | CPU-only as built | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `simple-zarr-plate-processor` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `cellexpansion` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `cellexpansion_advanced` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `spotcounting` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `nuclei_measurements` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+| `aggregates_measurements` | CPU-only | No | Yes, CPU-only | Can run on MIG nodes as CPU work, but requesting MIG GRES wastes GPU. Prefer CPU/default partition. |
+
+Known test results:
+
+```text
+deconvolve_plate, 2 MIGs:
+  Slurm job 36943688, COMPLETED, gpu_a100_mig, gres/gpu=2, cpu=9, mem=64G
+
+deconvolve_plate, 1 MIG:
+  Slurm job 36944263, COMPLETED, gpu_a100_mig, gres/gpu=1, cpu=9, mem=64G
+
+classic cellpose on MIG:
+  Slurm job 36944301, FAILED
+  RuntimeError: torch.cuda.device_count() is 0 under MIG
+
+segmentation_cellpose4 on MIG:
+  Slurm job 36944593, COMPLETED framework probe
+  torch 2.5.1, cuda_available=True, device_count=1
+  device_name=NVIDIA A100-PCIE-40GB MIG 3g.20gb
+  Slurm job 36944617, COMPLETED Cellpose4 CLI smoke test
+  log: TORCH CUDA version installed and working; using GPU (CUDA)
+  output: synthetic_cp_masks.tif
+
+stardist on full A100:
+  Slurm job 36944563, FAILED probe
+  TensorFlow 1.15.0 cannot load libcudart.so.10.0, libcublas.so.10.0,
+  libcufft.so.10.0, libcurand.so.10.0, libcusolver.so.10.0,
+  libcusparse.so.10.0, libcudnn.so.7
+  tf_cuda_gpu_available=False
+
+stardist5d on full A100:
+  Slurm job 36944564, FAILED probe
+  Same missing CUDA 10/cuDNN 7 libraries as stardist
+  tf_cuda_gpu_available=False
+```
+
+Recommended settings after these tests:
+
+```ini
+# Good MIG candidate
+deconvolve_plate_job_partition = gpu_a100_mig
+deconvolve_plate_job_gres = gpu:a100_3g.20gb:1
+deconvolve_plate_job_cpus-per-task = 4
+deconvolve_plate_job_mem = 64GB
+
+# Good MIG candidate
+segmentation_cellpose4_job_partition = gpu_a100_mig
+segmentation_cellpose4_job_gres = gpu:a100_3g.20gb:1
+segmentation_cellpose4_job_cpus-per-task = 4
+segmentation_cellpose4_job_mem = 16GB
+
+# Classic Cellpose should remain full GPU if GPU is needed
+cellpose_job_partition = gpu_a100_22c
+cellpose_job_gpus = 1
+cellpose_job_cpus-per-task = 8
+cellpose_job_mem = 16GB
+```
+
+Do not put `stardist`/`stardist5d` on full GPU merely because they are GPU-intended. Their current containers do not use full A100 either; rebuild with a matching CUDA/cuDNN stack or treat them as CPU-only.
+
 ## Output Verification
 
 Workflow result import should fail early if no outputs exist. Look for error text:
