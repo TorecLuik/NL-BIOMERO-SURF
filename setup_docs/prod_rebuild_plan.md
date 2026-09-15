@@ -139,3 +139,80 @@ restore encrypted env snapshot from /data/storage_hpc
 restore database dumps
 rebuild from pinned Dockerfiles
 ```
+
+## Validation Results (2026-09-15)
+
+Executed on the dev VM against live Spider.
+
+### Builds
+
+```text
+nl-biomero-biomeroworker  biomero 2.8.2, biomero-importer 1.4.2, zarr 3.1.5, ezomero 1.1.1
+nl-biomero-omeroweb       omero-biomero 1.6.1, biomero 2.8.2, omero-forms 2.3.1,
+                          omero-web 5.33.1, ezomero 3.2.3
+```
+
+Both images build from a clean checkout. The only pip warning is the documented
+ezomero mismatch in the worker, which is by design.
+
+### Stack
+
+All 8 services start and stay up: metabase, biomero-importer, biomeroworker,
+database, database-biomero, omeroserver, omeroweb, omeroworker-1.
+
+```text
+[ok] OMERO database accepts queries
+[ok] BIOMERO database accepts queries
+[ok] OMERO.web login page responds on :4080
+[ok] output-verification patch present in worker and web
+[ok] worker reaches Spider Slurm from inside the container
+```
+
+### Upstream settings load correctly
+
+`SlurmClient.from_config()` inside the running worker:
+
+```text
+inject_gpu_flag            True
+gpu_partition              gpu_a100_mig
+gpu_gres                   gpu:a100_3g.20gb:1
+gpu_gpus                   None
+env_file_submission        True
+image_pull_via_sbatch      True
+apptainer_tmpdir           /project/biomero/Share/biomero/.apptainer_tmp
+slurm_conversion_partition None
+use_gpu map                {'cellpose': True, 'deconvolve_plate': True}
+```
+
+### Generated Slurm parameters
+
+From the real client, not a simulation:
+
+```text
+cellpose          --partition=gpu_a100_22c --gres=gpu:a100:1
+deconvolve_plate  --partition=gpu_a100_22c --gres=gpu:a100:1
+cellexpansion     (none: Spider default partition)
+```
+
+No workflow emits `--gres` and `--gpus` together.
+
+### Real Spider jobs
+
+All three policies submitted and COMPLETED:
+
+```text
+41197941 nlb-val-a100 COMPLETED  cpu=8,gres/gpu:a100=1,gres/gpu=1,mem=16G
+41197942 nlb-val-mig  COMPLETED  cpu=3,gres/gpu=1,mem=16G
+41197943 nlb-val-cpu  COMPLETED  cpu=2,mem=4G
+```
+
+### Still to verify with real data
+
+These need images and a browser, so they are not covered above:
+
+```text
+end-to-end workflow run with results imported back into OMERO
+BIOMERO importer picking up files under /data
+Metabase dashboard embedding in OMERO.web
+OMERO.insight connectivity on 4063/4064
+```
