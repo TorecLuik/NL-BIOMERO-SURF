@@ -213,6 +213,47 @@ else
   smoke_fail "worker cannot reach Spider Slurm (check .ssh mount and known_hosts)"
 fi
 
+# 7. Observability, which deploy-local-stack.sh starts unless START_LOG_STACK=0.
+# Warn rather than fail: the analysis stack works without it.
+if [[ "${START_LOG_STACK:-1}" == "0" ]]; then
+  smoke_ok "log stack skipped (START_LOG_STACK=0)"
+else
+  # OpenSearch reports green or yellow when usable; yellow is normal on a
+  # single node, where replica shards stay unassigned.
+  OS_HEALTH="$(curl -fsS --max-time 20 http://localhost:9200/_cluster/health 2>/dev/null \
+    | sed -n 's/.*"status" *: *"\([a-z]*\)".*/\1/p')"
+  case "${OS_HEALTH}" in
+    green|yellow) smoke_ok "OpenSearch cluster is ${OS_HEALTH}" ;;
+    "")           warn "OpenSearch not responding on :9200; log viewer will be empty" ;;
+    *)            warn "OpenSearch cluster is ${OS_HEALTH}" ;;
+  esac
+
+  if curl -fsS -o /dev/null --max-time 25 http://localhost:5601/logs/api/status 2>/dev/null; then
+    smoke_ok "OpenSearch Dashboards responds under /logs"
+  else
+    warn "OpenSearch Dashboards not responding on :5601 (it can take a minute to start)"
+  fi
+
+  # Fluent Bit can run while failing to deliver, so check that documents are
+  # actually arriving rather than trusting container state.
+  if [[ -n "${OS_HEALTH}" ]]; then
+    COUNT_1="$(curl -fsS --max-time 20 http://localhost:9200/biomero-logs/_count 2>/dev/null \
+      | sed -n 's/.*"count" *: *\([0-9]*\).*/\1/p')"
+    if [[ -z "${COUNT_1}" ]]; then
+      warn "biomero-logs index missing; check the opensearch-init container"
+    else
+      sleep 20
+      COUNT_2="$(curl -fsS --max-time 20 http://localhost:9200/biomero-logs/_count 2>/dev/null \
+        | sed -n 's/.*"count" *: *\([0-9]*\).*/\1/p')"
+      if [[ -n "${COUNT_2}" && "${COUNT_2}" -gt "${COUNT_1}" ]]; then
+        smoke_ok "Fluent Bit is indexing into biomero-logs ($((COUNT_2 - COUNT_1)) new docs)"
+      else
+        warn "biomero-logs has ${COUNT_1} docs but is not growing; check: docker logs fluent-bit"
+      fi
+    fi
+  fi
+fi
+
 echo
 if [[ "${SMOKE_FAILURES}" -gt 0 ]]; then
   echo "Smoke tests finished with ${SMOKE_FAILURES} failure(s)." >&2
@@ -227,3 +268,4 @@ echo "  - run a CPU workflow, a MIG GPU workflow, and deconvolve_plate on full A
 echo "  - confirm workflow results import back into OMERO"
 echo "  - confirm the BIOMERO importer picks up files under /data"
 echo "  - open OMERO.web and check the Metabase dashboards embed"
+echo "  - open /logs and confirm the log viewer renders behind basic auth"

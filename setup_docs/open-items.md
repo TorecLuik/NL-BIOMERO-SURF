@@ -30,6 +30,7 @@ is covered by the automated smoke tests:
 end-to-end workflow run with results imported back into OMERO
 BIOMERO importer picking up files under /data
 Metabase dashboard embedding in OMERO.web
+the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
 scripts/bootstrap-prod.sh on a genuinely bare VM
 ```
@@ -120,6 +121,8 @@ gpu      cellpose --partition=gpu_a100_22c --gres=gpu:a100:1
          everything else   no partition, Spider default
          no workflow emits --gres and --gpus together
 jobs     full-A100, MIG and CPU-only probe jobs all COMPLETED on Spider
+logs     OpenSearch green, Dashboards serving /logs, Fluent Bit indexing;
+         biomero-logs holds ~51M docs going back to June
 ```
 
 GPU assignments were re-tested rather than carried over. All GPU-relevant
