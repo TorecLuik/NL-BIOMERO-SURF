@@ -69,6 +69,13 @@ doctor:
 	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null || grep -E '^BIOMERO_VERSION=' .env.shared); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
 	@for f in .env .ssh/id_rsa .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+	@echo "== Importer image =="
+	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env.shared | cut -d= -f2); \
+	got=$$(sudo docker run --rm --entrypoint sh nl-biomero-biomero-importer:latest -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
+	if [ -z "$$got" ]; then echo "  [warn] importer image not built yet"; \
+	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
+	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
+	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
 
 # -- stack ------------------------------------------------------------------
 
