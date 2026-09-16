@@ -1,46 +1,58 @@
 # Deploying to a New VM
 
-End-to-end checklist for a fresh SURF Research Cloud VM. Steps 1-4 are manual
-because they need credentials or root; step 5 is the automated part.
+Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
+one manual stop between them:
+
+```bash
+scripts/provision-vm.sh     # host packages, submodule, hostname, nginx
+# restore .env and .ssh/, open ports 4063 and 4064
+make deploy                 # build, start, smoke test
+```
 
 Budget about an hour, most of it image builds.
 
-## 1. Host prerequisites
+## What cannot be automated
 
-Nothing in this repository installs these, and `make deploy` refuses to run
-without them.
+Three things have to be done by hand, and `provision-vm.sh` checks all three
+rather than assuming them.
 
-```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-plugin git make apache2-utils
-sudo systemctl enable --now docker
-```
+**The secrets.** `.env` and `.ssh/` exist only in your archive. `.env` is the
+only copy of the deployment secrets; there is no `.env.secrets` to render it
+from. A script that could fetch these unattended would be a worse security
+posture than the manual step.
 
-Requirements:
+**Ports 4063 and 4064.** OMERO.insight connects directly to these. There is no
+host firewall on this VM, so they are opened in the SURF Research Cloud
+interface, which has no API reachable from inside the VM. Everything else is
+proxied through nginx on 443, so no other port needs opening.
 
-```text
-disk    40 GB free on /, at least 25 GB to build at all
-memory  16 GB
-docker  needs sudo; every make target already uses it
-```
+**The Spider key.** If the SSH key is new rather than restored, its public half
+has to be authorised on Spider for `SPIDER_USER`.
 
-## 2. Clone and fetch the submodule
+## 1. Clone
 
 ```bash
 sudo mkdir -p /opt/omero && sudo chown "$USER" /opt/omero
 cd /opt/omero
 git clone <repo-url> NL-BIOMERO
 cd NL-BIOMERO
-make init
 ```
 
-`make init` fetches the `biomero-importer` submodule and then runs `make doctor`.
-The importer image builds from that submodule, so the build fails on an empty
-directory without it.
+## 2. Prepare the host
+
+```bash
+scripts/provision-vm.sh
+```
+
+It installs docker, compose, git, make and htpasswd; fetches the
+`biomero-importer` submodule; sets the three per-VM hostname values from
+`hostname -f`; installs the nginx location block and reloads nginx. Then it
+reports on the three manual items and exits non-zero while any is outstanding.
+
+Flags: `--skip-packages` if the host already has them, `--no-nginx` to leave
+host nginx alone.
 
 ## 3. Restore the secrets
-
-These cannot be regenerated. Copy them from your archive:
 
 ```text
 .env            deployment secrets; the only copy
@@ -50,27 +62,14 @@ These cannot be regenerated. Copy them from your archive:
 ```bash
 chmod 600 .env .ssh/id_rsa
 chmod 644 .ssh/id_rsa.pub .ssh/known_hosts .ssh/config
+ssh -F .ssh/config spider 'sinfo -s | head'   # confirm the key works
 ```
 
-The public key must already be authorised on Spider for `SPIDER_USER`. Confirm
-before going further:
+## 4. Open the OMERO.insight ports
 
-```bash
-ssh -F .ssh/config spider 'sinfo -s | head'
-```
-
-## 4. Point the deployment at this host
-
-Three values are per-VM. A wrong CSRF origin lets the whole stack start and
-then blocks OMERO.web login with an error that does not name the cause.
-
-```bash
-make set-host HOST=$(hostname -f)
-```
-
-That rewrites `OMERO_CSRF_TRUSTED_ORIGINS`, `METABASE_SITE_URL` and
-`OBSERVABILITY_ROOT_URL` in `.env` and `.env.shared`. `make doctor` warns
-whenever they stop matching the host.
+In the SURF Research Cloud interface, open `4063` and `4064` to the networks
+that need OMERO.insight. Re-run `scripts/provision-vm.sh` to confirm; it probes
+both and warns while either is unreachable.
 
 ## 5. Deploy
 
@@ -79,27 +78,15 @@ make deploy
 ```
 
 Preflight, build, start, then smoke tests: services running, both databases
-answering, web login page, installed versions against the pins, the runtime
+answering, the web login page, installed versions against the pins, the runtime
 patch, Spider reachability, the log stack, and the public URL.
 
-## 6. Publish through host nginx
+If the host was not fully prepared, preflight says so and refuses to deploy.
 
-SURF owns the TLS server block; this repository only supplies the location
-block.
+## 6. Restore data, if this replaces an existing deployment
 
-```bash
-sudo cp nginx/omero-web.conf /etc/nginx/app-location-conf.d/omero-web.conf
-sudo htpasswd -c /etc/nginx/.htpasswd <admin-user>   # guards /logs
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-Without this the stack runs but is unreachable from outside the VM. `make
-doctor` reports whether the public URL answers.
-
-## 7. Restore data, if this replaces an existing deployment
-
-Volumes, the Metabase H2 database and stack configs come from the backup. The
-restore commands are in its `MANIFEST.md`:
+Volumes, the Metabase H2 database and stack configs come from the backup, with
+restore commands in its `MANIFEST.md`:
 
 ```text
 /data/storage_hpc/biomero-backup-2026-09-15/
@@ -107,7 +94,7 @@ restore commands are in its `MANIFEST.md`:
 
 Restore with the stack stopped (`make down`), then `make up`.
 
-## 8. Verify what the smoke tests cannot
+## 7. Verify what the smoke tests cannot
 
 These need real data or a browser:
 
@@ -119,6 +106,21 @@ open OMERO.web and check the Metabase dashboards embed
 open /logs and confirm the log viewer renders behind basic auth
 connect OMERO.insight on 4063/4064
 ```
+
+## Ports
+
+```text
+443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
+4063   public      OMERO.insight
+4064   public      OMERO.insight SSL
+4080   localhost   OMERO.web, reached through nginx
+3000   localhost   Metabase, reached through nginx
+5601   localhost   OpenSearch Dashboards, reached through nginx
+9200   localhost   OpenSearch API
+```
+
+Only 443, 4063 and 4064 should be reachable from outside. The rest are published
+on the host for nginx and local debugging.
 
 ## Spider
 

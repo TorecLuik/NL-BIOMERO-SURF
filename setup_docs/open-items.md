@@ -31,7 +31,7 @@ BIOMERO importer picking up files under /data
 Metabase dashboard embedding in OMERO.web
 the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
-the new-vm.md checklist end to end on a genuinely bare VM
+scripts/provision-vm.sh and the new-vm.md checklist on a genuinely bare VM
 ```
 
 The last one matters most. `make deploy` has only ever run here, where Docker,

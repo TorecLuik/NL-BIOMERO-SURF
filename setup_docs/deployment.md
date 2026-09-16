@@ -115,8 +115,24 @@ make deploy    # preflight, deploy, smoke test
 make doctor    # diagnose without changing anything
 ```
 
-For a brand-new VM, follow [new-vm.md](new-vm.md): it covers the host packages,
-secrets, hostname and nginx steps that `make deploy` cannot do itself.
+For a brand-new VM, follow [new-vm.md](new-vm.md). It is two commands with one
+manual stop: `make provision` prepares the host, then the secrets are restored
+and ports 4063/4064 opened in SURF Research Cloud, then `make deploy`.
+
+## Ports
+
+```text
+443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
+4063   public      OMERO.insight
+4064   public      OMERO.insight SSL
+4080   localhost   OMERO.web, reached through nginx
+3000   localhost   Metabase, reached through nginx
+5601   localhost   OpenSearch Dashboards, reached through nginx
+9200   localhost   OpenSearch API
+```
+
+There is no host firewall on this VM; 4063 and 4064 are opened in the SURF
+Research Cloud interface. Everything else reaches users through nginx on 443.
 
 The importer image builds from the `biomero-importer/` submodule, not from
 `BIOMERO_IMPORTER_VERSION`, so a fresh clone must run `make init` first or the

@@ -12,11 +12,12 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help init deploy doctor set-host up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init deploy doctor set-host up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Setup"
+	@echo "  make provision          prepare a fresh VM: packages, submodule, nginx"
 	@echo "  make init               fetch submodules and run preflight"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
@@ -48,6 +49,11 @@ help:
 	@echo "  make snellius           ssh to Snellius (needs an ssh host first)"
 
 # -- setup ------------------------------------------------------------------
+
+# Host preparation for a fresh VM. Stops before deploying, because the secrets
+# and the SURF Research Cloud port rules cannot be set from inside the VM.
+provision:
+	@./scripts/provision-vm.sh
 
 # A fresh clone has an empty biomero-importer/, and the importer image builds
 # from that directory, so this has to run before the first build.
