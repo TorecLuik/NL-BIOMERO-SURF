@@ -1,5 +1,7 @@
 # Open Items
 
+*Created 2026-09-15 · last updated 2026-09-16*
+
 Work in progress on `prod-rebuild-2026-09`: what is still open, and what the
 rebuild changed. Delete entries as they close, and delete this file once the
 branch merges. For how the deployment is configured, see

@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init deploy doctor set-host up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init deploy doctor set-host docs-dates up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -22,6 +22,7 @@ help:
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
+	@echo "  make docs-dates         refresh the date stamps in setup_docs/"
 	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
@@ -103,6 +104,23 @@ doctor:
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
+
+# Refresh the Created/last updated stamps in setup_docs/ from git history. The
+# stamp goes stale as soon as a doc is edited, so run this before committing
+# documentation changes.
+docs-dates:
+	@for f in setup_docs/*.md; do \
+		c=$$(git log --diff-filter=A --format=%ad --date=short -- "$$f" | tail -1); \
+		m=$$(git log -1 --format=%ad --date=short -- "$$f"); \
+		[ -n "$$c" ] || continue; \
+		if git diff --quiet -- "$$f" && git diff --cached --quiet -- "$$f"; then :; else m=$$(date +%F); fi; \
+		if head -4 "$$f" | grep -q '^\*Created '; then \
+			sed -i -E "s|^\*Created .*|*Created $$c · last updated $$m*|" "$$f"; \
+		else \
+			sed -i "1a\\\n*Created $$c · last updated $$m*" "$$f"; \
+		fi; \
+		printf '  %-38s %s -> %s\n' "$$(basename $$f)" "$$c" "$$m"; \
+	done
 
 # Rewrite the three per-VM hostname values. Run after cloning onto a new host:
 # a wrong CSRF origin lets the stack start but blocks OMERO.web login.
