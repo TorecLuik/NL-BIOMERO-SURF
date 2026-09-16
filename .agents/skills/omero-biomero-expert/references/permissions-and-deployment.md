@@ -26,6 +26,60 @@ metabase H2 files are commonly owned by uid/gid 2000
 
 Use `stat -c '%U:%G %a %n' <path>` and container `id` before changing ownership.
 
+## Ports and Public Reachability
+
+```text
+443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
+4063   public      OMERO.insight
+4064   public      OMERO.insight SSL
+4080   localhost   OMERO.web, reached through nginx
+3000   localhost   Metabase, reached through nginx
+5601   localhost   OpenSearch Dashboards, reached through nginx
+9200   localhost   OpenSearch API
+```
+
+There is no host firewall on this VM. `ufw` is inactive and the iptables INPUT
+policy is ACCEPT, so reachability is decided in the SURF Research Cloud
+interface, not on the host. If OMERO.insight cannot connect on 4063/4064 while
+the stack is healthy, the ports are almost certainly not open SURF-side; nothing
+on the VM will show a block.
+
+Check what actually answers from the VM:
+
+```bash
+for p in 443 4063 4064; do
+  timeout 5 bash -c "echo > /dev/tcp/$(hostname -f)/$p" 2>/dev/null \
+    && echo "$p open" || echo "$p closed/filtered"
+done
+```
+
+4080, 3000 and 5601 being filtered is correct; they are published on the host
+for nginx and local debugging only.
+
+If the public URL does not answer at all, the nginx location block is probably
+missing. `make doctor` reports this.
+
+## Per-VM Values
+
+Three settings are specific to the host and are wrong on any fresh clone:
+
+```text
+OMERO_CSRF_TRUSTED_ORIGINS
+METABASE_SITE_URL
+OBSERVABILITY_ROOT_URL
+```
+
+A wrong `OMERO_CSRF_TRUSTED_ORIGINS` is the nastiest failure here: every
+container starts, all smoke tests pass, and OMERO.web login fails with an error
+that does not name the cause. Fix all three at once:
+
+```bash
+make set-host HOST=$(hostname -f)
+make up
+```
+
+`make doctor` compares them against `hostname -f` and warns on any mismatch.
+
 ## Project-Local SSH
 
 Do not blindly mount host `~/.ssh` directly to the worker's final SSH directory. Host SSH permissions can be incompatible with the container user and can produce nested `.ssh/.ssh` state after restarts.
