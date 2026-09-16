@@ -40,16 +40,13 @@ cd "${PROJECT_ROOT_DIR}"
 echo "Reminder: access the web UIs via SSH port forwarding:"
 echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601 <user>@<server>"
 
-# Ensure the clear-text deployment env exists. Compose keeps using normal .env;
-# Dotenvx is only used to regenerate that local file from committed encrypted
-# public-facing credentials when needed.
-if [[ ! -f "${ENV_PATH}" && -f "${PROJECT_ROOT_DIR}/.env.shared" && -f "${PROJECT_ROOT_DIR}/.env.secrets" ]]; then
-  "${PROJECT_ROOT_DIR}/scripts/write-clear-env-from-dotenvx.sh"
-fi
-
+# .env holds the deployment secrets and is not in git. Seeding it from
+# .env.shared gives a stack that starts but has placeholder credentials, so
+# restore the real .env from your archive when rebuilding a live deployment.
 if [[ ! -f "${ENV_PATH}" ]]; then
   cp "${PROJECT_ROOT_DIR}/.env.shared" "${ENV_PATH}"
   chmod 600 "${ENV_PATH}"
+  echo "Seeded ${ENV_PATH} from .env.shared; restore the real secrets before going live."
 fi
 
 if ! grep -q '^SPIDER_USER=' "${ENV_PATH}"; then

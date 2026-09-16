@@ -12,9 +12,7 @@
 #
 # Prerequisites that must exist before running, because they cannot be
 # regenerated from the repository:
-#   .env         deployment env; on this deployment there is no .env.secrets,
-#                so .env itself is the only copy of the secrets
-#   .env.keys    dotenvx private keys, used with .env.secrets where one exists
+#   .env         deployment secrets; the only copy, so archive it somewhere safe
 #   .ssh/id_rsa  Spider SSH key registered with the SPIDER_USER account
 set -euo pipefail
 
@@ -65,16 +63,8 @@ fi
 # Secrets that cannot be reconstructed from the repository.
 if [[ -f .env ]]; then
   ok ".env present (deployment secrets)"
-elif [[ -f .env.shared && -f .env.secrets && -f .env.keys ]]; then
-  ok ".env absent but can be rendered from .env.secrets via dotenvx"
 else
-  fail ".env is missing and cannot be rendered; restore it from your secrets archive"
-fi
-
-if [[ -f .env.keys ]]; then
-  ok ".env.keys present (dotenvx private keys)"
-else
-  warn ".env.keys missing; only needed to re-render .env from an .env.secrets"
+  fail ".env is missing; restore it from your secrets archive before deploying"
 fi
 
 if [[ -f .ssh/id_rsa ]]; then

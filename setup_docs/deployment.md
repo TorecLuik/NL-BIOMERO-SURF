@@ -84,6 +84,9 @@ them. Everything is a thin wrapper, so the underlying `docker compose` call
 always works too.
 
 ```text
+make init                  fetch submodules, then run doctor
+make deploy                set up, start and smoke test the stack
+make doctor                diagnose drift, changes nothing
 make up / down / ps        whole stack, log stack included
 make build                 rebuild images and restart
 make rebuild:SVC           rebuild one service
@@ -106,9 +109,15 @@ before Spider rejects the job.
 ## Rebuilding
 
 ```bash
-scripts/bootstrap-prod.sh              # preflight, deploy, smoke test
-scripts/bootstrap-prod.sh --check-only # preflight only
+make init      # fresh clone only: fetch the biomero-importer submodule
+make deploy    # preflight, deploy, smoke test
+make doctor    # diagnose without changing anything
 ```
+
+The importer image builds from the `biomero-importer/` submodule, not from
+`BIOMERO_IMPORTER_VERSION`, so a fresh clone must run `make init` first or the
+build fails on an empty directory. Keep the submodule tag and the pin in step;
+`make doctor` warns when they diverge.
 
 The script checks prerequisites, deploys through `scripts/deploy-local-stack.sh`,
 then smoke tests services, databases, the web login page, installed versions,
@@ -117,13 +126,14 @@ the runtime patch, and Spider reachability.
 ### Files that cannot be regenerated
 
 ```text
-.env         deployment secrets; the only copy on this deployment
-.env.keys    dotenvx private keys, used with an .env.secrets where one exists
+.env         deployment secrets; the only copy
 .ssh/        Spider SSH key material
 ```
 
-There is no `.env.secrets` here, so `.env` itself must be archived. Everything
-else in the repo is reproducible from a clean checkout.
+Archive both somewhere safe. `deploy-local-stack.sh` seeds `.env` from
+`.env.shared` when it is absent, which gives a stack that starts but has
+placeholder credentials, so restore the real file when rebuilding a live
+deployment. Everything else in the repo is reproducible from a clean checkout.
 
 ## Slurm Job Scripts
 

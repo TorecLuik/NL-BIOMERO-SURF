@@ -12,10 +12,15 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help init deploy doctor up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
+	@echo "Setup"
+	@echo "  make init               fetch submodules and run preflight"
+	@echo "  make deploy             set up and start the stack, then smoke test"
+	@echo "  make doctor             diagnose configuration drift, changes nothing"
+	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
 	@echo "  make down               stop everything"
@@ -40,6 +45,30 @@ help:
 	@echo "Cluster"
 	@echo "  make spider             ssh to Spider from inside the worker"
 	@echo "  make snellius           ssh to Snellius (needs an ssh host first)"
+
+# -- setup ------------------------------------------------------------------
+
+# A fresh clone has an empty biomero-importer/, and the importer image builds
+# from that directory, so this has to run before the first build.
+init:
+	git submodule update --init --recursive
+	@$(MAKE) --no-print-directory doctor
+
+deploy:
+	@./scripts/bootstrap-prod.sh
+
+# Read-only. Checks the things that have actually gone wrong here: a missing or
+# stale submodule, pins that disagree between files, and images that do not
+# match the pins they were supposedly built from.
+doctor:
+	@echo "== Submodule =="
+	@if [ -f biomero-importer/Dockerfile ]; then 		printf '  [ ok ] biomero-importer checked out at %s\n' "$$(cd biomero-importer && git describe --tags 2>/dev/null || echo unknown)"; 		pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env.shared | cut -d= -f2); 		have=$$(cd biomero-importer && git describe --tags 2>/dev/null | sed 's/^v//'); 		if [ "$$have" = "$$pin" ]; then printf '  [ ok ] submodule matches BIOMERO_IMPORTER_VERSION (%s)\n' "$$pin"; 		else printf '  [warn] submodule is %s but pin is %s; the importer image would build from the wrong source\n' "$$have" "$$pin"; fi; 	else 		echo "  [FAIL] biomero-importer/ is empty; run: make init"; 	fi
+	@echo "== Pins =="
+	@for v in BIOMERO_VERSION OMERO_BIOMERO_VERSION BIOMERO_IMPORTER_VERSION OMERO_FORMS_VERSION; do 		sh=$$(grep -E "^$$v=" .env.shared 2>/dev/null | cut -d= -f2); 		lo=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); 		if [ -z "$$lo" ]; then printf '  [ ok ] %-26s %s (.env.shared only)\n' "$$v" "$$sh"; 		elif [ "$$sh" = "$$lo" ]; then printf '  [ ok ] %-26s %s\n' "$$v" "$$sh"; 		else printf '  [warn] %-26s .env.shared=%s but .env=%s; .env wins at build time\n' "$$v" "$$sh" "$$lo"; fi; 	done
+	@echo "== Installed vs pins =="
+	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null || grep -E '^BIOMERO_VERSION=' .env.shared); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
+	@echo "== Required files =="
+	@for f in .env .ssh/id_rsa .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
 
 # -- stack ------------------------------------------------------------------
 

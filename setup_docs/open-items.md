@@ -10,8 +10,7 @@ branch merges. For how the deployment is configured, see
 **Archive the secret files.** They exist only on this VM and are in no backup:
 
 ```text
-.env         deployment secrets; there is no .env.secrets, so this is the only copy
-.env.keys    dotenvx private keys
+.env         deployment secrets; the only copy
 .ssh/        Spider SSH key material
 ```
 
