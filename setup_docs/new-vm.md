@@ -11,6 +11,10 @@ make deploy                 # build, start, smoke test
 
 Budget about an hour, most of it image builds.
 
+Most of this could become a Research Cloud catalog item, so that creating a
+workspace does it instead. See [catalog-item-migration.md](catalog-item-migration.md)
+for what that would replace and what it would not.
+
 ## What cannot be automated
 
 Three things have to be done by hand, and `provision-vm.sh` checks all three

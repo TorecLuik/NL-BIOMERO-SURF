@@ -38,6 +38,13 @@ The last one matters most. `make deploy` has only ever run here, where Docker,
 the repo, the secrets and nginx already existed. `setup_docs/new-vm.md` writes
 down the manual steps around it, but that sequence is itself unverified.
 
+## Planned
+
+Turning the deployment into a Research Cloud catalog item, so that creating a
+workspace replaces most of `new-vm.md`. Scoped in
+[catalog-item-migration.md](catalog-item-migration.md), not started. Five open
+questions there need answering before any component is written.
+
 ## Then
 
 Provision the replacement prod VM, run `scripts/bootstrap-prod.sh` on it from a
