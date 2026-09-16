@@ -20,7 +20,7 @@ metabase           dashboards embedded in OMERO.web
 
 ## Observability
 
-`opensearch-compose.yml` is a second compose project, started automatically by
+`opensearch-compose.yml` holds the log stack, started automatically by
 `scripts/deploy-local-stack.sh` unless `START_LOG_STACK=0`:
 
 ```text
@@ -30,12 +30,15 @@ fluent-bit             tails ./logs and indexes into biomero-logs
 opensearch-init        one-shot; installs the index template, then exits 0
 ```
 
-Because it is a separate compose project, `docker compose up -d` on the main
-stack does not start it. Start or check it explicitly:
+Both compose files share one project name, derived from the directory, so
+`docker compose ps` lists the log stack alongside the core services. But
+`docker compose up -d` only starts what is in the files it was given, so running
+it without `-f opensearch-compose.yml` leaves the log stack down while `ps` still
+shows it. That is how it ends up stopped unnoticed. `make up` starts both.
 
 ```bash
+make up                                          # or:
 sudo docker compose -f opensearch-compose.yml up -d
-sudo docker compose -f opensearch-compose.yml ps
 curl -s localhost:9200/_cluster/health
 curl -s 'localhost:9200/_cat/indices?v'
 ```
@@ -53,9 +56,9 @@ count stops rising. `scripts/bootstrap-prod.sh` checks exactly that.
 script starts it. Use it only if replacing OpenSearch, and do not run both, since
 both tail `./logs`.
 
-No container in either project sets a restart policy, so nothing comes back
-after a host reboot. The same is true of the main stack; bring the host back up
-with `scripts/bootstrap-prod.sh`.
+No container sets a restart policy, so nothing comes back after a host reboot.
+The same is true of the core services; bring the host back up with `make up` or
+`scripts/bootstrap-prod.sh`.
 
 ## Versions
 
@@ -73,6 +76,32 @@ Base images: `openmicroscopy/omero-server:5.6.18` for the server and workers,
 `openmicroscopy/omero-web-standalone:5.33.1` for web.
 
 `BIOMERO_VERSION` has no `v` prefix; it is passed straight to pip.
+
+## Everyday Commands
+
+A `Makefile` wraps the commands that get typed most. `make` on its own lists
+them. Everything is a thin wrapper, so the underlying `docker compose` call
+always works too.
+
+```text
+make up / down / ps        whole stack, log stack included
+make build                 rebuild images and restart
+make rebuild:SVC           rebuild one service
+make logs / logs:SVC       tail everything, or follow one service
+make shell:SVC             shell in a container
+make check / smoke         preflight, or full deploy and smoke test
+make gpu                   effective Slurm params per workflow
+make config                BIOMERO settings as the worker resolves them
+make spider                ssh to Spider from inside the worker
+make psql / psql-biomero   psql into either database
+```
+
+Service-scoped targets use a colon, not a slash: `logs/omeroweb` would collide
+with the real `logs/` directory and make would treat it as already built.
+
+Run `make gpu` after changing GPU configuration. It shows the parameters BIOMERO
+will actually submit, which is where a `--gres` and `--gpus` conflict shows up
+before Spider rejects the job.
 
 ## Rebuilding
 
