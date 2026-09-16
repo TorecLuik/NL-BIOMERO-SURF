@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help init deploy doctor up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help init deploy doctor set-host up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -20,6 +20,7 @@ help:
 	@echo "  make init               fetch submodules and run preflight"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
+	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
@@ -69,6 +70,26 @@ doctor:
 	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null || grep -E '^BIOMERO_VERSION=' .env.shared); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
 	@for f in .env .ssh/id_rsa .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+	@echo "== Public hostname =="
+	@host=$$(hostname -f 2>/dev/null); \
+	envfile=.env; [ -f "$$envfile" ] || envfile=.env.shared; \
+	bad=0; \
+	for k in OMERO_CSRF_TRUSTED_ORIGINS METABASE_SITE_URL OBSERVABILITY_ROOT_URL; do \
+		val=$$(grep -E "^$$k=" "$$envfile" 2>/dev/null | cut -d= -f2-); \
+		if [ -z "$$val" ]; then printf '  [warn] %s is not set in %s\n' "$$k" "$$envfile"; bad=1; \
+		elif printf '%s' "$$val" | grep -qF "$$host"; then printf '  [ ok ] %-28s matches %s\n' "$$k" "$$host"; \
+		else printf '  [warn] %-28s does not contain %s\n' "$$k" "$$host"; bad=1; fi; \
+	done; \
+	if [ "$$bad" = "1" ]; then echo "         these are per-VM values; fix them with: make set-host HOST=$$host"; fi
+	@echo "== Public URL =="
+	@host=$$(hostname -f 2>/dev/null); \
+	code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -k "https://$$host/webclient/login/" 2>/dev/null); \
+	case "$$code" in \
+		200|302) printf '  [ ok ] https://%s/webclient/login/ answers %s\n' "$$host" "$$code" ;; \
+		000|"")  printf '  [warn] https://%s did not answer; is the nginx location block installed?\n' "$$host"; \
+		         echo "         sudo cp nginx/omero-web.conf /etc/nginx/app-location-conf.d/ && sudo nginx -t && sudo systemctl reload nginx" ;; \
+		*)       printf '  [warn] https://%s/webclient/login/ returned %s\n' "$$host" "$$code" ;; \
+	esac
 	@echo "== Importer image =="
 	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env.shared | cut -d= -f2); \
 	got=$$(sudo docker run --rm --entrypoint sh nl-biomero-biomero-importer:latest -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
@@ -76,6 +97,19 @@ doctor:
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
+
+# Rewrite the three per-VM hostname values. Run after cloning onto a new host:
+# a wrong CSRF origin lets the stack start but blocks OMERO.web login.
+set-host:
+	@test -n "$(HOST)" || { echo "usage: make set-host HOST=my.vm.example.org"; exit 2; }
+	@for f in .env .env.shared; do \
+		[ -f "$$f" ] || continue; \
+		sed -i -E "s|^OMERO_CSRF_TRUSTED_ORIGINS=.*|OMERO_CSRF_TRUSTED_ORIGINS=[\"https://$(HOST)\"]|" "$$f"; \
+		sed -i -E "s|^METABASE_SITE_URL=.*|METABASE_SITE_URL=https://$(HOST)/metabase|" "$$f"; \
+		sed -i -E "s|^OBSERVABILITY_ROOT_URL=.*|OBSERVABILITY_ROOT_URL=https://$(HOST)/logs/|" "$$f"; \
+		printf 'updated %s\n' "$$f"; \
+	done
+	@echo "Restart to apply: make up"
 
 # -- stack ------------------------------------------------------------------
 

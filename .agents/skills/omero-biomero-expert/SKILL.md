@@ -63,7 +63,7 @@ Read only the relevant reference before acting:
 - [references/slurm-and-gpu.md](references/slurm-and-gpu.md): Spider/Slurm behavior, GPU and MIG policy, per-workflow GPU assignment, generated job scripts, image pulls and Apptainer, the output-verification patch.
 - [references/importer-analyzer-storage.md](references/importer-analyzer-storage.md): BIOMERO.importer, analyzer-to-importer result flow, `/data` path invariants, `.analyzed`/`.processed`, shared storage, import order polling, importer logs.
 
-Deployment configuration lives outside this skill, in `setup_docs/deployment.md`: versions, GPU policy, the runtime patch, observability, and how to rebuild. `setup_docs/open-items.md` tracks what is still open on the current branch.
+Deployment configuration lives outside this skill, in `setup_docs/deployment.md`: versions, GPU policy, the runtime patch, observability, and how to rebuild. `setup_docs/new-vm.md` is the end-to-end checklist for standing up a fresh VM, including the host packages, secrets, hostname and nginx steps that `make deploy` cannot do itself. `setup_docs/open-items.md` tracks what is still open on the current branch.
 
 ## Converter and Importer Code
 

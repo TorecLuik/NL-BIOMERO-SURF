@@ -73,6 +73,29 @@ else
   fail ".ssh/id_rsa missing; restore the Spider key from the backup first"
 fi
 
+# Public ingress. nginx is host-managed on SURF Research Cloud, so this only
+# reports; it never edits host configuration.
+NGINX_LOCATION=/etc/nginx/app-location-conf.d/omero-web.conf
+if [[ -f "${NGINX_LOCATION}" ]]; then
+  ok "nginx location block installed"
+else
+  warn "nginx location block not installed; the stack will run but stay unreachable from outside"
+  warn "  sudo cp nginx/omero-web.conf ${NGINX_LOCATION} && sudo nginx -t && sudo systemctl reload nginx"
+fi
+
+# Per-VM hostname values. A wrong CSRF origin lets the stack start but blocks
+# OMERO.web login, with an error that does not name the cause.
+PUBLIC_HOST="$(hostname -f 2>/dev/null || true)"
+ENV_FOR_HOST=.env; [[ -f "${ENV_FOR_HOST}" ]] || ENV_FOR_HOST=.env.shared
+if [[ -n "${PUBLIC_HOST}" ]] \
+   && grep -qE '^OMERO_CSRF_TRUSTED_ORIGINS=' "${ENV_FOR_HOST}" \
+   && ! grep -E '^OMERO_CSRF_TRUSTED_ORIGINS=' "${ENV_FOR_HOST}" | grep -qF "${PUBLIC_HOST}"; then
+  warn "OMERO_CSRF_TRUSTED_ORIGINS does not mention ${PUBLIC_HOST}; login will fail"
+  warn "  make set-host HOST=${PUBLIC_HOST}"
+else
+  ok "hostname values match ${PUBLIC_HOST:-unknown}"
+fi
+
 # Version pins the build depends on.
 if [[ -f .env.shared ]]; then
   ok "pins: $(grep -E '^(BIOMERO_VERSION|OMERO_BIOMERO_VERSION|BIOMERO_IMPORTER_VERSION)=' .env.shared | tr '\n' ' ')"
@@ -242,6 +265,18 @@ else
       fi
     fi
   fi
+fi
+
+# 8. The public URL, which is what users actually hit. Warn rather than fail:
+# the stack is healthy even when host nginx is not configured yet.
+if [[ -n "${PUBLIC_HOST}" ]]; then
+  PUB_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -k \
+    "https://${PUBLIC_HOST}/webclient/login/" 2>/dev/null || true)"
+  case "${PUB_CODE}" in
+    200|302) smoke_ok "public URL answers ${PUB_CODE}: https://${PUBLIC_HOST}/" ;;
+    000|"")  warn "https://${PUBLIC_HOST}/ did not answer; check the nginx location block" ;;
+    *)       warn "https://${PUBLIC_HOST}/webclient/login/ returned ${PUB_CODE}" ;;
+  esac
 fi
 
 echo

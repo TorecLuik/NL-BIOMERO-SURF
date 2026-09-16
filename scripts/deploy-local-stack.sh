@@ -95,10 +95,18 @@ if [[ -z "${SPIDER_PROJECT:-}" ]]; then
   fi
 fi
 
-# Fetch the linked importer repository if it is not present yet.
+# The importer image builds from the biomero-importer/ submodule, so fetch it
+# through git rather than cloning a URL by hand. An earlier version cloned a
+# different fork here, which silently produced an importer built from the wrong
+# source whenever the submodule was missing.
 if [[ ! -f "${IMPORTER_DOCKERFILE_PATH}" ]]; then
-  rm -rf "${IMPORTER_DIR}"
-  git clone https://github.com/NL-BioImaging/BIOMERO.importer.git "${IMPORTER_DIR}"
+  git -C "${PROJECT_ROOT_DIR}" submodule update --init --recursive
+fi
+
+if [[ ! -f "${IMPORTER_DOCKERFILE_PATH}" ]]; then
+  echo "biomero-importer/ is still empty after submodule update." >&2
+  echo "Fetch it manually, then re-run: git submodule update --init --recursive" >&2
+  exit 1
 fi
 
 # Create the bind-mounted host paths the stack expects.

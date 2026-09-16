@@ -110,9 +110,13 @@ before Spider rejects the job.
 
 ```bash
 make init      # fresh clone only: fetch the biomero-importer submodule
+make set-host HOST=$(hostname -f)   # new host only
 make deploy    # preflight, deploy, smoke test
 make doctor    # diagnose without changing anything
 ```
+
+For a brand-new VM, follow [new-vm.md](new-vm.md): it covers the host packages,
+secrets, hostname and nginx steps that `make deploy` cannot do itself.
 
 The importer image builds from the `biomero-importer/` submodule, not from
 `BIOMERO_IMPORTER_VERSION`, so a fresh clone must run `make init` first or the

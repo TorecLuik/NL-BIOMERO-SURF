@@ -31,12 +31,12 @@ BIOMERO importer picking up files under /data
 Metabase dashboard embedding in OMERO.web
 the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
-scripts/bootstrap-prod.sh on a genuinely bare VM
+the new-vm.md checklist end to end on a genuinely bare VM
 ```
 
-The last one matters most. The script's whole purpose is working where nothing
-is set up yet, and it has only ever run here, where Docker, the repo and the
-secrets already existed.
+The last one matters most. `make deploy` has only ever run here, where Docker,
+the repo, the secrets and nginx already existed. `setup_docs/new-vm.md` writes
+down the manual steps around it, but that sequence is itself unverified.
 
 ## Then
 
