@@ -189,3 +189,32 @@ Common in-container paths:
 /auto-importer/tests/Barbie2.tif
 /auto-importer/tests/Barbie3.tif
 ```
+
+## Importer Version Comes From the Submodule
+
+The importer image builds from the `biomero-importer/` git submodule, not from
+`BIOMERO_IMPORTER_VERSION`. That pin only controls what the worker and web
+images install from pip. The two can disagree silently:
+
+```text
+.env.shared:  BIOMERO_IMPORTER_VERSION=1.4.2   <- worker and web, via pip
+submodule:    v1.3.0                           <- the importer image
+```
+
+`make doctor` reports both the submodule tag and the version inside the built
+image. Check it after any version bump.
+
+To move the importer:
+
+```bash
+cd biomero-importer && git fetch --tags && git checkout v<version>
+cd .. && make rebuild:biomero-importer
+make doctor
+```
+
+Moving the submodule is not enough on its own. The image keeps whatever source
+it was last built from until it is rebuilt, so `doctor` can report a correct
+submodule and a stale image at the same time.
+
+A fresh clone has an empty `biomero-importer/` and the build fails outright.
+Run `make init` first.

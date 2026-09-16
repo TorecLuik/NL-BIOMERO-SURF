@@ -60,6 +60,8 @@ Host biomero-prod
 
 Use `ssh -F .ssh/config biomero-prod ...` if the alias is not in `~/.ssh/config`.
 
+The current `biomero-prod` entry points at a deleted VM and refuses connections. Commands in this skill that target it are the right pattern but cannot run until a replacement is provisioned and the `HostName` is updated. Until then, everything runs on the dev workspace.
+
 ## Deploy Script Permission Workarounds
 
 `scripts/deploy-local-stack.sh` creates expected bind-mount paths and applies pragmatic permissions:

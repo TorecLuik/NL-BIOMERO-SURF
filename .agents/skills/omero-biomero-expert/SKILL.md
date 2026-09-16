@@ -11,21 +11,26 @@ Never print secrets. Mask `.env`, container env, Metabase datasource JSON, passw
 
 ## First Checks
 
-Confirm the host. In this workspace, `biomero-prod` may live in the repo-local SSH config, so use `ssh -F .ssh/config biomero-prod ...` when the default SSH config does not resolve it.
+Start with the Makefile. `make` lists every target; these three answer most questions before any manual inspection:
 
 ```bash
-ssh -F .ssh/config biomero-prod 'hostname; whoami; pwd'
-ssh -F .ssh/config biomero-prod 'cd /opt/omero/NL-BIOMERO && sudo docker compose ps'
+make ps       # all containers, log stack included
+make doctor   # read-only: submodule, pin and image drift
+make config   # BIOMERO settings as the worker resolves them
 ```
+
+`make doctor` is the fastest way to find the failure modes this deployment actually hits: a stale `biomero-importer` submodule, `.env` and `.env.shared` disagreeing on pins, or an image that does not match the pin it was supposedly built from.
 
 Known paths:
 
 ```text
-prod stack: /opt/omero/NL-BIOMERO
 dev workspace: /home/sloev/local-share/opt/omero/NL-BIOMERO
+prod stack:    /opt/omero/NL-BIOMERO
 ```
 
-Docker often requires `sudo`. If `docker ps` fails on `/var/run/docker.sock`, retry with `sudo docker ...`.
+There is currently no production VM. The `biomero-prod` host in `.ssh/config` points at a deleted machine and refuses connections; ignore it until a replacement is provisioned and the entry is repointed.
+
+Docker requires `sudo` here. If `docker ps` fails on `/var/run/docker.sock`, retry with `sudo docker ...`; every `make` target already does.
 
 Core service names:
 
@@ -57,6 +62,8 @@ Read only the relevant reference before acting:
 - [references/metabase-dashboards.md](references/metabase-dashboards.md): BIOMERO Analyze/Import iframe failures, dashboard IDs, embedding secrets, H2 inspection, datasource credential repair, signed embed smoke tests.
 - [references/slurm-and-gpu.md](references/slurm-and-gpu.md): Spider/Slurm behavior, GPU and MIG policy, per-workflow GPU assignment, generated job scripts, image pulls and Apptainer, the output-verification patch.
 - [references/importer-analyzer-storage.md](references/importer-analyzer-storage.md): BIOMERO.importer, analyzer-to-importer result flow, `/data` path invariants, `.analyzed`/`.processed`, shared storage, import order polling, importer logs.
+
+Deployment configuration lives outside this skill, in `setup_docs/deployment.md`: versions, GPU policy, the runtime patch, observability, and how to rebuild. `setup_docs/open-items.md` tracks what is still open on the current branch.
 
 ## Converter and Importer Code
 
