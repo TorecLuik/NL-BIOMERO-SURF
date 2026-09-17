@@ -1,6 +1,6 @@
 # Open Items
 
-*Created 2026-09-15 · last updated 2026-09-16*
+*Created 2026-09-15 · last updated 2026-09-17*
 
 Work in progress on `prod-rebuild-2026-09`: what is still open, and what the
 rebuild changed. Delete entries as they close, and delete this file once the
@@ -35,6 +35,16 @@ the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
 scripts/provision-vm.sh and the new-vm.md checklist on a genuinely bare VM
 ```
+
+The first two now have browser-based procedures and public test data:
+[pipeline-tests.md](pipeline-tests.md) and [reference-data.md](reference-data.md).
+They still need a browser and live Spider, so they remain unrun.
+
+Three registered workflows (`stardist5d`, `spotcounting`,
+`aggregates_measurements`) cannot be tested at all with the current two
+reference images: one needs a Z-stack or time series, the other two need an
+aggregate mask that nothing here produces. Gaps are listed in
+[reference-data.md](reference-data.md).
 
 The last one matters most. `make deploy` has only ever run here, where Docker,
 the repo, the secrets and nginx already existed. `setup_docs/new-vm.md` writes
@@ -100,6 +110,19 @@ command.
 
 ### Problems found along the way
 
+- Two cellpose runs failed on 2026-09-16, neither caused by the rebuild: one fed
+  a `(3,2,2048,2048)` stack to a 2D-only workflow, the other ran on a
+  by-reference image whose source had been deleted. Both failure modes, and how
+  to avoid them, are in [pipeline-tests.md](pipeline-tests.md).
+- Images 51 and 257 (`7-1.czi`) were deleted as unrecoverable: imported by
+  reference from `/data/fig7_RSAdetection_16w/`, which no longer exists, and the
+  2026-09-15 backup had archived the dangling symlinks rather than the pixels.
+  Public replacements are in [reference-data.md](reference-data.md).
+- A transfer task that fails during ZARR export still reports CREATED, so the
+  error surfaces two steps later as a misleading
+  `SLURM_Remote_Conversion.py` ValidationException. Upstream behaviour, not
+  configuration; [pipeline-tests.md](pipeline-tests.md) says where the real
+  cause is logged.
 - A single `pip install` of `biomero-importer` and `biomero[full]` fails with
   ResolutionImpossible over conflicting ezomero pins. The two-step install is
   deliberate; see `deployment.md`.
