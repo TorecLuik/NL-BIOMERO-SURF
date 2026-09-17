@@ -81,18 +81,15 @@ fresh `.env` from it, and refuses to start when the two disagree.
 It is mode 0600 beside the database files it opens, so it is no more exposed
 than they are. `scripts/volume-identity.sh` is the only thing that writes it.
 
-**`slurm-config.ini` is not here.** It lives in the repository at
-`web/slurm-config.ini`, gitignored and rendered from the committed
-`web/slurm-config-template.ini` by `make render-config`, which every deploy also
-runs. It is mode 0666 because the containers bind-mount it read-write.
+`slurm-config.ini` is not on the volume. It lives in the repository at
+`web/slurm-config.ini`, gitignored, rendered from the committed
+`web/slurm-config-template.ini` by `make render-config` and by every deploy. It
+is mode 0666 because the containers bind-mount it read-write.
 
-It used to live on the volume, on the grounds that the OMERO.biomero admin UI
-rewrites it from the `omeroweb` container and so it was deployment state. The UI
-can still write it, but those edits are deliberately not preserved: the next
-render overwrites them, and a change worth keeping belongs in the template,
-where it is reviewable and reaches every VM. Everything the file contains is
-derivable from the template plus `.env`, so nothing about it has to travel with
-the data.
+The OMERO.biomero admin UI can write that file from the `omeroweb` container,
+and those edits are not preserved: the next render overwrites them. A change
+worth keeping belongs in the template, where it is reviewable and reaches every
+VM.
 
 Nothing else on the volume is configuration. `.env` is an ordinary file in the
 repository, per-VM and gitignored, copied from `.env.example`; `.ssh/` holds the

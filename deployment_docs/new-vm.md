@@ -74,8 +74,8 @@ host nginx alone.
 ## 3. Create this VM's secrets
 
 `.env` and `.ssh/` belong to the VM, not to the volume. Neither is in git, and
-neither is restored from the storage volume: a volume carrying a previous
-machine's `.env` would hand this one that machine's hostname and pins.
+neither comes from the storage volume: `.env` carries this machine's hostname
+and pins, and the cluster key is an authorisation granted on Spider.
 
 ```bash
 cp .env.example .env        # then fill in every value marked CHANGE ME

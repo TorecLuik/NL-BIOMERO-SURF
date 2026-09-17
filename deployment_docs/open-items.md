@@ -107,6 +107,20 @@ from each workflow's descriptor, and converter images are built on Slurm.
 **Added `scripts/bootstrap-prod.sh`.** Preflight, deploy, smoke test in one
 command.
 
+**Narrowed what travels with the volume.** An earlier layout kept `.env`,
+`.ssh/` and `slurm-config.ini` in `config/` on the storage volume and symlinked
+the repository at them. Only what is fixed by the data belongs there, which is
+`volume-identity` alone:
+
+- `.env` and `.ssh/` are per-VM. A fresh VM adopting a volume's `.env` silently
+  inherited the previous machine's hostname and pins, and the two copies drifted
+  with nothing to say which was authoritative. `deploy-local-stack.sh` no longer
+  links them, and the stale copies were deleted from this volume.
+- `slurm-config.ini` is rendered from the committed template plus `.env`, so it
+  is reproducible rather than state. It sat on the volume because the
+  OMERO.biomero admin UI rewrites it; those edits are now deliberately
+  transient. `make link-config` became `make render-config`.
+
 ### Problems found along the way
 
 Upstream behaviour that is not fixable here is collected in
