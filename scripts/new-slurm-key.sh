@@ -86,7 +86,10 @@ if [[ -e "${KEY}" ]]; then
   echo "Kept the previous key as ${BACKUP}"
 fi
 
-ssh-keygen -t ed25519 -N '' -C "slurm-access@$(hostname -f 2>/dev/null || hostname)" -f "${KEY}" >/dev/null
+# The comment is a label, not an address. Spider's key registration form
+# rejects anything shaped like an email, and "user@host.domain" is exactly that
+# shape, so the host is joined with a dash instead of an @.
+ssh-keygen -t ed25519 -N '' -C "slurm-access-$(hostname -f 2>/dev/null || hostname)" -f "${KEY}" >/dev/null
 chmod 600 "${KEY}"
 chmod 644 "${KEY}.pub"
 echo "Generated ${KEY}"
