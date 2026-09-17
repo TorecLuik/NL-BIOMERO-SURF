@@ -6,10 +6,11 @@ Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
 one manual stop between them:
 
 ```bash
-# attach the storage volume in the portal first -- it carries the data
-# and the secrets. See storage-architecture.md.
+# attach the storage volume in the portal first -- it carries the data and
+# the credentials that unlock it. See storage-architecture.md.
 make provision              # host packages, submodule, hostname, nginx
-make init                   # submodules, and link .env/.ssh at the volume
+cp .env.example .env        # fill in every CHANGE ME, then make new-key
+make init                   # submodules, rendered config, hostname, /logs auth
 # open ports 4063 and 4064
 make set-host HOST=$(hostname -f)
 make deploy                 # build, start, smoke test
@@ -32,8 +33,8 @@ missing.
 credentials that unlock it, so nothing deploys without it. Creating and
 attaching it is dashboard work: a volume attaches to one workspace at a time,
 and attaching to a running workspace means pausing it first. `.env` and `.ssh/`
-are *not* on the volume: they belong to the VM, and only `volume-identity` and
-`slurm-config.ini` travel with the data.
+are *not* on the volume: they belong to the VM, and `volume-identity` is the
+only thing that travels with the data.
 
 **Ports 4063 and 4064.** OMERO.insight connects directly to these. There is no
 host firewall on this VM, so they are opened in the SURF Research Cloud
@@ -79,13 +80,13 @@ machine's `.env` would hand this one that machine's hostname and pins.
 ```bash
 cp .env.example .env        # then fill in every value marked CHANGE ME
 make new-key                # the cluster key, if it is not being reused
-make link-config            # or make init, which also runs this
+make render-config          # or make init, which also runs this
 make set-host HOST=$(hostname -f)
 ```
 
-`make link-config` points `web/slurm-config.ini` at the volume's copy. It is the
-only repository file that reaches into `config/`, because the OMERO.biomero
-admin UI rewrites it at runtime.
+`make render-config` writes `web/slurm-config.ini` from the committed template
+and this VM's `.env`. Nothing on the volume is involved: admin-UI edits to that
+file are not preserved, so a change worth keeping goes in the template.
 
 The database passwords and `METABASE_SECRET_KEY` are the exception, and they go
 the other way: they are fixed by the data, so `volume-identity.sh` reads them

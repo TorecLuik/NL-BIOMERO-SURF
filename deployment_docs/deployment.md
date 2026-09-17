@@ -37,9 +37,10 @@ $OMERO_DATA_PATH/
 ```
 
 `docker-compose.yml` declares no named volumes; every mount is a bind mount
-under that path. The repository's `.env`, `.ssh` and `web/slurm-config.ini` are
-symlinks into `config/`, created by `make link-config` and re-checked by
-`make init`, so a fresh clone carries no secrets.
+under that path. The repository's `.env` and `.ssh/` are per-VM and gitignored, and
+`web/slurm-config.ini` is rendered from the committed template, so a fresh clone
+carries no secrets and nothing on the volume but `volume-identity` is
+configuration.
 
 Full detail, including how to set up a fresh VM and how to populate an empty
 volume, is in [storage-architecture.md](storage-architecture.md).

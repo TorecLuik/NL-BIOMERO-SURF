@@ -21,7 +21,7 @@ state, irreplaceable                   compute, rebuildable
 both Postgres databases                the git clone, .env, .ssh/
 the OMERO image repository             Docker images (~34 GB)
 L-Drive user data                      build cache (~9 GB)
-volume-identity, slurm-config.ini      containers
+volume-identity                        containers, web/slurm-config.ini
 backups                                logs/
                                        OpenSearch and Loki indices
 ```
@@ -53,7 +53,7 @@ Three things sit deliberately on the VM despite looking like state:
 ├── database-biomero/    BIOMERO Postgres        owner 999:999, mode 0700
 ├── omero/               OMERO image repository  owner 1000:0,  mode 0755
 ├── L-Drive/             user data, /data in the containers
-├── config/              volume-identity, slurm-config.ini -- see below
+├── config/              volume-identity -- see below
 └── backups/             backup_master.sh output
 ```
 
@@ -63,11 +63,11 @@ Any copy of this data must preserve it — use `cp -a`, never a plain `cp`.
 
 ### config/
 
-`config/` holds what belongs to the volume rather than to any VM:
+`config/` holds what belongs to the volume rather than to any VM. That is one
+file:
 
 ```text
 config/volume-identity     the credentials that open this volume's databases
-config/slurm-config.ini    runtime Slurm configuration
 ```
 
 **`volume-identity`** carries the database passwords and `METABASE_SECRET_KEY`.
@@ -81,10 +81,18 @@ fresh `.env` from it, and refuses to start when the two disagree.
 It is mode 0600 beside the database files it opens, so it is no more exposed
 than they are. `scripts/volume-identity.sh` is the only thing that writes it.
 
-**`slurm-config.ini`** is rewritten by the OMERO.biomero admin UI from the
-`omeroweb` container, so it is deployment state rather than repository content.
-`web/slurm-config.ini` is a symlink to it, created by `make link-config`, and is
-mode 0666 so uid 999 can write it.
+**`slurm-config.ini` is not here.** It lives in the repository at
+`web/slurm-config.ini`, gitignored and rendered from the committed
+`web/slurm-config-template.ini` by `make render-config`, which every deploy also
+runs. It is mode 0666 because the containers bind-mount it read-write.
+
+It used to live on the volume, on the grounds that the OMERO.biomero admin UI
+rewrites it from the `omeroweb` container and so it was deployment state. The UI
+can still write it, but those edits are deliberately not preserved: the next
+render overwrites them, and a change worth keeping belongs in the template,
+where it is reviewable and reaches every VM. Everything the file contains is
+derivable from the template plus `.env`, so nothing about it has to travel with
+the data.
 
 Nothing else on the volume is configuration. `.env` is an ordinary file in the
 repository, per-VM and gitignored, copied from `.env.example`; `.ssh/` holds the
@@ -202,10 +210,8 @@ for v in database database-biomero omero; do
 done
 sudo cp -a web/L-Drive/. $V/L-Drive/
 
-# runtime Slurm config; volume-identity is written by the next deploy
-sudo cp -a web/slurm-config.ini $V/config/slurm-config.ini
-
-make link-config && make up && make adopt-volume
+# volume-identity is written by the next deploy
+make up && make adopt-volume
 ```
 
 Verify ownership landed correctly before starting — this is the step that most
@@ -247,9 +253,9 @@ Postgres initialises `database/` and `database-biomero/` on first start, and
 OMERO creates its repository under `omero/`. Leave those three empty and owned
 by root — the containers set them up. Only `L-Drive/` needs populating, and only if you want the test datasets.
 
-`config/` fills itself: `make deploy` renders `slurm-config.ini` from the
-committed `web/slurm-config-template.ini` and writes `volume-identity` with the
-credentials it initialised the databases with.
+`config/` fills itself: `make deploy` writes `volume-identity` there with the
+credentials it initialised the databases with. `slurm-config.ini` is rendered
+into the repository, not onto the volume.
 
 The SSH key is the one thing that cannot come from this repository or be
 generated locally. It has to come from wherever the group keeps it, or be

@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init link-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init render-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -21,7 +21,7 @@ help:
 	@echo "  make init               submodules, runtime config, hostname, /logs auth"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
-	@echo "  make link-config        link slurm-config.ini to the storage volume"
+	@echo "  make render-config      render slurm-config.ini from the template"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make adopt-volume       record an existing volume's database credentials"
 	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
@@ -69,31 +69,20 @@ provision:
 # HOST overrides the public hostname, which otherwise comes from hostname -f.
 init:
 	git submodule update --init --recursive
-	@$(MAKE) --no-print-directory link-config
+	@$(MAKE) --no-print-directory render-config
 	@$(MAKE) --no-print-directory set-host HOST=$(if $(HOST),$(HOST),$$(hostname -f))
 	@$(MAKE) --no-print-directory logs-auth
 	@$(MAKE) --no-print-directory doctor
 
-# slurm-config.ini is runtime state: the OMERO.biomero admin UI rewrites it from
-# the omeroweb container, so it belongs with the volume rather than the repo.
-# This points the repo's copy at it. Idempotent, and safe to re-run.
+# slurm-config.ini is rendered from the committed template and the values in
+# .env, so it is reproducible per VM rather than state that travels with the
+# data. make deploy renders it too; this is for setting it up before deploying.
 #
-# DATA_PATH overrides the mountpoint for a volume not named omero-data, for the
-# case where .env does not carry it yet.
-link-config:
-	@path="$(DATA_PATH)"; \
-	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
-	if [ -z "$$path" ]; then echo "  [FAIL] OMERO_DATA_PATH is not set in .env; copy .env.example to .env"; exit 1; fi; \
-	if [ ! -d "$$path/config" ]; then \
-		echo "  [FAIL] $$path/config does not exist."; \
-		echo "         Is the storage volume attached? See deployment_docs/storage-architecture.md"; \
-		exit 1; \
-	fi; \
-	src="$$path/config/slurm-config.ini"; dst=web/slurm-config.ini; \
-	if [ -L "$$dst" ] && [ "$$(readlink "$$dst")" = "$$src" ]; then printf '  [ ok ] %s\n' "$$dst"; \
-	elif [ -e "$$dst" ] && [ ! -L "$$dst" ]; then \
-		printf '  [warn] %s is a real file; move it to %s and re-run\n' "$$dst" "$$src"; exit 1; \
-	else ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (linked)\n' "$$dst"; fi
+# The OMERO.biomero admin UI can write this file from the omeroweb container.
+# Those edits are deliberately not preserved -- the next render overwrites
+# them -- so a change worth keeping belongs in web/slurm-config-template.ini.
+render-config:
+	@./scripts/render-slurm-config.sh
 
 deploy:
 	@./scripts/bootstrap-prod.sh
