@@ -217,6 +217,47 @@ cp -R src/. dst/` so restarts are idempotent; and let the worker run as a uid
 that can read a `0600` mount, which removes the permission conflict instead of
 trading it for a second copy of the secret.
 
+## 9. An empty ID list reaches OMERO as `in ()` and fails the import
+
+**Repo:** BIOMERO (`SLURM_Import_Results.py`)
+
+A cellpose run on 2026-09-17 (`c92ea552-74ff-4713-8c07-834cc806ecaa`) finished
+on Slurm, produced its mask, and then failed at 90% in the import step:
+
+```text
+ApiUsageException: unexpected end of subtree
+  [select obj from ome.model.core.Image obj ... where obj.id in ()]
+  nested exception is org.hibernate.hql.ast.QuerySyntaxException
+```
+
+The workflow itself was fine. The Slurm log ends `Job completed successfully`,
+and the 1.9 MB mask is in `.analyzed/<uuid>/<ts>/`. Nothing reached OMERO: no
+image was created after the run started, so the results exist only on disk.
+
+The query is built from an empty ID list. `findAllByQuery` is called with
+`where obj.id in (:ids)` and an `RList` whose `_val` is empty, which OMERO
+renders as `in ()` and Hibernate rejects. An empty list is a legitimate outcome
+here -- the workflow may match nothing -- so it should short-circuit to "no
+images" rather than be sent to the server as a malformed query.
+
+What is odd, and unresolved: the IDs were recorded. The import task carries
+`input_data: {"IDs":[756]}` in `workflowtracker_events`, image 756 still exists,
+and it is in the same group and owner (`system`/`root`) the script ran as. So
+the list is empty at the call site despite being populated in the task, and the
+failure is 23 ms after the results are extracted -- too fast for a lookup to
+have been attempted and come back empty. The guarded paths in the script log
+`No input IDs available...` when they find nothing, and that line is absent, so
+this is a different call site that never checks.
+
+This is the same family as item 1: the script does not treat "no images" as a
+normal outcome. There it exits with `CRITICAL: No image files found`; here it
+passes the empty list to the server.
+
+**Suggested:** return early when the ID list is empty instead of building a
+query from it, and log the list and its origin at that point so the empty case
+is diagnosable. More generally, treat an empty image set as a valid result
+throughout the script rather than an error or an unchecked value.
+
 ## Reporting
 
 Repositories:
@@ -230,6 +271,12 @@ OMERO.biomero       https://github.com/NL-BioImaging/OMERO.biomero
 Items 1 and 3 are the ones that cost the most time here, and both have a
 one-line workaround worth including in any report: clear the dataset chip, and
 use OMERO.insight for anything that must outlive its source file.
+
+Item 9 is the one with a live cost: a workflow that runs correctly on Slurm
+still reports FAILED and leaves its results on disk, so it looks like a compute
+failure and is not. It is unresolved here -- the IDs are recorded on the task
+but the query is built from an empty list -- and the report should ask where
+that list is read, since this deployment cannot see the call site.
 
 Item 8 is the one to raise first for anyone deploying outside a developer
 laptop: it cannot be worked around without either exposing the cluster key to
