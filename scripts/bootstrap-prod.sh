@@ -86,7 +86,7 @@ fi
 # Per-VM hostname values. A wrong CSRF origin lets the stack start but blocks
 # OMERO.web login, with an error that does not name the cause.
 PUBLIC_HOST="$(hostname -f 2>/dev/null || true)"
-ENV_FOR_HOST=.env; [[ -f "${ENV_FOR_HOST}" ]] || ENV_FOR_HOST=.env.shared
+ENV_FOR_HOST=.env
 if [[ -n "${PUBLIC_HOST}" ]] \
    && grep -qE '^OMERO_CSRF_TRUSTED_ORIGINS=' "${ENV_FOR_HOST}" \
    && ! grep -E '^OMERO_CSRF_TRUSTED_ORIGINS=' "${ENV_FOR_HOST}" | grep -qF "${PUBLIC_HOST}"; then
@@ -96,16 +96,47 @@ else
   ok "hostname values match ${PUBLIC_HOST:-unknown}"
 fi
 
+# Every key .env.example documents has to be present, non-empty, and actually
+# filled in. Compose substitutes a missing value with the empty string, so
+# without this a half-filled .env reaches the containers and fails there --
+# Postgres initialising with a blank password rather than refusing to start.
+if [[ -f .env.example && -f .env ]]; then
+  MISSING_KEYS=()
+  PLACEHOLDER_KEYS=()
+  while IFS= read -r key; do
+    if ! grep -qE "^${key}=" .env 2>/dev/null; then
+      MISSING_KEYS+=("${key}")
+      continue
+    fi
+    value="$(grep -hE "^${key}=" .env | tail -1 | cut -d= -f2-)"
+    if [[ -z "${value}" ]]; then
+      MISSING_KEYS+=("${key}")
+    elif [[ "${value}" == *"CHANGE ME"* || "${value}" == *"CHANGE-ME"* ]]; then
+      PLACEHOLDER_KEYS+=("${key}")
+    fi
+  done < <(grep -oE '^[A-Z_]+=' .env.example | tr -d '=' | sort -u)
+
+  if [[ "${#MISSING_KEYS[@]}" -gt 0 ]]; then
+    fail "missing or empty in .env: ${MISSING_KEYS[*]}"
+  fi
+  if [[ "${#PLACEHOLDER_KEYS[@]}" -gt 0 ]]; then
+    fail "still a placeholder in .env: ${PLACEHOLDER_KEYS[*]}"
+  fi
+  if [[ "${#MISSING_KEYS[@]}" -eq 0 && "${#PLACEHOLDER_KEYS[@]}" -eq 0 ]]; then
+    ok "every key in .env.example is set in .env"
+  fi
+fi
+
 # Version pins the build depends on.
-if [[ -f .env.shared ]]; then
-  ok "pins: $(grep -E '^(BIOMERO_VERSION|OMERO_BIOMERO_VERSION|BIOMERO_IMPORTER_VERSION)=' .env.shared | tr '\n' ' ')"
+if [[ -f .env ]]; then
+  ok "pins: $(grep -E '^(BIOMERO_VERSION|OMERO_BIOMERO_VERSION|BIOMERO_IMPORTER_VERSION)=' .env | tr '\n' ' ')"
 else
-  fail ".env.shared is missing"
+  fail ".env is missing; copy .env.example to .env and fill it in"
 fi
 
 # Spider identity and reachability. Non-fatal: the stack still starts without
 # Slurm, it just cannot run workflows.
-SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env .env.shared 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
 if [[ -n "${SPIDER_USER_VAL}" ]]; then
   ok "SPIDER_USER is set"
   if timeout 25 ssh -F .ssh/config -o BatchMode=yes -o ConnectTimeout=15 spider 'true' 2>/dev/null; then
@@ -208,7 +239,7 @@ WORKER_VERSIONS="$(compose exec -T biomeroworker /opt/omero/server/venv3/bin/pip
   | grep -iE '^(biomero|biomero-importer|ezomero|zarr) ' || true)"
 if [[ -n "${WORKER_VERSIONS}" ]]; then
   smoke_ok "worker packages: $(tr -s ' ' <<<"${WORKER_VERSIONS}" | tr '\n' ';')"
-  EXPECTED_BIOMERO="$(grep -E '^BIOMERO_VERSION=' .env.shared | cut -d= -f2)"
+  EXPECTED_BIOMERO="$(grep -E '^BIOMERO_VERSION=' .env | cut -d= -f2)"
   ACTUAL_BIOMERO="$(awk '/^biomero /{print $2}' <<<"${WORKER_VERSIONS}")"
   if [[ "${ACTUAL_BIOMERO}" == "${EXPECTED_BIOMERO}" ]]; then
     smoke_ok "worker BIOMERO version matches pin (${EXPECTED_BIOMERO})"

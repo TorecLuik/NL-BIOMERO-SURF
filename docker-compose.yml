@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
     # Define named network to communicate with other containers
     networks:
       - omero
@@ -29,7 +29,7 @@ services:
     environment:
       POSTGRES_USER: ${BIOMERO_POSTGRES_USER}
       POSTGRES_DB: ${BIOMERO_POSTGRES_DB}
-      POSTGRES_PASSWORD: ${BIOMERO_POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${BIOMERO_POSTGRES_PASSWORD:?set BIOMERO_POSTGRES_PASSWORD in .env (see .env.example)}
     # Define named network to communicate with other containers
     networks:
       - omero
@@ -68,7 +68,7 @@ services:
         biomeroworker:Processor-0
       CONFIG_omero_master_host: omeroserver
       CONFIG_omero_sessions_timeout: ${OMERO_SESSIONS_TIMEOUT}
-      ROOTPASS: ${OMERO_ROOT_PASSWORD}
+      ROOTPASS: ${OMERO_ROOT_PASSWORD:?set OMERO_ROOT_PASSWORD in .env (see .env.example)}
     # Define named network to communicate with other containers
     networks:
       - omero
@@ -183,13 +183,13 @@ services:
       ENV: ${OMERO_WEB_ENV}
       OMERO_BIOMERO_CONFIG_FILE: /opt/omero/web/OMERO.web/var/biomero-config.json
       METABASE_SITE_URL: ${METABASE_SITE_URL}
-      METABASE_SECRET_KEY: ${METABASE_SECRET_KEY}
+      METABASE_SECRET_KEY: ${METABASE_SECRET_KEY:?set METABASE_SECRET_KEY in .env (see .env.example)}
       METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID: ${METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID}
       METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID: ${METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       IMPORT_MOUNT_PATH: ${IMPORT_MOUNT_PATH}
       FORMS_MASTER_USER: ${FORMS_MASTER_USER}
-      FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD}
+      FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD:?set FORMS_MASTER_PASSWORD in .env (see .env.example)}
       IMPORTER_ENABLED: ${IMPORTER_ENABLED}
       ANALYZER_ENABLED: ${ANALYZER_ENABLED}
       CONFIG_omero_web_csrf__trusted__origins: ${OMERO_CSRF_TRUSTED_ORIGINS}
@@ -234,7 +234,7 @@ services:
       MB_DB_USER: ${BIOMERO_POSTGRES_USER}
       MB_DB_PASS: ${BIOMERO_POSTGRES_PASSWORD}
       MB_USER: ${METABASE_USER}
-      MB_PASSWORD: ${METABASE_PASSWORD}
+      MB_PASSWORD: ${METABASE_PASSWORD:?set METABASE_PASSWORD in .env (see .env.example)}
       MB_SITE_URL: ${METABASE_SITE_URL}
       MB_ENABLE_EMBEDDING: "true"
       MB_ENABLE_EMBEDDING_STATIC: "true"
@@ -263,7 +263,7 @@ services:
     environment:
       OMERO_HOST: omeroserver
       OMERO_USER: ${OMERO_IMPORTER_USER}
-      OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD}
+      OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD:?set OMERO_IMPORTER_PASSWORD in .env (see .env.example)}
       OMERO_PORT: ${OMERO_PORT}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       ADI_RUN_MIGRATIONS: ${ADI_RUN_MIGRATIONS}
