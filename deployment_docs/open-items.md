@@ -202,3 +202,18 @@ GPU assignments were re-tested rather than carried over. All GPU-relevant
 workflow containers are already pinned to their latest upstream releases, and
 classic cellpose on a MIG slice still reports `cuda True` with `device_count 0`,
 so its full-A100 pin stands.
+
+## Found by the fresh-VM rebuild (2026-09-17)
+
+`biomeroworker/slurm-config.ini` is baked into the image at
+`/etc/slurm-config.ini`, which is *first* in BIOMERO's config search path. It
+holds upstream's local-dev defaults -- `host=localslurm`, `/data/my-scratch/...`
+-- none of which apply here. It is harmless today only because configparser
+merges the search path in order and the bind-mounted
+`web/slurm-config.ini` happens to define every key it defines, so every value is
+overridden. Verified: zero keys currently leak through.
+
+That safety is accidental. Any key added to the baked copy, or removed from the
+template, silently takes effect with a local-dev value. The deploy bind-mounts
+the authoritative config unconditionally, so the `COPY` at
+`biomeroworker/Dockerfile:74` can go; it needs a worker image rebuild to verify.
