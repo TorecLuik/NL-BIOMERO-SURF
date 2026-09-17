@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init link-config deploy doctor set-host adopt-volume new-key show-key docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init link-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -26,6 +26,7 @@ help:
 	@echo "  make adopt-volume       record an existing volume's database credentials"
 	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
 	@echo "  make show-key           print the public half of the cluster key"
+	@echo "  make logs-auth          create the basic-auth file nginx needs for /logs"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
@@ -91,6 +92,23 @@ link-config:
 
 deploy:
 	@./scripts/bootstrap-prod.sh
+
+# nginx serves /logs behind basic auth from /etc/nginx/.htpasswd, which is
+# host state rather than repository content: nothing generates it, and without
+# it /logs answers 401 while the rest of the site works. Credentials come from
+# NGINX_LOGS_USER and NGINX_LOGS_PASSWORD in .env.
+logs-auth:
+	@user=$$(grep -hE '^NGINX_LOGS_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
+	pass=$$(grep -hE '^NGINX_LOGS_PASSWORD=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
+	if [ -z "$$user" ] || [ -z "$$pass" ] || [ "$$pass" = "CHANGE ME" ]; then \
+		echo "  [FAIL] set NGINX_LOGS_USER and NGINX_LOGS_PASSWORD in .env first"; exit 1; fi; \
+	if ! command -v htpasswd >/dev/null 2>&1; then \
+		echo "  [FAIL] htpasswd is missing; sudo apt-get install -y apache2-utils"; exit 1; fi; \
+	sudo htpasswd -b -c /etc/nginx/.htpasswd "$$user" "$$pass" >/dev/null 2>&1; \
+	sudo chmod 644 /etc/nginx/.htpasswd; \
+	if sudo nginx -t >/dev/null 2>&1; then sudo systemctl reload nginx; \
+		printf '  [ ok ] /logs basic auth set for %s\n' "$$user"; \
+	else echo "  [warn] wrote the file but nginx -t failed; check: sudo nginx -t"; fi
 
 # Record the database credentials of a volume that predates volume-identity.
 # Verifies the password in .env against the running database before writing, so

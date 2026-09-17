@@ -112,8 +112,8 @@ else
     ok "htpasswd already present"
   else
     # /logs is behind basic auth, and nginx fails the location without this file.
-    warn "no /etc/nginx/.htpasswd; create one before using /logs:"
-    warn "  sudo htpasswd -c /etc/nginx/.htpasswd <admin-user>"
+    warn "no /etc/nginx/.htpasswd; /logs answers 401 until it exists:"
+    warn "  make logs-auth"
   fi
   if sudo nginx -t >/dev/null 2>&1; then
     sudo systemctl reload nginx

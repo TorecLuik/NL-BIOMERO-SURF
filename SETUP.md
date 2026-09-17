@@ -44,7 +44,10 @@ make init
 # 6. public hostname
 make set-host HOST=$(hostname -f)
 
-# 7. build and start -- about an hour, most of it image builds
+# 7. basic auth for /logs
+make logs-auth
+
+# 8. build and start -- about an hour, most of it image builds
 make deploy
 ```
 
@@ -113,6 +116,7 @@ Until the key is registered, the stack runs but cannot reach the cluster.
 | --- | --- |
 | `make provision` | no sudo, or no network for apt |
 | `make init` | volume not attached, or no `config/` on it |
+| `make logs-auth` | `NGINX_LOGS_*` unset in `.env`, or `htpasswd` missing |
 | `make deploy` | `.env` incomplete, disagrees with the volume, or Spider unreachable |
 
 If `make init` cannot find `config/`, check `mount | grep /data/` first: the

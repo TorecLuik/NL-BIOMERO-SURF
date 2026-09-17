@@ -19,8 +19,8 @@ ATTACHED VOLUME                        THE VM
 state, irreplaceable                   compute, rebuildable
 
 both Postgres databases                the git clone
-the OMERO image repository             Docker images (~34 GB)
-L-Drive user data                      build cache (~9 GB)
+the OMERO image repository             Docker images
+L-Drive user data                      build cache
 volume-identity, slurm-config.ini      containers
                                        .env, .ssh/
 backups                                logs/
