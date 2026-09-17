@@ -18,23 +18,29 @@ without a restore-from-backup cycle.
 ATTACHED VOLUME                        THE VM
 state, irreplaceable                   compute, rebuildable
 
-both Postgres databases                the git clone
-the OMERO image repository             Docker images
-L-Drive user data                      build cache
+both Postgres databases                the git clone, .env, .ssh/
+the OMERO image repository             Docker images (~34 GB)
+L-Drive user data                      build cache (~9 GB)
 volume-identity, slurm-config.ini      containers
-                                       .env, .ssh/
 backups                                logs/
                                        OpenSearch and Loki indices
 ```
 
 The dividing line is whether losing it would cost data or just time. Everything
-on the right is reconstructed by `make deploy` from the repository plus the
-volume.
+on the right is rebuilt by `make deploy` from the repository plus the volume,
+except `.env` and `.ssh/`: you write `.env` from `.env.example` and generate the
+cluster key with `make new-key`. Neither carries anything a volume needs back --
+the credentials that open its databases come from the volume itself.
 
-Two things sit deliberately on the VM despite looking like state:
+Three things sit deliberately on the VM despite looking like state:
+
+- **`.env`** is per-VM: hostnames, cluster identity, generated secrets. The
+  values that are fixed by a volume's data live on that volume, so a rebuilt VM
+  needs a filled-in template, not a restored file.
 
 - **`logs/`** is written by the containers and shipped to OpenSearch. It is
   ~780 MB and grows. Losing it loses history, not data.
+
 - **OpenSearch indices** are ~7 GB — larger than everything on the volume
   combined, and derived by reindexing `logs/`. Putting them on the volume would
   mean most of the storage budget was spent preserving logs.
