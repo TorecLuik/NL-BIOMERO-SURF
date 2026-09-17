@@ -224,25 +224,26 @@ recommendations".
 
 ### From nothing — a genuinely fresh deployment
 
-An empty volume is a valid starting point. Create the six directories and let
-the stack initialise:
+An empty volume is a valid starting point and needs no preparation. The
+procedure is the one under [Setting Up a Fresh VM](#setting-up-a-fresh-vm)
+above, unchanged: attach the volume, point `OMERO_DATA_PATH` at the mountpoint,
+and deploy. The only difference is that `.env`'s `CHANGE ME` passwords are kept
+rather than replaced from the volume, because there is nothing there yet to
+take them from.
 
-```bash
-V=/data/<volume-name>
-sudo mkdir -p $V/{database,database-biomero,omero,L-Drive,config,backups}
-```
+Every directory creates itself. Docker creates `database/`, `database-biomero/`
+and `omero/` as root when it binds them, which is the ownership Postgres and
+OMERO require, and each initialises its own contents on first start.
+`deploy-local-stack.sh` creates `L-Drive/`, `volume-identity.sh` creates
+`config/`, and `backup_master.sh` creates `backups/` when it first runs.
 
-Postgres initialises `database/` and `database-biomero/` on first start, and
-OMERO creates its repository under `omero/`. Leave those three empty and owned
-by root — the containers set them up. Only `L-Drive/` needs populating, and only if you want the test datasets.
-
-`config/` fills itself: `make deploy` writes `volume-identity` there with the
-credentials it initialised the databases with. `slurm-config.ini` is rendered
-into the repository, not onto the volume.
+`make deploy` then writes `volume-identity` with the credentials it initialised
+the databases with, so the volume can be opened by a later VM.
 
 The SSH key is the one thing that cannot come from this repository or be
-generated locally. It has to come from wherever the group keeps it, or be
-newly authorised on Spider.
+generated against the cluster on its own: `make new-key` produces it, but its
+public half has to be authorised on Spider, or the key has to come from wherever
+the group keeps it.
 
 For test data rather than real data, `make reference-data` downloads and
 verifies the reference datasets into `$OMERO_DATA_PATH/L-Drive/reference-data/`.
@@ -252,8 +253,8 @@ TIFFs using the worker's Python.
 ## Verifying
 
 ```bash
-make doctor          checks the symlinks resolve, the pins agree, the hostname
-                     matches, and the public URL answers
+make doctor          checks the submodule, the pins, the required files, the
+                     hostname, and the public URL
 make ps              every container running
 ```
 
