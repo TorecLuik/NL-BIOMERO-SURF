@@ -38,5 +38,11 @@
     "incucyte_archive": {
       "container": "cellularimagingcf/biomero-converter:latest"
     }
+  },
+  "group_mappings": {
+    "0": {
+      "folder": "root",
+      "groupName": "system"
+    }
   }
 }
