@@ -240,55 +240,46 @@ renders as `in ()` and Hibernate rejects. An empty list is a legitimate outcome
 here -- the workflow may match nothing -- so it should short-circuit to "no
 images" rather than be sent to the server as a malformed query.
 
-The IDs are recorded, but the script reads them off the wrong task. It resolves
-a task from the Slurm job id:
-
-```text
-16:53:12,677  Retrieved task_id=7d95d98f... for job_id=41284613
-```
-
-`7d95d98f` is the **cellpose** task, and a workflow's tasks do not all describe
-their input the same way:
-
-```text
-cellpose                    input_data: "biomero_<uuid>"
-_SLURM_Image_Transfer.py    input_data: [756]
-SLURM_Remote_Conversion.py  input_data: "biomero_<uuid>"
-CONVERT_ZARR_TO_TIFF        input_data: "/project/.../biomero_<uuid>"
-SLURM_Import_Results.py     input_data: {"IDs": [756]}
-```
-
-The script then does:
+`ROI_Target_Image_IDs` is declared `optional=True` with no default, and the
+script reads it without checking:
 
 ```python
-if isinstance(_input_data, dict):
-    image_ids = _input_data.get('IDs', []) or []
-elif isinstance(_input_data, list):
-    image_ids = _input_data
+_roi_target_ids = unwrap(client.getInput(ROI_TARGET_IMAGE_IDS)) or []
+input_images = [
+    img for img in conn.getObjects("Image",
+        ids=[int(i) for i in _roi_target_ids])
+    if img
+]
 ```
 
-cellpose's `input_data` is a `str`, so neither branch runs and `image_ids` stays
-`[]`. A `str` is iterable and would have produced garbage had it been accepted;
-instead it is silently skipped. The compute task is the one keyed by the Slurm
-job id, so this is the normal case, not an edge case -- the IDs live on the
-transfer and import tasks, which have no Slurm job of their own.
+Nothing supplies that parameter when ROIs are not requested, so `unwrap` returns
+`None`, `or []` makes it an empty list, and `getObjects` is called with
+`ids=[]`. This runs unconditionally on every successful extraction, before any
+of the code that would have found the IDs elsewhere: the task-based fallback
+sits about ten lines below it and never executes.
 
-Three of the four call sites then guard with `if not image_ids` and log
-`No input IDs available...`. That line is absent from this run, so the failing
-call is the fourth, which passes the empty list to
-`getObjects("Image", ids=[])`.
+This arrived with 2.8.2. The parameter does not exist in v2.7.0 at all, and the
+runs on this deployment split exactly on the version rather than on options or
+data:
 
-This is the same family as item 1: the script does not treat "no images" as a
-normal outcome. There it exits with `CRITICAL: No image files found`; here it
-passes the empty list to the server.
+```text
+v2.7.0   09-17 09:52 .. 11:07   cellpose, stardist, cellexpansion, ...   DONE
+v2.8.2   09-17 16:51           cellpose c92ea552                        FAILED
+v2.8.2   09-17 17:46           cellpose 7f4ca095                        FAILED
+```
 
-**Suggested:** three fixes, any one of which prevents this run from failing.
-Read the IDs from the task that has them -- the import task's own
-`{"IDs": [...]}` -- rather than from whichever task the Slurm job id resolves
-to. Handle the `str` case explicitly instead of falling through to `[]`, so an
-unexpected `input_data` shape is visible rather than silent. And guard the
-fourth call site like the other three, returning early on an empty list instead
-of sending `in ()` to the server.
+Both 2.8.2 runs fail identically, and no run on 2.8.2 has succeeded. Both had
+`Create_ROIs: False` and `Output - Add as attachment to original images: False`,
+which is the ordinary configuration for a segmentation workflow writing masks to
+a dataset.
+
+**Suggested:** skip the lookup when the ID list is empty, as the three other
+ID-resolving paths in the same script already do -- they guard with
+`if not image_ids` and log `No input IDs available...`. An empty
+`ROI_Target_Image_IDs` is the normal case for a workflow that does not create
+ROIs, so it should not reach the server at all. More generally, no call should
+pass an empty list into `ids=`, since OMERO renders it as `in ()` and the
+resulting error names neither the parameter nor the script line.
 
 ## Reporting
 
@@ -304,10 +295,11 @@ Items 1 and 3 are the ones that cost the most time here, and both have a
 one-line workaround worth including in any report: clear the dataset chip, and
 use OMERO.insight for anything that must outlive its source file.
 
-Item 9 is the one with a live cost: a workflow that runs correctly on Slurm
-still reports FAILED and leaves its results on disk, so it looks like a compute
-failure and is not. It should reproduce on any workflow whose compute task
-records a directory name rather than image IDs, which is the ordinary case.
+Item 9 is the one to report first and the only regression here: it is new in
+2.8.2, it has failed every run since this deployment reached that version, and
+a workflow that ran correctly on Slurm still reports FAILED with its results
+left on disk, so it reads as a compute failure and is not. Any segmentation
+workflow run without ROIs should reproduce it.
 
 Item 8 is the one to raise first for anyone deploying outside a developer
 laptop: it cannot be worked around without either exposing the cluster key to
