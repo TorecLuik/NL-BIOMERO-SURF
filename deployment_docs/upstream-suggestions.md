@@ -155,53 +155,69 @@ error.
 
 **Suggested:** collapse the duplicate to a single entry.
 
-## Local Follow-ups
+## 8. The worker's SSH handling cannot work as shipped
 
-Not upstream: these are this repository's own, kept here so the rebuild's
-findings stay in one place. Both are known trade-offs rather than defects.
+**Repo:** NL-BIOMERO (`biomeroworker/10-mount-ssh.sh`, `docker-compose.yml`)
 
-### The `.ssh` permission split is a workaround
+The container cannot mount an SSH directory directly, because host permissions
+do not suit the container user. The shipped answer is to mount it at `/tmp/.ssh`
+and have the entrypoint copy it into place:
 
-`biomeroworker` runs as `omero-server`, whose uid and gid match neither the
-owner nor the group of the repo-local `.ssh`, so it reads the key as "other"
-and the startup copy fails with `cp: cannot stat '/tmp/.ssh/.': Permission
-denied`. OpenSSH refuses a private key any group or other can read, so the host
-and the container want contradictory modes on one file. `deploy-local-stack.sh`
-resolves it by keeping `.ssh` at `0600` and mounting a second, group-readable
-copy, `.ssh-worker`, at `0640`.
+```yaml
+- "~/.ssh:/tmp/.ssh:ro"
+```
 
-That works and keeps the key off-limits to other accounts, but it is two copies
-of a secret and a gid that has to track the image.
+```bash
+if [[ -d /tmp/.ssh ]]; then
+  cp -R /tmp/.ssh /opt/omero/server/.ssh
+  chmod 700 /opt/omero/server/.ssh
+  chmod 600 /opt/omero/server/.ssh/*
+```
 
-Three tidier-looking fixes were tested and do not work:
+Four problems, all reproducible:
 
-- **Group-read on the single `.ssh`.** OpenSSH refuses a private key with any
-  group or other bit, *even when the group is the owner's own primary group*:
-  `chmod 640` yields `WARNING: UNPROTECTED PRIVATE KEY FILE!` and the key is
-  ignored. This is unconditional, so no mode on one shared file satisfies both
-  consumers.
-- **`group_add` on the service.** Adding the host `.ssh` gid as a supplementary
-  group does not help while the directory is `0700`/`0600`, because the owner
-  bits are all that matter, and loosening them runs into the point above.
-- **World-readable key**, the arrangement this replaced, which exposes the
-  cluster key to every account on the VM.
+**The whole of `~/.ssh` goes into the container.** The worker needs one cluster
+key. It receives every key the operator owns, plus their `config` and
+`known_hosts`. A compromise of the worker is a compromise of every host that
+user can reach, and on a shared VM the mount silently widens as the operator
+adds keys for unrelated work.
 
-What would actually remove the split is changing the container side rather than
-the host side: run `biomeroworker` as a uid that owns the host files, or install
-the key into the image at build time so nothing is mounted. Both mean editing
-the worker image, whose `USER omero-server` is inherited from
-`openmicroscopy/omero-server`. Worth doing when that image is next touched;
-until then the two-copy split is the working arrangement, not a shortcut.
+**The copy nests on restart.** `cp -R src dst` creates `dst` on the first run,
+but copies *into* it on every run after, so a restart produces
+`/opt/omero/server/.ssh/.ssh/`:
 
-### Smoke tests report consequences as failures
+```text
+run 1   /opt/omero/server/.ssh/id_rsa
+run 2   /opt/omero/server/.ssh/id_rsa
+        /opt/omero/server/.ssh/.ssh/id_rsa
+```
 
-One dead `biomeroworker` produces four `[FAIL]` lines: the service itself, then
-the package versions, the runtime patch, and Spider reachability, each of which
-only needs the worker to be running. The output reads as four problems when
-there is one, and the real cause is not distinguished from its consequences.
+The stale outer copy still resolves, so the worker keeps running on the key from
+whenever the container was first created, and a rotated key appears not to take
+effect. The script's own `TODO: error on windows ? this didn't copy 'config'` is
+the same bug seen from the other side.
 
-Making the worker-dependent checks skip when the worker is down -- reporting
-them as skipped rather than failed -- would point at the cause immediately.
+**The permissions are unsatisfiable on the host side.** The container reads the
+mount as "other", so the key needs group or world read; OpenSSH refuses any
+private key with a group or other bit set, *even when the group is the owner's
+own*. One file therefore cannot serve both the container and ordinary `ssh` on
+the host. Tested and rejected here: a single `0640` key (`WARNING: UNPROTECTED
+PRIVATE KEY FILE!`, key ignored), and `group_add` with the directory at `0700`
+(owner bits are all that matter). The only arrangements that work are a
+world-readable key, or two copies at different modes -- this deployment mounts a
+separate `.ssh-worker` at `0640` and keeps `.ssh` at `0600`.
+
+**Nothing fails loudly.** A key the container cannot read stops the worker with
+`cp: cannot stat '/tmp/.ssh/.': Permission denied` and exit 1, which surfaces
+only as an absent service; the nesting case does not fail at all.
+
+**Suggested:** mount a single named key rather than a directory, via a build arg
+or a Docker secret; replace `cp -R src dst` with `rm -rf dst && mkdir -p dst &&
+cp -R src/. dst/` so restarts are idempotent; and let the worker run as a uid
+that can read a `0600` mount, which removes the permission conflict instead of
+trading it for a second copy of the secret.
+
+## Reporting
 
 Repositories:
 
@@ -214,3 +230,9 @@ OMERO.biomero       https://github.com/NL-BioImaging/OMERO.biomero
 Items 1 and 3 are the ones that cost the most time here, and both have a
 one-line workaround worth including in any report: clear the dataset chip, and
 use OMERO.insight for anything that must outlive its source file.
+
+Item 8 is the one to raise first for anyone deploying outside a developer
+laptop: it cannot be worked around without either exposing the cluster key to
+every account on the host or keeping two copies of it, and its failure modes are
+a container that exits with one line of output and a key rotation that silently
+does not take.
