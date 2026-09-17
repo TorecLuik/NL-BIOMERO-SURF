@@ -91,10 +91,11 @@ docker exec nl-biomero-omeroserver-1 bash -lc \
 
 **Pass:** images render; the command prints nothing.
 
-Check for pixel-less duplicates at the same time. An OME-TIFF carrying an
-`Image` `Name` imports as two OMERO images, and the second has no pixels: it
-shows `No preview` in the workflow picker's Thumbnail Grid and fails any
-workflow it reaches.
+Check for pixel-less images at the same time. Importing a `.zarr` directory --
+easy to do by selecting a whole reference-data folder, which holds both a
+`.ome.tiff` and a `.zarr` -- creates an OMERO image with no pixels. It shows
+`No preview` in the workflow picker's Thumbnail Grid and fails any workflow it
+reaches.
 
 ```bash
 # plate wells legitimately have no fileset, so exclude well samples

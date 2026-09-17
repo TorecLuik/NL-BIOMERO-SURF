@@ -76,15 +76,18 @@ The `.ome.tiff` files are the ones to import. BIOMERO hands BIAFLOWS workflows
 TIFF, so the Zarr copies are kept as the verifiable upstream original, not as
 workflow input.
 
-### One file can give two OMERO images
+### Import the `.ome.tiff` only, never the `.zarr`
 
-An OME-TIFF imports as **two** OMERO images: the file-level one holding the
-pixels, and a second named after the `Image` element in the OME-XML holding
-none. The empty one shows `No preview` in the workflow picker and fails any
-workflow that reaches it. `tifffile` always writes an `Image` element, naming it
-`Image0` when no name is given, so this is not avoidable by omitting the name.
+Each dataset directory holds both an `.ome.tiff` and a `.zarr`. Only the TIFF is
+workflow input; the Zarr is kept as the verifiable upstream original.
 
-After importing, check for a pixel-less twin and delete it:
+Selecting the whole directory in the Importer imports **both**. The Zarr lands
+as an OMERO image with no fileset and no pixels, shows `No preview` in the
+workflow picker, and fails any workflow that reaches it. Its `biomero.import`
+annotation names the `.zarr` in its `Filepath`, which is how to tell one apart
+from a real image.
+
+Select the two `.ome.tiff` files individually. If a Zarr was imported already:
 
 ```sql
 -- pixel-less images have no fileset and no pixels path. Plate wells legitimately
@@ -99,7 +102,8 @@ Delete those in OMERO.web under Data; do not run workflows on them.
 Through the UI, either route works:
 
 ```text
-BIOMERO tab -> Importer   browse to /data/reference-data, select, import
+BIOMERO tab -> Importer   browse to /data/reference-data and select the two
+                          .ome.tiff files, not the folders
 OMERO.insight             File > Import, standard import dialog
 ```
 
