@@ -193,30 +193,53 @@ extending beyond it.
 
 ## T3 — Quantification
 
-Needs the original plus both masks. The strictest test, because it fails on
-naming alone.
+Needs the original plus both masks, all built from `$RGB` -- see below.
 
 ```text
-images      $FIG7 + T1 mask + T2 mask   (select all three)
+images      $RGB + its T1 mask + its T2 mask   (select all three)
 workflow    nuclei_measurements
   nuclei_mask_suffix   _Nuclei_Mask
   cells_mask_suffix    _Cells_Mask
-  metric_channels      1,2        NOT the default
+  metric_channels      1,2,3      the default; $RGB has three channels
 4) Upload result CSVs as OMERO tables   ON
 ```
+
+**Use `$RGB`, not `$FIG7`.** The CellProfiler pipeline loads the original
+through `NamesAndTypes` as a *colour* image, so it needs three channels. Run on
+the 2-channel `$FIG7` it fails inside CellProfiler with:
+
+```text
+ValueError: cannot reshape array of size 524288 into shape (512,512)
+```
+
+524288 is 512x512x2: the reader got two channels where the pipeline expected a
+colour image. Setting `metric_channels` to `1,2` does not help -- the wrapper
+reconfigures the measurement channels but not how the image is loaded. The
+descriptor's own wording gives it away: "E.g. 1,2,3 for RGB".
+
+So T3 needs masks built from `$RGB`: run T1 and T2 against `$RGB` first, with
+the same rename settings, then measure.
 
 Two traps, both silent:
 
 - The suffixes above are the workflow's defaults, and they are what T1 and T2
   were named to produce. Any other spelling and the pipeline matches nothing.
-- `metric_channels` defaults to `1,2,3`. `$FIG7` has two channels, and on the
-  default the wrapper skips channel reconfiguration entirely, so the measurement
-  is wrong rather than absent. Set `1,2`.
+  The match is on a substring, so the accumulated `.0.tif` extensions that a
+  round trip adds do not break it.
+- `metric_channels` defaults to `1,2,3`, which is correct for `$RGB`. The
+  wrapper only reconfigures channels when the value differs from the default.
 
 **Pass:** a table attached in OMERO with one row per cell.
 
-**Fail:** an empty or missing table almost always means the suffixes or the
-channel list, not the measurement — check those before anything else.
+**Fail:** read the Slurm log before assuming the measurement is at fault:
+
+```bash
+docker exec nl-biomero-biomeroworker-1 \
+  ssh spider "tail -40 ~/omero-<jobid>.log"
+```
+
+A `does contain` line for each suffix means matching worked and the fault is
+elsewhere. No such lines means the suffixes are wrong.
 
 ## T4 — A second image shape
 
@@ -237,7 +260,11 @@ Same as T1, swapping the workflow. Use `$RGB`, not `$FIG7`.
 ```text
 image       $RGB
 workflow    stardist
+3c) Rename  {original_file}_Nuclei_Mask.{ext}
 ```
+
+Set the rename even though T5 chains into nothing: without it the result imports
+as `<name>.ome.tiff.0.tif`, hard to tell from the original in a list.
 
 StarDist branches on 1-channel greyscale vs 3-channel RGB and has no 2-channel
 path, so `$FIG7` takes the RGB branch on 2-channel data and the result is not
