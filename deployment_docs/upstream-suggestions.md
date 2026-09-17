@@ -134,7 +134,57 @@ before any Slurm job exists.
 **Suggested:** list only what `slurm-config.ini` registers, or mark the rest as
 unavailable.
 
-## Reporting
+## 7. Duplicate `biomero-importer` entries in `.gitmodules`
+
+**Repo:** NL-BIOMERO
+
+Fetching the upstream repository warns on an ancestor commit:
+
+```text
+warning: <commit>:.gitmodules, multiple configurations found for
+'submodule.biomero-importer.path'. Skipping second one!
+warning: <commit>:.gitmodules, multiple configurations found for
+'submodule.biomero-importer.url'. Skipping second one!
+```
+
+`.gitmodules` declares `submodule.biomero-importer` twice. Git resolves this
+silently by taking the first and discarding the second, so the submodule can
+resolve to a different path or URL than the file appears to specify. Harmless
+until the two entries disagree, at which point the checkout is wrong with no
+error.
+
+**Suggested:** collapse the duplicate to a single entry.
+
+## Local Follow-ups
+
+Not upstream: these are this repository's own, kept here so the rebuild's
+findings stay in one place. Both are known trade-offs rather than defects.
+
+### The `.ssh` permission split is a workaround
+
+`biomeroworker` runs as `omero-server`, whose uid and gid match neither the
+owner nor the group of the repo-local `.ssh`, so it reads the key as "other"
+and the startup copy fails with `cp: cannot stat '/tmp/.ssh/.': Permission
+denied`. OpenSSH refuses a private key any group or other can read, so the host
+and the container want contradictory modes on one file. `deploy-local-stack.sh`
+resolves it by keeping `.ssh` at `0600` and mounting a second, group-readable
+copy, `.ssh-worker`, at `0640`.
+
+That works and keeps the key off-limits to other accounts, but it is two copies
+of a secret and a gid that has to track the image. Running the worker with a
+uid that matches the host, or installing the key at build time, would delete
+the whole class: no second copy, no `WORKER_GID`, no mode arithmetic. More
+invasive, and worth doing when the worker image is next touched.
+
+### Smoke tests report consequences as failures
+
+One dead `biomeroworker` produces four `[FAIL]` lines: the service itself, then
+the package versions, the runtime patch, and Spider reachability, each of which
+only needs the worker to be running. The output reads as four problems when
+there is one, and the real cause is not distinguished from its consequences.
+
+Making the worker-dependent checks skip when the worker is down -- reporting
+them as skipped rather than failed -- would point at the cause immediately.
 
 Repositories:
 

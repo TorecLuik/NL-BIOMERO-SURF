@@ -229,8 +229,13 @@ for _ in $(seq 1 36); do
 done
 
 SMOKE_FAILURES=0
+SMOKE_SKIPPED=0
 smoke_ok()   { printf '  [ ok ] %s\n' "$1"; }
 smoke_fail() { printf '  [FAIL] %s\n' "$1"; SMOKE_FAILURES=$((SMOKE_FAILURES + 1)); }
+# A check that cannot run because something it depends on is already broken.
+# Reporting these as failures turns one dead service into a screenful of red
+# and buries the cause among its consequences.
+smoke_skip() { printf '  [skip] %s\n' "$1"; SMOKE_SKIPPED=$((SMOKE_SKIPPED + 1)); }
 
 # 1. Every expected service is running.
 EXPECTED_SERVICES=(database database-biomero omeroserver omeroweb biomeroworker)
@@ -242,6 +247,14 @@ for svc in "${EXPECTED_SERVICES[@]}"; do
     smoke_fail "service not running: ${svc}"
   fi
 done
+
+# Checks 4 to 6 all exec into biomeroworker, so without it they report the same
+# outage three more times. Decide once whether they can run at all.
+if grep -qx biomeroworker <<<"${RUNNING}"; then
+  WORKER_UP=1
+else
+  WORKER_UP=0
+fi
 
 # 2. Both databases accept queries.
 if compose exec -T database psql -U "${POSTGRES_USER:-omero}" -d "${POSTGRES_DB:-omero}" -c 'SELECT 1' >/dev/null 2>&1; then
@@ -273,6 +286,9 @@ fi
 
 # 4. Installed versions match the pins, so a stale image is caught here rather
 #    than during a workflow run.
+if [[ "${WORKER_UP}" -eq 0 ]]; then
+  smoke_skip "worker package versions (biomeroworker is not running)"
+else
 WORKER_VERSIONS="$(compose exec -T biomeroworker /opt/omero/server/venv3/bin/pip list 2>/dev/null \
   | grep -iE '^(biomero|biomero-importer|ezomero|zarr) ' || true)"
 if [[ -n "${WORKER_VERSIONS}" ]]; then
@@ -287,9 +303,12 @@ if [[ -n "${WORKER_VERSIONS}" ]]; then
 else
   smoke_fail "could not read worker package versions"
 fi
+fi
 
 # 5. The runtime patch is present in the installed BIOMERO.
-if compose exec -T biomeroworker grep -q '_nl_biomero_verify_outputs' \
+if [[ "${WORKER_UP}" -eq 0 ]]; then
+  smoke_skip "BIOMERO output-verification patch (biomeroworker is not running)"
+elif compose exec -T biomeroworker grep -q '_nl_biomero_verify_outputs' \
      /opt/omero/server/venv3/lib/python3.11/site-packages/biomero/slurm_client.py 2>/dev/null; then
   smoke_ok "BIOMERO output-verification patch applied in worker"
 else
@@ -297,7 +316,9 @@ else
 fi
 
 # 6. The worker can reach Spider, which is what actually runs workflows.
-if compose exec -T biomeroworker ssh -o BatchMode=yes -o ConnectTimeout=15 spider 'sinfo -h -o "%P"' >/dev/null 2>&1; then
+if [[ "${WORKER_UP}" -eq 0 ]]; then
+  smoke_skip "worker to Spider Slurm (biomeroworker is not running)"
+elif compose exec -T biomeroworker ssh -o BatchMode=yes -o ConnectTimeout=15 spider 'sinfo -h -o "%P"' >/dev/null 2>&1; then
   smoke_ok "worker can reach Spider Slurm"
 else
   smoke_fail "worker cannot reach Spider Slurm (check .ssh mount and known_hosts)"
@@ -358,8 +379,18 @@ fi
 
 echo
 if [[ "${SMOKE_FAILURES}" -gt 0 ]]; then
-  echo "Smoke tests finished with ${SMOKE_FAILURES} failure(s)." >&2
+  if [[ "${SMOKE_SKIPPED}" -gt 0 ]]; then
+    echo "Smoke tests finished with ${SMOKE_FAILURES} failure(s); ${SMOKE_SKIPPED} check(s) skipped because what they depend on is down." >&2
+  else
+    echo "Smoke tests finished with ${SMOKE_FAILURES} failure(s)." >&2
+  fi
   echo "Inspect with: sudo docker compose ps && sudo docker compose logs --tail=120" >&2
+  exit 1
+fi
+
+# Skipped checks never ran, so the suite cannot claim to have passed.
+if [[ "${SMOKE_SKIPPED}" -gt 0 ]]; then
+  echo "Smoke tests passed, but ${SMOKE_SKIPPED} check(s) were skipped and still need verifying." >&2
   exit 1
 fi
 
