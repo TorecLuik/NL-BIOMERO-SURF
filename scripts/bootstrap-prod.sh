@@ -305,7 +305,8 @@ else
 fi
 fi
 
-# 5. The runtime patch is present in the installed BIOMERO.
+# 5. The runtime patches are present. Both fail the same way if they silently
+#    stop applying: a workflow that runs correctly still fails at 90%.
 if [[ "${WORKER_UP}" -eq 0 ]]; then
   smoke_skip "BIOMERO output-verification patch (biomeroworker is not running)"
 elif compose exec -T biomeroworker grep -q '_nl_biomero_verify_outputs' \
@@ -313,6 +314,17 @@ elif compose exec -T biomeroworker grep -q '_nl_biomero_verify_outputs' \
   smoke_ok "BIOMERO output-verification patch applied in worker"
 else
   smoke_fail "BIOMERO output-verification patch missing in worker"
+fi
+
+if grep -qx omeroserver <<<"${RUNNING}"; then
+  if compose exec -T omeroserver grep -q '\[\] if not _roi_target_ids else \[' \
+       /opt/omero/server/OMERO.server/lib/scripts/biomero/_data/SLURM_Import_Results.py 2>/dev/null; then
+    smoke_ok "empty ROI_Target_Image_IDs guard applied in server scripts"
+  else
+    smoke_fail "empty ROI_Target_Image_IDs guard missing; imports will fail at 90%"
+  fi
+else
+  smoke_skip "ROI_Target_Image_IDs guard (omeroserver is not running)"
 fi
 
 # 6. The worker can reach Spider, which is what actually runs workflows.

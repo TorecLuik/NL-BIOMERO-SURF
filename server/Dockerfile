@@ -41,6 +41,11 @@ RUN cd $OMERO_DIST/lib/scripts/ && \
     rm -f biomero/admin/Example_Minimal_Slurm_Script.py && \
     rm -f biomero/__workflows/SLURM_CellPose_Segmentation.py
 
+# 2.8.2 sends OMERO an empty image-id list on every run that does not create
+# ROIs, which fails the import at 90%. See patch_biomero_scripts.py.
+COPY server/patch_biomero_scripts.py /tmp/patch_biomero_scripts.py
+RUN python3 /tmp/patch_biomero_scripts.py
+
 # Install the Figure-to-PDF script for OMERO.figure plugin
 RUN curl -o $OMERO_DIST/lib/scripts/omero/figure_scripts/Figure_To_Pdf.py \
     https://raw.githubusercontent.com/ome/omero-figure/refs/heads/master/omero_figure/scripts/omero/figure_scripts/Figure_To_Pdf.py

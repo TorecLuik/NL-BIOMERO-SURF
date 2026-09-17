@@ -262,20 +262,28 @@ sbatch --partition=gpu_a100_mig --gres=gpu:a100_3g.20gb:1 --cpus-per-task=3 \
   python -c 'import torch;print(torch.cuda.is_available(),torch.cuda.device_count())'"
 ```
 
-## Runtime Patch
+## Runtime Patches
 
-One patch remains, applied in both the worker and web images because
-OMERO.biomero submits analyzer jobs from the web process:
+Two patches, both idempotent and both failing loudly if upstream moves their
+anchor. If one fails after a version bump, check whether upstream fixed the
+behaviour itself and delete the patch rather than re-anchoring it.
+
+`server/patch_biomero_scripts.py` guards an unchecked empty ID list in
+`SLURM_Import_Results.py`. 2.8.2 reads the optional `ROI_Target_Image_IDs`
+parameter and passes it straight to `getObjects("Image", ids=...)`; nothing
+supplies it unless ROIs are requested, so an ordinary segmentation run sends
+OMERO `where obj.id in ()` and every workflow fails at 90% with its results
+already on disk. New in 2.8.2; the parameter does not exist in 2.7.0. See
+[upstream-suggestions.md](upstream-suggestions.md) item 9.
+
+The second is applied in both the worker and web images, because OMERO.biomero
+submits analyzer jobs from the web process:
 
 `biomeroworker/patch_biomero_runtime.py` injects
 `biomeroworker/patches/generated_job_postprocess.py`, which appends
 `set -eo pipefail` and `_nl_biomero_verify_outputs` to generated job scripts. A
 workflow container can print a traceback, exit zero, and leave `data/out` empty;
 without the check BIOMERO enters import and hangs around 90%.
-
-The patch is idempotent and fails loudly if upstream moves its anchor. If it
-fails after a version bump, check whether upstream now verifies outputs itself
-and delete the patch rather than re-anchoring it.
 
 Everything else this deployment needs is upstream configuration:
 
