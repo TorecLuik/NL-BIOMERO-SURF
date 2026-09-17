@@ -53,7 +53,7 @@ Three things sit deliberately on the VM despite looking like state:
 ├── database-biomero/    BIOMERO Postgres        owner 999:999, mode 0700
 ├── omero/               OMERO image repository  owner 1000:0,  mode 0755
 ├── L-Drive/             user data, /data in the containers
-├── config/              volume-identity -- see below
+├── config/              volume-identity, the databases' credentials
 └── backups/             backup_master.sh output
 ```
 
@@ -61,22 +61,16 @@ The ownership is not cosmetic. Postgres refuses to start if its data directory
 is not owned by the database user and mode 0700, and OMERO expects uid 1000.
 Any copy of this data must preserve it — use `cp -a`, never a plain `cp`.
 
-### config/
+### config/volume-identity
 
-`config/` holds what belongs to the volume rather than to any VM. That is one
-file:
-
-```text
-config/volume-identity     the credentials that open this volume's databases
-```
-
-**`volume-identity`** carries the database passwords and `METABASE_SECRET_KEY`.
-These are decided once, when the volume is empty, and fixed by its data
-afterwards: Postgres ignores `POSTGRES_PASSWORD` once the cluster exists, and
-`METABASE_SECRET_KEY` decrypts what Metabase has already written. They open this
-volume and nothing else, so losing them means losing the data. `make deploy`
-writes the file when it initialises an empty volume, fills those values into a
-fresh `.env` from it, and refuses to start when the two disagree.
+`config/` holds what belongs to the volume rather than to any VM, which is this
+one file. It carries the database passwords and `METABASE_SECRET_KEY`, decided
+once when the volume is empty and fixed by its data afterwards: Postgres ignores
+`POSTGRES_PASSWORD` once the cluster exists, and `METABASE_SECRET_KEY` decrypts
+what Metabase has already written. They open this volume and nothing else, so
+losing them means losing the data. `make deploy` writes the file when it
+initialises an empty volume, fills those values into a fresh `.env` from it, and
+refuses to start when the two disagree.
 
 It is mode 0600 beside the database files it opens, so it is no more exposed
 than they are. `scripts/volume-identity.sh` is the only thing that writes it.
@@ -183,8 +177,8 @@ what you have.
 
 ### From an existing deployment
 
-The direct route, and the one used to create the current layout. The stack must
-be down — copying a running Postgres data directory gives you a corrupt one.
+The direct route. The stack must be down — copying a running Postgres data
+directory gives you a corrupt one.
 
 ```bash
 make down
