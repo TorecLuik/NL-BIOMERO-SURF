@@ -33,20 +33,6 @@ select both .ome.tiff files -> Import
 Below, `$FIG7` is `fig7_RSAdetection_16w` (2 channels, DNA on **C0**) and `$RGB`
 is `6E3rd4hrSTFBGlc-1_Render_SeriesRGB` (3 channels, DNA on **C2**).
 
-## Order
-
-T2 and T3 consume earlier output, and T3 needs it built on `$RGB`:
-
-```text
-T0                            check the imports first
-T1 -> T2                      segment and expand $FIG7
-T4 -> T2 -> T3                the same on $RGB, then quantify
-T5, T6, T7                    independent, any time after T0
-```
-
-T2 runs twice, once per image. T3 measures `$RGB` only, because the CellProfiler
-pipeline needs three channels.
-
 ## How to run a workflow
 
 Every test below uses the same dialog, so it is described once here.
@@ -61,7 +47,7 @@ Use_ZARR_Format            leave OFF -- workflows here expect TIFF
 Choose_Z_Section           "Max projection" flattens a Z-stack (see the trap below)
 <workflow name>            tick the workflow, which reveals its parameters
 2) Attach to original images
-3a) Import into NEW Dataset   name it, e.g. "T1 nuclei"
+3a) Import into NEW Dataset   name it, e.g. "A1 nuclei"
 3c) Rename the imported images   THE FIELD THAT DECIDES LATER TESTS
 ```
 
@@ -89,14 +75,29 @@ docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
   -c "SELECT * FROM biomero_workflow_progress_view WHERE workflow_id='<uuid>';"
 ```
 
-## T0 — Import is self-contained
+## Order
+
+The tests come in two chains plus three independent checks. Each chain runs top
+to bottom; the second exists because quantification needs a 3-channel image.
+
+```text
+P1              prerequisite: the imports are usable
+A1 -> A2        segment and expand $FIG7
+B1 -> B2 -> B3  segment, expand and quantify $RGB
+I1, I2, I3      independent, any time after P1
+```
+
+A2 and B2 are the same test on different input, so its settings are given once,
+under A2.
+
+## P1 — Imports are usable
 
 Guards against the failure that cost two images here. In **Data**, open each
 imported image. If it renders, its pixels are in the OMERO volume.
 
 A by-reference import whose source has been deleted throws
 `ResourceError: Error instantiating pixel buffer` instead of displaying, and
-every workflow on it will fail in T1. To audit the whole repository at once:
+every workflow on it will fail later. To audit the whole repository at once:
 
 ```bash
 docker exec nl-biomero-omeroserver-1 bash -lc \
@@ -122,7 +123,11 @@ docker exec nl-biomero-database-1 psql -U omero -d omero \
 *Select ALL* in the picker while one exists, because a single bad image aborts
 the whole batch and every other image in that run is lost.
 
-## T1 — Segmentation, the whole chain
+## Chain A — $FIG7
+
+Two channels, 512x512. Proves the chain works at all.
+
+### A1 — Segmentation, the whole chain
 
 The core test. Nuclei on the DNA channel of `$FIG7`.
 
@@ -134,7 +139,7 @@ workflow    cellpose
   prob_threshold   0.5
   cp_model         nuclei
   use_gpu          true
-3a) NEW Dataset  T1 nuclei
+3a) NEW Dataset  A1 nuclei
 3c) Rename       {original_file}_Nuclei_Mask.{ext}
 ```
 
@@ -143,8 +148,8 @@ words it as "0 for grayscale and RGB converted to grayscale by luminance; 1, 2
 or 3 to select a specific RGB channel", which reads as RGB-only, but `1` does
 select C0 on this 2-channel image.
 
-The rename matters even though nothing in T1 reads it: T3 will not find this
-mask under any other name.
+The rename matters even though nothing in A1 reads it: B3 will not find a mask
+under any other name.
 
 Four stages run; the Analyzer shows progress through them:
 
@@ -155,7 +160,7 @@ cellpose                     Slurm job on gpu_a100_22c
 SLURM_Import_Results.py      mask imported back
 ```
 
-**Pass:** status `DONE` at 100%, and a label image in `T1 nuclei` whose nuclei
+**Pass:** status `DONE` at 100%, and a label image in `A1 nuclei` whose nuclei
 visually match the DNA channel when flipped between the two in **Data**.
 
 **Fail, and where to look:**
@@ -168,7 +173,7 @@ ValidationException: "Input data": biomero_<uuid> not in [...]
      docker exec nl-biomero-biomeroworker-1 \
        grep -i "Critical error\|ResourceError" \
        /opt/omero/server/OMERO.server/var/log/biomero.log | tail
-     Usually a broken by-reference import -- run T0.
+     Usually a broken by-reference import -- run P1.
 
 Slurm job FAILED
   -> docker exec nl-biomero-biomeroworker-1 \
@@ -184,39 +189,80 @@ Invalid C index: 1/1  (in the biomero.log traceback)
      see the conversion note in reference-data.md.
 ```
 
-## T2 — Cell expansion
+### A2 — Cell expansion
 
-Needs a nucleus mask from T1 or T4. Select the mask image, not the original.
+Needs the nucleus mask from A1. Select the mask image, not the original.
 
 ```text
 image       the nucleus mask
 workflow    cellexpansion
   max_pixels                       25
   discard_cells_without_cytoplasm  true
-3a) NEW Dataset  T2 cells
+3a) NEW Dataset  A2 cells
 3c) Rename       leave EMPTY -- see below
 ```
 
 **Leave the rename empty.** CellExpansion names its own output by taking the
 input filename and replacing the literal substring `Nuclei` with `Cells`. Given
-`..._Nuclei_Mask.tif` from T1 it produces `..._Cells_Mask.tif`, which is exactly
-what T3 needs. If the input has no `Nuclei` in its name, input and output names
-collide and the run is unusable — which is why T1 sets the rename.
+`..._Nuclei_Mask.tif` from A1 it produces `..._Cells_Mask.tif`, which is what B3
+needs. If the input has no `Nuclei` in its name, input and output names
+collide and the run is unusable — which is why A1 sets the rename.
 
 CellExpansion reads only the mask and never the original, so it has no channel
 parameters and these settings are the same whichever image the mask came from.
 
-**Pass:** a cell mask in `T2 cells`, each cell containing one nucleus and
+**Pass:** a cell mask in `A2 cells`, each cell containing one nucleus and
 extending beyond it.
 
-## T3 — Quantification
+## Chain B — $RGB
 
-Needs the original plus both masks, all built from `$RGB`. **Run T4, then T2 on
-its mask, before this.** The T1/T2 masks are built on `$FIG7` and cannot be used
-here, for the channel reason below.
+Three channels, 1114x1757. Repeats the segmentation on a different image shape,
+and is the only chain that can reach quantification: the CellProfiler pipeline
+loads the original as a colour image and needs three channels.
+
+### B1 — Segmentation on the RGB image
+
+The same segmentation on `$RGB`. A1 must have passed first; this repeats it on a
+different image shape and starts the chain B3 needs.
 
 ```text
-images      $RGB + its T4 mask + its T2 mask   (select all three)
+image       $RGB
+workflow    cellpose
+  nuc_channel      3     C2 = DNA (blue)
+  diameter         0     auto
+  prob_threshold   0.5
+  cp_model         nuclei
+  use_gpu          true
+3a) NEW Dataset  B1 nuclei
+3c) Rename       {original_file}_Nuclei_Mask.{ext}
+```
+
+`nuc_channel` is `3` for C2, unambiguous here because the image really is
+3-channel RGB. Everything else matches A1.
+
+Worth running separately: `$RGB` is 3-channel where `$FIG7` is 2-channel, and
+1114x1757 where `$FIG7` is 512x512. It crosses the 1024 px tile size in both
+dimensions, so it is the only reference image that exercises tiling, and the
+wrapper pads non-square images up to at least 224 and crops back afterwards.
+
+**Pass:** as A1, and the returned mask is the full 1114x1757.
+
+### B2 — Cell expansion on the RGB mask
+
+A2 again, against B1's mask. Same settings -- CellExpansion reads only the mask,
+never the original, so nothing changes with the channel count. Leave `3c) Rename`
+empty so it produces `..._Cells_Mask...` itself.
+
+**Pass:** a cell mask in its dataset, each cell containing one nucleus and
+extending beyond it.
+
+### B3 — Quantification
+
+Needs the original plus both masks, all built from `$RGB`. The A-chain masks are
+built on `$FIG7` and cannot be used here, for the channel reason below.
+
+```text
+images      $RGB + the B1 mask + the B2 mask   (select all three)
 workflow    nuclei_measurements
   nuclei_mask_suffix   _Nuclei_Mask
   cells_mask_suffix    _Cells_Mask
@@ -237,11 +283,11 @@ colour image. Setting `metric_channels` to `1,2` does not help -- the wrapper
 reconfigures the measurement channels but not how the image is loaded. The
 descriptor's own wording gives it away: "E.g. 1,2,3 for RGB".
 
-So T3 needs masks built from `$RGB`: run T4, then T2 on its mask.
+This is why the B chain exists: B1 and B2 build the masks on `$RGB`.
 
 Two traps, both silent:
 
-- The suffixes above are the workflow's defaults, and they are what T1 and T2
+- The suffixes above are the workflow's defaults, and they are what B1 and B2
   were named to produce. Any other spelling and the pipeline matches nothing.
   The match is on a substring, so the accumulated `.0.tif` extensions that a
   round trip adds do not break it.
@@ -260,37 +306,13 @@ docker exec nl-biomero-biomeroworker-1 \
 A `does contain` line for each suffix means matching worked and the fault is
 elsewhere. No such lines means the suffixes are wrong.
 
-## T4 — A second image shape
+## Independent checks
 
-T1 again on `$RGB`, and the first half of the chain T3 needs.
+These need nothing from the chains beyond P1.
 
-```text
-image       $RGB
-workflow    cellpose
-  nuc_channel      3     C2 = DNA (blue)
-  diameter         0     auto
-  prob_threshold   0.5
-  cp_model         nuclei
-  use_gpu          true
-3a) NEW Dataset  T4 nuclei (RGB)
-3c) Rename       {original_file}_Nuclei_Mask.{ext}
-```
+### I1 — StarDist
 
-`nuc_channel` is `3` for C2, and unambiguous here because the image really is
-3-channel RGB. Everything else matches T1.
-
-Worth running separately: `$RGB` is 3-channel where `$FIG7` is 2-channel, and
-1114x1757 where `$FIG7` is 512x512. It crosses the 1024 px tile size in both
-dimensions, so it is the only reference image that exercises tiling, and the
-wrapper pads non-square images up to at least 224 and crops back afterwards.
-
-**Pass:** as T1, and the returned mask is the full 1114x1757.
-
-Then run T2 against this mask to get the cell mask, and T3 can run.
-
-## T5 — StarDist
-
-Same as T1, swapping the workflow. Use `$RGB`, not `$FIG7`.
+Same as A1, swapping the workflow. Use `$RGB`, not `$FIG7`.
 
 ```text
 image       $RGB
@@ -298,16 +320,16 @@ workflow    stardist
 3c) Rename  {original_file}_Nuclei_Mask.{ext}
 ```
 
-Set the rename even though T5 chains into nothing: without it the result imports
+Set the rename even though this chains into nothing: without it the result imports
 as `<name>.ome.tiff.0.tif`, hard to tell from the original in a list.
 
 StarDist branches on 1-channel greyscale vs 3-channel RGB and has no 2-channel
 path, so `$FIG7` takes the RGB branch on 2-channel data and the result is not
 meaningful. This is a property of the workflow, not a bug in the deployment.
 
-**Pass:** a mask comparable to T4's on the same input.
+**Pass:** a mask comparable to B1's on the same input.
 
-## T6 — Importer watch path
+### I2 — Importer watch path
 
 Independent of the workflow chain, and separately unverified. In **BIOMERO →
 Importer**, drop a copy of a reference `.ome.tiff` into a watched folder, or
@@ -315,14 +337,14 @@ place it there on disk, and watch it appear in OMERO unattended.
 
 **Pass:** the image is imported without anyone pressing Import.
 
-## T7 — ZARR format passthrough
+### I3 — ZARR format passthrough
 
 `Use_ZARR_Format` in the run dialog is not about the input image being a Zarr.
 OMERO always exports to OME-Zarr; the toggle only decides whether that export is
 converted to TIFF before the workflow runs:
 
 ```text
-OFF   zarr -> tiff   CONVERT_ZARR_TO_TIFF runs      (T1-T6 take this path)
+OFF   zarr -> tiff   CONVERT_ZARR_TO_TIFF runs      (every other test takes this)
 ON    zarr -> zarr   conversion is a no-op
 ```
 
@@ -332,8 +354,8 @@ takes TIFF. Only `BilayersTest`, which is not in `slurm-config.ini`, declares
 expects TIFF.
 
 ```text
-image     $FIG7 (the .ome.tiff, as in T1)
-workflow  cellpose, exactly as T1
+image     $FIG7 (the .ome.tiff, as in A1)
+workflow  cellpose, exactly as A1
 Use_ZARR_Format   ON
 Ome-zarr version  0.4
 ```
@@ -348,7 +370,7 @@ rather than a format mismatch.
 
 Note this tests the *transfer* format, not the registered Zarr images.
 
-### Running a workflow on a registered Zarr image
+#### Running a workflow on a registered Zarr image
 
 This is a separate case and it does not work. Submitting a Zarr-registered image
 (one whose pixels OMERO reads in place through `externalinfo`) runs the whole
@@ -413,9 +435,26 @@ Note also that the BIOMERO developers suggested `Cellpose4 v0.10.1` and
 from `biomeroworker/slurm-config.ini` fail at submission, before any Slurm job
 exists.
 
+## Status
+
+As of 2026-09-17:
+
+```text
+P1  pass
+A1  pass      cellpose on $FIG7, mask imported back
+A2  pass      cell mask, chained from A1's name
+B1  pass      cellpose on $RGB
+B2  not run
+B3  not run   the earlier attempt used A-chain masks and failed on channel count
+I1  pass      stardist on $RGB
+I2  not run
+I3  not run
+```
+
 ## Recording results
 
 These tests need a browser and live Spider, so nothing runs them automatically.
-When a test passes, move its line into the `Verified` block of
-[open-items.md](open-items.md) with the date; when one fails, note the workflow
-UUID from the Analyzer so the run can be traced in `biomero_task_execution`.
+When a test passes, update the block above and move its line into the `Verified`
+block of [open-items.md](open-items.md) with the date. When one fails, note the
+workflow UUID from the Analyzer; look it up in `biomero_workflow_progress_view`,
+then read `biomero_task_execution` for the error text.
