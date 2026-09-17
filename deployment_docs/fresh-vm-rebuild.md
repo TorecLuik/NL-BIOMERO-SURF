@@ -70,20 +70,25 @@ Fixes are one commit each on `prod-rebuild-2026-09`. Beyond them:
 
 ## What it proves
 
-The second rebuild, against the fixed tree, reached a running stack with all
-smoke tests passing, and then all nine checks in
-[pipeline-tests.md](pipeline-tests.md) passed on it -- including I2 and I3,
-which had never been run. B3 measured **56 nuclei**, the same number the
-development VM recorded.
+All nine checks in [pipeline-tests.md](pipeline-tests.md) pass on a stack built
+from an empty volume, including I2 and I3, which had never been run. B3
+measured **56 nuclei**, the same number the development VM recorded.
 
-That last number is the point. The same input through an independently built
-stack, with different credentials on a volume that started empty, produces the
-same measurement.
+That number is the point. The same input, through an independently built stack
+with different credentials on a volume that started empty, produces the same
+measurement -- so what reproduces is the result, not just the deployment.
+
+Those nine ran on the first rebuild, once each fix was in place. The tree was
+then wiped and rebuilt a second time to check the finished article, and that
+run is below.
 
 ## The second rebuild
 
 Run against the fixed tree, from the same starting point: empty volume, no
-repository, no images, no nginx configuration.
+repository, no images, no nginx configuration. Worth doing separately, because
+it caught a bug introduced *after* the first rebuild -- `make init-env` died on
+a SIGPIPE from its own password generator, having won that race every time it
+was tested by hand.
 
 ```text
 make provision    full report, no early exit
@@ -96,9 +101,15 @@ make deploy       exit 0, all smoke tests passed
 
 Then, with nothing done by hand in between: reference data fetched and verified
 against its checksums, both images imported through the Importer panel, and A1
-run to a nucleus mask back in OMERO. The importer came up saying READY TO UPLOAD
-DATA TO OMERO on its first start, and `/logs` answered 401 without credentials
-and 302 with them.
+run to a nucleus mask back in OMERO -- the same 512x512 single-channel mask the
+first rebuild produced. The importer came up saying READY TO UPLOAD DATA TO
+OMERO on its first start, and `/logs` answered 401 without credentials and 302
+with them.
+
+A1 alone was re-run here rather than all nine: the chains below it exercise
+BIOMERO, which the first rebuild already covered, while what this run had to
+show is that the *deployment path* still arrives at a stack that can run a
+workflow end to end.
 
 ## Still not covered
 
