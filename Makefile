@@ -73,8 +73,17 @@ init:
 # Existing real files are left alone rather than replaced, so running this on a
 # machine that predates the volume layout reports them instead of destroying
 # them.
+#
+# DATA_PATH overrides where the volume is mounted, for a volume whose name is
+# not omero-data:
+#
+#   make link-config DATA_PATH=/data/my-volume
+#
+# It wins over both env files, so pointing at a volume never means editing the
+# tracked .env.shared. After linking, the volume's own .env carries the path.
 link-config:
-	@path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
+	@path="$(DATA_PATH)"; \
+	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
 	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env.shared 2>/dev/null | tail -1 | cut -d= -f2-); \
 	if [ -z "$$path" ]; then echo "  [FAIL] OMERO_DATA_PATH is not set in .env or .env.shared"; exit 1; fi; \
 	if [ ! -d "$$path/config" ]; then \
@@ -198,19 +207,24 @@ reference-data:
 # Rewrite the three per-VM hostname values. Run after cloning onto a new host:
 # a wrong CSRF origin lets the stack start but blocks OMERO.web login.
 #
-# Only .env is touched. It is per-VM, gitignored, and lives on the storage
-# volume, and it overrides .env.shared for all three values -- so writing them
-# into the tracked .env.shared as well only dirtied the working tree with one
-# machine's hostname.
+# The values are per-VM, so they are written to .env, which is gitignored and
+# lives on the storage volume. .env is a symlink into config/, which is
+# root-owned, so the edit is written back through the link in place: sed -i
+# would either replace the link with a regular file or fail on the temporary
+# file it cannot create in that directory.
 set-host:
 	@test -n "$(HOST)" || { echo "usage: make set-host HOST=my.vm.example.org"; exit 2; }
 	@if [ ! -f .env ]; then \
 		echo "  [FAIL] .env does not exist; run make link-config first"; \
 		exit 1; \
 	fi
-	@sed -i -E "s|^OMERO_CSRF_TRUSTED_ORIGINS=.*|OMERO_CSRF_TRUSTED_ORIGINS=[\"https://$(HOST)\"]|" .env
-	@sed -i -E "s|^METABASE_SITE_URL=.*|METABASE_SITE_URL=https://$(HOST)/metabase|" .env
-	@sed -i -E "s|^OBSERVABILITY_ROOT_URL=.*|OBSERVABILITY_ROOT_URL=https://$(HOST)/logs/|" .env
+	@tmp=$$(mktemp); \
+	sed -E -e "s|^OMERO_CSRF_TRUSTED_ORIGINS=.*|OMERO_CSRF_TRUSTED_ORIGINS=[\"https://$(HOST)\"]|" \
+	       -e "s|^METABASE_SITE_URL=.*|METABASE_SITE_URL=https://$(HOST)/metabase|" \
+	       -e "s|^OBSERVABILITY_ROOT_URL=.*|OBSERVABILITY_ROOT_URL=https://$(HOST)/logs/|" \
+	       .env > "$$tmp" && cat "$$tmp" > .env; \
+	rc=$$?; rm -f "$$tmp"; \
+	if [ $$rc -ne 0 ]; then echo "  [FAIL] could not write .env"; exit 1; fi
 	@printf 'updated .env\n'
 	@echo "Restart to apply: make up"
 
