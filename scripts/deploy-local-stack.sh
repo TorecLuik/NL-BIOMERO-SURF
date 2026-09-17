@@ -208,9 +208,6 @@ exec "$@"
 EOF
 chmod 755 "${MOUNT_SSH_SCRIPT_PATH}"
 
-# Keep the project SSH copy readable for Docker and host SSH locked down for manual use.
-chmod 755 "${SSH_DIR}"
-chmod 644 "${SSH_DIR}/config" "${SSH_DIR}/known_hosts" "${SSH_DIR}/id_rsa" "${SSH_DIR}/id_rsa.pub"
 sudo chmod -R 777 "${LDRIVE_DIR}" "${PROJECT_ROOT_DIR}/logs"
 # OMERO.biomero writes these bind-mounted files from inside the web container.
 # Keep them host-writable for uid 999 (omero-web), even after git checkout,
