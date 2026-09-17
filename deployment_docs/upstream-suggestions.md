@@ -1,6 +1,6 @@
 # Upstream Suggestions
 
-*Created 2026-09-17*
+*Created 2026-09-17 · last updated 2026-09-17*
 
 Findings from this deployment that belong upstream rather than in local
 configuration. Each one is reproducible here and cost real debugging time.

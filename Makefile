@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init deploy doctor set-host docs-dates up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init deploy doctor set-host docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
+	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
@@ -132,12 +133,17 @@ doctor:
 	else printf '  [warn] uncapped container logs: %s\n' "$$(echo $$uncapped | tr '\n' ' ')"; \
 	     echo "         these grow without bound; re-create them: make up"; fi
 
-# Refresh the Created/last updated stamps in deployment_docs/ from git history. The
-# stamp goes stale as soon as a doc is edited, so run this before committing
+# Refresh the Created/last updated stamps in deployment_docs/ from git history.
+# The stamp goes stale as soon as a doc is edited, so run this before committing
 # documentation changes.
+#
+# --follow is needed so a directory rename does not reset every Created date.
+# Note the "last updated" stamp keys off the working tree being dirty, so a
+# bulk change that touches every file -- a rename, a sed across the directory --
+# will stamp all of them. Check `git diff` before committing the result.
 docs-dates:
 	@for f in deployment_docs/*.md; do \
-		c=$$(git log --diff-filter=A --format=%ad --date=short -- "$$f" | tail -1); \
+		c=$$(git log --follow --diff-filter=A --format=%ad --date=short -- "$$f" | tail -1); \
 		m=$$(git log -1 --format=%ad --date=short -- "$$f"); \
 		[ -n "$$c" ] || continue; \
 		if git diff --quiet -- "$$f" && git diff --cached --quiet -- "$$f"; then :; else m=$$(date +%F); fi; \
@@ -148,6 +154,11 @@ docs-dates:
 		fi; \
 		printf '  %-38s %s -> %s\n' "$$(basename $$f)" "$$c" "$$m"; \
 	done
+
+# Re-download the public reference datasets used by the pipeline tests, and
+# verify them. Safe to re-run; see deployment_docs/reference-data.md.
+reference-data:
+	@./scripts/fetch-reference-data.sh
 
 # Rewrite the three per-VM hostname values. Run after cloning onto a new host:
 # a wrong CSRF origin lets the stack start but blocks OMERO.web login.
