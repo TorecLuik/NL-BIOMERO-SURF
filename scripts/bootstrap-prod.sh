@@ -127,6 +127,13 @@ if [[ -f .env.example && -f .env ]]; then
   fi
 fi
 
+# Database credentials against the volume that holds the data. Postgres ignores
+# POSTGRES_PASSWORD after the cluster exists, so a .env that disagrees fails at
+# authentication time rather than at startup.
+if ! "${PROJECT_ROOT_DIR}/scripts/volume-identity.sh" check; then
+  fail "database credentials do not match the storage volume"
+fi
+
 # Version pins the build depends on.
 if [[ -f .env ]]; then
   ok "pins: $(grep -E '^(BIOMERO_VERSION|OMERO_BIOMERO_VERSION|BIOMERO_IMPORTER_VERSION)=' .env | tr '\n' ' ')"
@@ -169,6 +176,10 @@ fi
 echo
 echo "== Deploying stack =="
 "${PROJECT_ROOT_DIR}/scripts/deploy-local-stack.sh"
+
+# Record what an empty volume was just initialised with, so a later deploy can
+# detect a .env that has drifted from the data. A no-op on a stamped volume.
+"${PROJECT_ROOT_DIR}/scripts/volume-identity.sh" write || true
 
 if [[ "${SKIP_SMOKE}" -eq 1 ]]; then
   echo "--skip-smoke given; deployment finished without smoke tests."

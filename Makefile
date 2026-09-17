@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init link-config deploy doctor set-host docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init link-config deploy doctor set-host adopt-volume docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
 	@echo "  make link-config        link .env/.ssh/slurm-config to the storage volume"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
+	@echo "  make adopt-volume       record an existing volume's database credentials"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
@@ -107,6 +108,12 @@ link-config:
 
 deploy:
 	@./scripts/bootstrap-prod.sh
+
+# Record the database credentials of a volume that predates volume-identity.
+# Verifies the password in .env against the running database before writing, so
+# it cannot enshrine a wrong one. Needs the database up: make up
+adopt-volume:
+	@./scripts/volume-identity.sh adopt
 
 # Read-only. Checks the things that have actually gone wrong here: a missing or
 # stale submodule, pins that disagree between files, and images that do not
