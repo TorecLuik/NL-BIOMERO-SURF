@@ -1,0 +1,20 @@
+# Shared log rotation cap for every container in this deployment, so no
+# single container can fill the host disk with unbounded stdout/stderr
+# (Docker's json-file driver has no size limit unless one is set here).
+#
+# Every service in docker-compose.yml, docker-compose-dev.yml,
+# opensearch-compose.yml, and logs-compose.yml pulls this in via:
+#
+#   extends:
+#     file: logging-defaults.yml
+#     service: default-logging
+#
+# This is a stub service, never started directly; `extends` only merges its
+# config into the referencing service.
+services:
+  default-logging:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

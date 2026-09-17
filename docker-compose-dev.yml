@@ -17,6 +17,9 @@ services:
     # Define named volumes to persist data on host after shutdown
     volumes:
       - "database:/var/lib/postgresql/data"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   database-biomero:
     # Define a prebuilt Postgres image with a version
@@ -32,6 +35,9 @@ services:
     # Define named volumes to persist data on host after shutdown
     volumes:
       - "database-biomero:/var/lib/postgresql/data"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   # Name of our omero server, referenced in omero_master_host
   omeroserver:
@@ -75,11 +81,9 @@ services:
       - "./web/L-Drive:/data"
       - "tus-destination:/data/tus_destination"
       - "./logs/omeroserver:/opt/omero/server/OMERO.server/var/log"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   # Name of our worker node, can be anything
   omeroworker-1:
@@ -100,11 +104,9 @@ services:
       - "./web/L-Drive:/data"
       - "tus-destination:/data/tus_destination"
       - "./logs/omeroworker-1:/opt/omero/server/OMERO.server/var/log"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   # Define our processor worker
   biomeroworker:
@@ -154,11 +156,9 @@ services:
       - "./config/biomero-importer:/opt/omero/server/config-importer:ro"
       - "./web/biomero-config.json:/opt/omero/server/biomero-config.json:ro"
       - "./logs/biomeroworker:/opt/omero/server/OMERO.server/var/log"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   # Service for the omero.web UI
   omeroweb:
@@ -212,11 +212,9 @@ services:
       - "./web/group-mappings.json:/opt/omero/web/OMERO.web/var/group-mappings.json:rw"
       - "./logs/omeroweb:/opt/omero/web/OMERO.web/var/log"
       - "./logs/nginx:/var/log/nginx"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
     entrypoint: ["sh", "-c", "tail -f /dev/null"]
 
   # New Metabase service
@@ -234,6 +232,9 @@ services:
       - "3000:3000" # Expose Metabase on port 3000
     volumes:
       - "./metabase:/metabase-data" # Mount existing H2 db
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
   biomero-importer:
     build:
@@ -262,11 +263,9 @@ services:
       - "./biomero-importer/biomero_importer:/auto-importer/biomero_importer"
       - "./logs/biomero-importer:/auto-importer/logs"
     user: "${OMERO_CONTAINER_USER}"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
 
 # Define the network(s) to communicate between containers
 networks:

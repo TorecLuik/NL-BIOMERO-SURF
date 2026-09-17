@@ -212,6 +212,55 @@ If logs cannot be written, check host `logs/biomero-importer` ownership and mode
 
 `web/44-create_forms_user.py` creates/validates the forms master user. If forms startup fails, check `omeroweb` logs before changing OMERO user/group state.
 
+## Disk Space and Log Growth
+
+The host root filesystem is small relative to what Docker can accumulate. A full disk breaks things that look unrelated: VS Code Remote-SSH fails with `UnpackFailed` because it cannot extract the server tarball, containers fail to start, and Postgres/OpenSearch can flip into a read-only protective mode.
+
+Check quickly:
+
+```bash
+df -h /
+sudo du -sxh /var/lib/docker/* 2>/dev/null | sort -rh | head
+sudo docker system df -v
+```
+
+Ordinary, safe-to-reclaim space (does not touch running containers or their data):
+
+```bash
+sudo docker image prune -a -f      # dangling/unused images only
+sudo journalctl --vacuum-time=3d   # systemd journal, self-regrows, safe to trim
+```
+
+Before removing any image shown as reclaimable, confirm with `docker inspect <container> --format='{{.Image}}'` that no running container actually references it — a tag can be reassigned to a new build while a running container still holds the old image ID, so the stale tag looks orphaned but the digest under it may not be.
+
+Stale `~/.vscode-server` installs from failed/interrupted remote connections can also hold several GB; safe to `rm -rf ~/.vscode-server` on the affected user, VS Code reinstalls it on next connect.
+
+### Runaway container logs
+
+Docker's `json-file` log driver has no size cap unless a service sets one. A container stuck retrying a failing action logs one entry per attempt and can grow a single log file to tens of GB, which is a much larger and faster space drain than image/volume growth. Find the actual offender by log file size, not just image/volume size:
+
+```bash
+sudo find /var/lib/docker/containers -name '*-json.log' -exec du -h {} \; | sort -rh | head
+```
+
+If one file dominates, `sudo docker logs <container> --tail 50` (or `tail` the file directly) to see what is looping before deciding whether to just truncate the log or also fix the underlying loop. Truncating in place is safe and does not require a restart:
+
+```bash
+sudo truncate -s 0 /var/lib/docker/containers/<id>/<id>-json.log
+```
+
+OpenSearch specifically has a self-reinforcing failure mode worth recognizing: once disk usage crosses its flood-stage watermark, it marks indices read-only, including its own audit-log index. Every subsequent request then fails to audit-log, which OpenSearch reports as an `ERROR` with a full stack trace — for every request — which fills the disk further and keeps the watermark tripped. Truncating the log does not fix this; the block has to be lifted via the OpenSearch API once space exists, or the log regrows immediately.
+
+Every service in `docker-compose.yml`, `docker-compose-dev.yml`, `opensearch-compose.yml`, and `logs-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
+
+```yaml
+extends:
+  file: logging-defaults.yml
+  service: default-logging
+```
+
+`extends` is used instead of a YAML anchor because anchors do not resolve across separate files — each compose file parses independently, so an anchor defined in one file is invisible in another even under `include:`. `extends` genuinely merges from the external file, so `logging-defaults.yml` is the one real source; changing the cap there changes it everywhere. Any new service added to these files needs the same `extends:` block or it reverts to Docker's unbounded default.
+
 ## Backup Guardrails
 
 Before mutating live prod state:
