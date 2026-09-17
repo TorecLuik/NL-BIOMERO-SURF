@@ -320,6 +320,54 @@ release fails every workflow run without ROIs, and the error names neither the
 parameter nor the script line. Yanking 2.8.2 would work too, but leaves 2.7.0
 as the newest stable, which predates the parameter entirely.
 
+## 10. The importer image always installs itself as version 0.0.0
+
+**Repo:** BIOMERO.importer (`Dockerfile`)
+
+The image reports `biomero-importer 0.0.0` no matter which tag is checked out.
+Here the submodule sits exactly on `v1.4.2`, and the installed package still
+says `0.0.0`, so `make doctor` reports a mismatch against the pin that the
+source does not actually have.
+
+The version is `dynamic` via `setuptools_scm`, and the Dockerfile picks between
+real metadata and a fallback with:
+
+```dockerfile
+RUN if [ -d "/auto-importer/.git" ]; then \
+        git config --global --add safe.directory /auto-importer && \
+        pip install /auto-importer; \
+    else \
+        SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0 pip install /auto-importer; \
+    fi
+```
+
+`-d` tests for a directory. In a git submodule -- which is how NL-BIOMERO
+consumes this repository -- `.git` is a *file* holding a `gitdir:` pointer:
+
+```text
+$ file biomero-importer/.git
+biomero-importer/.git: ASCII text
+$ cat biomero-importer/.git
+gitdir: ../.git/modules/biomero-importer
+```
+
+So the test is false for every submodule build and the fallback always wins.
+Changing `-d` to `-e` is not enough on its own: the pointer resolves outside
+the build context, so the git metadata is not there to read either.
+
+**Suggested:** accept the version as a build argument, defaulting to the current
+fallback, so a consumer that knows which tag it checked out can pass it:
+
+```dockerfile
+ARG BIOMERO_IMPORTER_VERSION=0.0.0
+RUN SETUPTOOLS_SCM_PRETEND_VERSION=${BIOMERO_IMPORTER_VERSION} pip install /auto-importer
+```
+
+That removes the `.git` probe entirely and works the same for a plain clone, a
+submodule, and a context with no git at all. Without it, no consumer can build
+an image that knows its own version, and any check comparing the installed
+version against a pin has to be disabled or special-cased.
+
 ## Reporting
 
 Repositories:

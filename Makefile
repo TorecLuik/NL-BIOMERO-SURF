@@ -176,8 +176,11 @@ doctor:
 	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); \
 	img=$$($(COMPOSE) config --images 2>/dev/null | grep -m1 'biomero-importer'); \
 	got=$$([ -n "$$img" ] && sudo docker run --rm --entrypoint sh "$$img" -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
-	if [ -z "$$got" ]; then echo "  [warn] importer image not built yet"; \
+	sub=$$(cd biomero-importer 2>/dev/null && git describe --tags --exact-match 2>/dev/null | sed 's/^v//'); \
+	if [ -z "$$got" ]; then echo "  [warn] could not read the importer image; is it built?"; \
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
+	elif [ "$$got" = "0.0.0" ] && [ "$$sub" = "$$pin" ]; then \
+	     printf '  [ ok ] importer submodule is at %s (image self-reports 0.0.0)\n' "$$sub"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
 	@echo "== Metabase app DB =="
