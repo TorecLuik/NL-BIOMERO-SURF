@@ -267,7 +267,8 @@ workflow    nuclei_measurements
   nuclei_mask_suffix   _Nuclei_Mask
   cells_mask_suffix    _Cells_Mask
   metric_channels      1,2,3      the default; $RGB has three channels
-4) Upload result CSVs as OMERO tables   ON
+Add (mask) image results to a dataset   NO dataset -- clear the chip
+Measurement Tables                      ON
 ```
 
 **Use `$RGB`, not `$FIG7`.** The CellProfiler pipeline loads the original
@@ -294,24 +295,27 @@ Two traps, both silent:
 - `metric_channels` defaults to `1,2,3`, which is correct for `$RGB`. The
   wrapper only reconfigures channels when the value differs from the default.
 
-**Pass:** the CellProfiler pipeline runs to `ExportToSpreadsheet` and writes
-`Nuclei.csv`, `Cells.csv`, `Cytoplasm.csv` and `Image.csv`, one row per object.
+**Clear the dataset from `Add (mask) image results to a dataset`.** That option
+has no toggle: it is on whenever a dataset is selected, so removing the chip is
+how to turn it off. Leave `Measurement Tables` on.
 
-**The tables do not reach OMERO.** They stay on the server under
-`/data/root/.analyzed/<workflow-uuid>/<timestamp>/`, and only the Slurm log is
-attached to the dataset. This is a bug in `SLURM_Import_Results.py`, not a
-setting: with `3a) Import into NEW Dataset` set, the script takes the importer
-path, finds no *image* files among the CSVs, and calls `sys.exit(1)` -- about a
-thousand lines before it would have processed the tables. `Measurement Tables`
-being on makes no difference.
+This matters because the workflow produces only CSVs. With a dataset selected,
+`SLURM_Import_Results.py` takes the importer path, scans for *image* files,
+finds none and calls `sys.exit(1)` -- about a thousand lines before it would
+have processed the tables:
 
 ```text
 CRITICAL: No image files found for importer processing - workflow failed!
 ```
 
-The workflow still reports `DONE` at 100%, because the Slurm job did succeed.
-Read the CSVs off disk, or retry without `3a)` set to see whether the table step
-is then reached.
+The workflow still reports `DONE` at 100%, because the Slurm job itself
+succeeded, and only the Slurm log gets attached. The UI marks the option
+"Suggested" even though this workflow declares no image outputs, so following
+the suggestion is what breaks it.
+
+**Pass:** five `OMERO.tables` attached to the dataset -- `Nuclei`, `Cells`,
+`Cytoplasm`, `Experiment` and `metadata` -- one row per object. The CSVs are
+also written to `/data/root/.analyzed/<workflow-uuid>/<timestamp>/`.
 
 **Fail:** read the Slurm log before assuming the measurement is at fault:
 
@@ -462,9 +466,8 @@ A1  pass      cellpose on $FIG7, mask imported back
 A2  pass      cell mask, chained from A1's name
 B1  pass      cellpose on $RGB
 B2  pass      cell mask, chained from B1's name
-B3  pass*     56 nuclei measured; the CSVs stay on disk, see B3
+B3  pass      56 nuclei measured, tables attached to the dataset
 I1  pass      stardist on $RGB
-                 * pass with a caveat, described in the test
 I2  not run
 I3  not run
 ```

@@ -29,7 +29,6 @@ is covered by the automated smoke tests:
 
 ```text
 BIOMERO importer picking up files under /data
-quantification: CellProfiler measurements on a 3-channel image
 the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
 scripts/provision-vm.sh and the new-vm.md checklist on a genuinely bare VM
@@ -162,8 +161,9 @@ On the dev VM against live Spider:
 ```text
 pipeline import -> Spider -> Slurm -> results back in OMERO, in the browser,
          on both reference images: cellpose segmentation, CellExpansion, and
-         stardist. Per-check status is in pipeline-tests.md; quantification
-         and the importer watch path are still open.
+         stardist, and CellProfiler quantification returning OMERO.tables.
+         Per-check status is in pipeline-tests.md; the importer watch path
+         and the ZARR passthrough are still open.
 builds   both images build from a clean checkout
 worker   biomero 2.8.2, biomero-importer 1.4.2, zarr 3.1.5, ezomero 1.1.1
 web      omero-biomero 1.6.1, biomero 2.8.2, omero-forms 2.3.1, omero-web 5.33.1
