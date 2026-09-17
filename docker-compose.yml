@@ -16,7 +16,7 @@ services:
       - omero
     # Define named volumes to persist data on host after shutdown
     volumes:
-      - "database:/var/lib/postgresql/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/database:/var/lib/postgresql/data"
       # - .\backup_and_restore\omero-2025-07-24-14-06-06-pg16:/var/lib/postgresql/data
     extends:
       file: logging-defaults.yml
@@ -35,7 +35,7 @@ services:
       - omero
     # Define named volumes to persist data on host after shutdown
     volumes:
-      - "database-biomero:/var/lib/postgresql/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/database-biomero:/var/lib/postgresql/data"
     extends:
       file: logging-defaults.yml
       service: default-logging
@@ -78,8 +78,8 @@ services:
       - "4064:4064"
     # Define named volume and map a folder from the host machine
     volumes:
-      - "omero:/OMERO"
-      - "./web/L-Drive:/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./logs/omeroserver:/opt/omero/server/OMERO.server/var/log"
     extends:
       file: logging-defaults.yml
@@ -100,8 +100,8 @@ services:
       - omero
     # Named volume to share data access and persist data
     volumes:
-      - "omero:/OMERO"
-      - "./web/L-Drive:/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./logs/omeroworker-1:/opt/omero/server/OMERO.server/var/log"
     extends:
       file: logging-defaults.yml
@@ -152,10 +152,10 @@ services:
     # Named volume to share data access and persist data
     # Forward host SSH setup to container
     volumes:
-      - "omero:/OMERO"
-      - "./.ssh:/tmp/.ssh:ro"
-      - "./web/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
-      - "./web/L-Drive:/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/.ssh:/tmp/.ssh:ro"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./config/biomero-importer:/opt/omero/server/config-importer:ro"
       - "./web/biomero-config.json:/opt/omero/server/biomero-config.json:ro"
       - "./logs/biomeroworker:/opt/omero/server/OMERO.server/var/log"
@@ -210,9 +210,9 @@ services:
     ports:
       - "4080:4080"
     volumes:
-      - "./web/slurm-config.ini:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/slurm-config.ini:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
       - "./web/biomero-config.json:/opt/omero/web/OMERO.web/var/biomero-config.json:rw"
-      - "./web/L-Drive:/data:rw"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data:rw"
       - "./logs/omeroweb:/opt/omero/web/OMERO.web/var/log"
     extends:
       file: logging-defaults.yml
@@ -270,8 +270,8 @@ services:
     networks:
       - omero
     volumes:
-      - "omero:/OMERO"
-      - "./web/L-Drive:/data"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
+      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./config/biomero-importer:/auto-importer/config:ro"
       - "./logs/biomero-importer:/auto-importer/logs"
     extends:
@@ -284,15 +284,6 @@ services:
 networks:
   omero:
 
-# Define the named volume(s) to persist data to the host computer
-# Mount restored data to the named volumes with external: true and name: <volume_name>
-volumes:
-  database:
-    # external: true
-    # name: nl-biomero_database16 # If you upgraded from 11 to 16, use the restored db name here
-  database-biomero:
-    # external: true
-    # name: biomero-2025-07-24-14-06-06-pg16 # Restored data
-  omero:
-    # external: true
-    # name: omero-server-2025-07-29_12-09-40-UTC #  Restored data
+# Data lives at ${OMERO_DATA_PATH} on the host, set in .env.
+# On a Research Cloud workspace this is the mountpoint of an attached storage
+# volume (/data/<volume-name>), so the data survives the workspace.

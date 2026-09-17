@@ -8,7 +8,14 @@ ENV_PATH="${PROJECT_ROOT_DIR}/.env"
 START_LOG_STACK="${START_LOG_STACK:-1}"
 SSH_DIR="${PROJECT_ROOT_DIR}/.ssh"
 HOME_SSH_DIR="${LOGIN_HOME}/.ssh"
-LDRIVE_DIR="${PROJECT_ROOT_DIR}/web/L-Drive"
+# L-Drive and the secrets live on the attached storage volume, not in the repo.
+# Resolve it the way docker-compose.yml does. See
+# deployment_docs/storage-architecture.md.
+OMERO_DATA_PATH_VAL="$(grep -hE '^OMERO_DATA_PATH=' "${PROJECT_ROOT_DIR}/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
+if [[ -z "${OMERO_DATA_PATH_VAL}" ]]; then
+  OMERO_DATA_PATH_VAL="$(grep -hE '^OMERO_DATA_PATH=' "${PROJECT_ROOT_DIR}/.env.shared" 2>/dev/null | tail -1 | cut -d= -f2-)"
+fi
+LDRIVE_DIR="${OMERO_DATA_PATH_VAL}/L-Drive"
 SLURM_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/slurm-config.ini"
 SLURM_TEMPLATE_PATH="${PROJECT_ROOT_DIR}/web/slurm-config-template.ini"
 BIOMERO_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/biomero-config.json"

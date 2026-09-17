@@ -1,6 +1,6 @@
 # SURF Research Cloud Catalog Item: Background and Plan
 
-*Created 2026-09-16 · last updated 2026-09-16*
+*Created 2026-09-16 · last updated 2026-09-17*
 
 Scoping note for turning this deployment into a Research Cloud catalog item, so
 that creating a workspace replaces most of `new-vm.md`.

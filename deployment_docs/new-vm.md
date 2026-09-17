@@ -1,13 +1,17 @@
 # Deploying to a New VM
 
-*Created 2026-09-16 · last updated 2026-09-16*
+*Created 2026-09-16 · last updated 2026-09-17*
 
 Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
 one manual stop between them:
 
 ```bash
+# attach the storage volume in the portal first -- it carries the data
+# and the secrets. See storage-architecture.md.
 make provision              # host packages, submodule, hostname, nginx
-# restore .env and .ssh/, open ports 4063 and 4064
+make init                   # submodules, and link .env/.ssh at the volume
+# open ports 4063 and 4064
+make set-host HOST=$(hostname -f)
 make deploy                 # build, start, smoke test
 ```
 
@@ -19,13 +23,16 @@ for what that would replace and what it would not.
 
 ## What cannot be automated
 
-Three things have to be done by hand, and `provision-vm.sh` checks all three
-rather than assuming them.
+Three things have to be done by hand. `provision-vm.sh` checks the last two and
+reports whether the secrets resolved; it cannot see the portal, so it cannot
+tell you whether the volume is attached — only that the files it expects are
+missing.
 
-**The secrets.** `.env` and `.ssh/` exist only in your archive. `.env` is the
-only copy of the deployment secrets; there is no `.env.secrets` to render it
-from. A script that could fetch these unattended would be a worse security
-posture than the manual step.
+**Attaching the storage volume.** The volume carries the data *and* the
+secrets, so nothing deploys without it. Creating and attaching it is dashboard
+work: a volume attaches to one workspace at a time, and attaching to a running
+workspace means pausing it first. `.env` and `.ssh/` are no longer hand-copied
+archives — they live in `config/` on that volume.
 
 **Ports 4063 and 4064.** OMERO.insight connects directly to these. There is no
 host firewall on this VM, so they are opened in the SURF Research Cloud
@@ -62,18 +69,25 @@ reports on the three manual items and exits non-zero while any is outstanding.
 Flags: `--skip-packages` if the host already has them, `--no-nginx` to leave
 host nginx alone.
 
-## 3. Restore the secrets
+## 3. Link the secrets from the storage volume
 
-```text
-.env            deployment secrets; the only copy
-.ssh/id_rsa     Spider key, plus id_rsa.pub, known_hosts and config
-```
+`.env` and `.ssh/` are no longer restored by hand. They live in `config/` on the
+attached storage volume, and the repository reaches them through symlinks:
 
 ```bash
-chmod 600 .env .ssh/id_rsa
-chmod 644 .ssh/id_rsa.pub .ssh/known_hosts .ssh/config
+make link-config            # or make init, which also runs this
 ssh -F .ssh/config spider 'sinfo -s | head'   # confirm the key works
 ```
+
+Because `.env` travels with the volume, it carries the *previous* machine's
+hostname. Set this one:
+
+```bash
+make set-host HOST=$(hostname -f)
+```
+
+If the volume is new and has no `config/` yet, see
+[storage-architecture.md](storage-architecture.md) for how to populate one.
 
 ## 4. Open the OMERO.insight ports
 

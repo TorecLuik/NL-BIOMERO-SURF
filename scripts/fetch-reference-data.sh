@@ -2,7 +2,9 @@
 # Re-download the public reference datasets used to exercise BIOMERO workflows.
 #
 # Source: RIKEN SSBD (https://ssbd.riken.jp/), served as OME-Zarr v0.4.
-# Writes into web/L-Drive/reference-data/, which OMERO sees as /data/reference-data.
+# Writes into $OMERO_DATA_PATH/L-Drive/reference-data/, which OMERO sees as
+# /data/reference-data. L-Drive lives on the attached storage volume; see
+# deployment_docs/storage-architecture.md.
 #
 # Fetches the Zarr, regenerates the .ome.tiff files from it, then verifies
 # everything against SHA256SUMS. Safe to re-run.
@@ -11,7 +13,20 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="$ROOT/web/L-Drive/reference-data"
+
+# L-Drive moved onto the attached storage volume, so resolve it the same way
+# docker-compose.yml does rather than assuming the old in-repo path.
+DATA_PATH="$(grep -hE '^OMERO_DATA_PATH=' "$ROOT/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
+[ -n "$DATA_PATH" ] || DATA_PATH="$(grep -hE '^OMERO_DATA_PATH=' "$ROOT/.env.shared" 2>/dev/null | tail -1 | cut -d= -f2-)"
+if [ -z "$DATA_PATH" ]; then
+  echo "OMERO_DATA_PATH is not set in .env or .env.shared" >&2
+  exit 1
+fi
+if [ ! -d "$DATA_PATH/L-Drive" ]; then
+  echo "$DATA_PATH/L-Drive does not exist; is the storage volume attached?" >&2
+  exit 1
+fi
+DEST="$DATA_PATH/L-Drive/reference-data"
 BASE="https://dmss3gw.riken.jp/globias/zarr/v0.4"
 # zarr and tifffile live in the worker venv, not the container default python
 PYBIN="/opt/omero/server/venv-3.11/bin/python"

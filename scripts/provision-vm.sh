@@ -5,7 +5,8 @@
 # submodule, the per-VM hostname values, and the nginx location block. It stops
 # before deploying, because three things cannot be automated from inside the VM:
 #
-#   1. .env and .ssh/ hold the deployment secrets and exist only in your archive
+#   1. .env and .ssh/ hold the deployment secrets and live on the attached
+#      storage volume; `make link-config` points the repo at them
 #   2. ports 4063 and 4064 are opened in the SURF Research Cloud interface
 #   3. the SSH public key must be authorised on Spider for SPIDER_USER
 #
@@ -14,7 +15,7 @@
 #   scripts/provision-vm.sh --skip-packages # host already has docker and git
 #   scripts/provision-vm.sh --no-nginx      # leave host nginx alone
 #
-# After it finishes: restore the secrets, then run `make deploy`.
+# After it finishes: `make link-config` (or `make init`), then `make deploy`.
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -77,7 +78,7 @@ if [[ -f .env || -f .env.shared ]]; then
   make --no-print-directory set-host "HOST=${PUBLIC_HOST}" >/dev/null
   ok "set to ${PUBLIC_HOST}"
 else
-  warn ".env and .env.shared are both missing; run set-host after restoring them"
+  warn ".env and .env.shared are both missing; run make link-config, then set-host"
 fi
 
 # --------------------------------------------------------------------- nginx --
@@ -114,7 +115,7 @@ MISSING=0
 if [[ -f .env ]]; then
   ok ".env present"
 else
-  warn ".env missing: restore it from your archive, it is the only copy"
+  warn ".env missing: run make link-config; is the storage volume attached?"
   MISSING=1
 fi
 
@@ -127,7 +128,7 @@ if [[ -s .ssh/id_rsa ]]; then
     MISSING=1
   fi
 else
-  warn ".ssh/id_rsa missing: restore it from your archive"
+  warn ".ssh/id_rsa missing: run make link-config; is the storage volume attached?"
   MISSING=1
 fi
 

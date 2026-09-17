@@ -1,6 +1,6 @@
 # Catalog Item: Testbed and Migration Procedure
 
-*Created 2026-09-16 · last updated 2026-09-16*
+*Created 2026-09-16 · last updated 2026-09-17*
 
 How to build and test the catalog item, and how to migrate the present VM onto
 attached storage once it works.

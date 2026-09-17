@@ -1,6 +1,6 @@
 # NL-BIOMERO Deployment
 
-*Created 2026-09-15 · last updated 2026-09-16*
+*Created 2026-09-15 · last updated 2026-09-17*
 
 Current state of this deployment: what it runs, how it is configured, and how to
 rebuild it. This describes how things are, not how they came to be.
@@ -19,6 +19,30 @@ database-biomero   BIOMERO analytics and import tracking Postgres
 biomero-importer   BIOMERO.importer, runs the converter under rootless Podman
 metabase           dashboards embedded in OMERO.web
 ```
+
+## Storage
+
+The stack's state does not live on the VM. Both databases, the OMERO image
+repository, L-Drive and the secrets sit on an attached storage volume at
+`$OMERO_DATA_PATH`, so they survive a workspace being rebuilt or replaced:
+
+```text
+$OMERO_DATA_PATH/
+├── database/            OMERO Postgres
+├── database-biomero/    BIOMERO Postgres
+├── omero/               OMERO image repository
+├── L-Drive/             user data, /data in the containers
+├── config/              .env, .ssh/, slurm-config.ini
+└── backups/             backup_master.sh output
+```
+
+`docker-compose.yml` declares no named volumes; every mount is a bind mount
+under that path. The repository's `.env`, `.ssh` and `web/slurm-config.ini` are
+symlinks into `config/`, created by `make link-config` and re-checked by
+`make init`, so a fresh clone carries no secrets.
+
+Full detail, including how to set up a fresh VM and how to populate an empty
+volume, is in [storage-architecture.md](storage-architecture.md).
 
 ## Observability
 

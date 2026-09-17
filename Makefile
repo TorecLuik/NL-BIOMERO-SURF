@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init deploy doctor set-host docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init link-config deploy doctor set-host docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -21,6 +21,7 @@ help:
 	@echo "  make init               fetch submodules and run preflight"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
+	@echo "  make link-config        link .env/.ssh/slurm-config to the storage volume"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
@@ -61,7 +62,41 @@ provision:
 # from that directory, so this has to run before the first build.
 init:
 	git submodule update --init --recursive
+	@$(MAKE) --no-print-directory link-config
 	@$(MAKE) --no-print-directory doctor
+
+# The stack's state -- both databases, the OMERO repository, L-Drive and the
+# secrets -- lives on an attached storage volume at $$OMERO_DATA_PATH, so that
+# it survives the VM. A fresh clone has no secrets: they arrive with the volume,
+# and this points the repo at them. Idempotent, and safe to re-run.
+#
+# Existing real files are left alone rather than replaced, so running this on a
+# machine that predates the volume layout reports them instead of destroying
+# them.
+link-config:
+	@path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
+	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env.shared 2>/dev/null | tail -1 | cut -d= -f2-); \
+	if [ -z "$$path" ]; then echo "  [FAIL] OMERO_DATA_PATH is not set in .env or .env.shared"; exit 1; fi; \
+	if [ ! -d "$$path/config" ]; then \
+		echo "  [FAIL] $$path/config does not exist."; \
+		echo "         Is the storage volume attached? See deployment_docs/storage-architecture.md"; \
+		exit 1; \
+	fi; \
+	rc=0; \
+	for pair in ".env:.env" ".ssh:.ssh" "slurm-config.ini:web/slurm-config.ini"; do \
+		src="$$path/config/$${pair%%:*}"; dst="$${pair##*:}"; \
+		if [ -L "$$dst" ]; then \
+			if [ "$$(readlink "$$dst")" = "$$src" ]; then printf '  [ ok ] %s\n' "$$dst"; \
+			else ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (repointed)\n' "$$dst"; fi; \
+		elif [ -e "$$dst" ]; then \
+			printf '  [warn] %s is a real file, not a link; move it to %s and re-run\n' "$$dst" "$$src"; rc=1; \
+		elif [ ! -e "$$src" ]; then \
+			printf '  [warn] %s missing on the volume; nothing to link\n' "$$src"; rc=1; \
+		else \
+			ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (linked)\n' "$$dst"; \
+		fi; \
+	done; \
+	exit $$rc
 
 deploy:
 	@./scripts/bootstrap-prod.sh
