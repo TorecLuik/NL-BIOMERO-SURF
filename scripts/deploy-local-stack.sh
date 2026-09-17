@@ -253,7 +253,13 @@ if [[ -z "${WORKER_GID}" ]]; then
   WORKER_GID=994
   echo "  [warn] could not read biomeroworker's gid from the image; assuming ${WORKER_GID}"
 fi
-mkdir -p "${WORKER_SSH_DIR}"
+# An interrupted or root-run deploy can leave this directory owned by root,
+# and the copy below then fails with "Permission denied" on a re-run. Take
+# ownership before writing rather than assuming the directory is ours: every
+# file in here is rewritten from .ssh/ on each deploy, so this owns nothing
+# that is not about to be overwritten.
+sudo mkdir -p "${WORKER_SSH_DIR}"
+sudo chown "$(id -u):$(id -g)" "${WORKER_SSH_DIR}"
 cp -f "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}" "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" \
       "${SSH_DIR}/known_hosts" "${SSH_DIR}/config" "${WORKER_SSH_DIR}/"
 sudo chgrp -R "${WORKER_GID}" "${WORKER_SSH_DIR}"
