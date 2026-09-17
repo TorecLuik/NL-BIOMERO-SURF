@@ -31,11 +31,11 @@ ssh-keyscan -H git.ia.surf.nl >> ~/.ssh/known_hosts
 git clone <this repo> && cd NL-BIOMERO
 make provision
 
-# 3. settings for this VM
-cp .env.example .env
-#    then fill in every value marked CHANGE ME, and set OMERO_DATA_PATH to the
-#    mountpoint from step 1. On a volume that already holds data, leave the
-#    database passwords as they are: make deploy takes those from the volume.
+# 3. settings for this VM. Generates every secret and reads the mountpoint
+#    from step 1, asking only for the Spider account
+make init-env
+#    On a volume that already holds data, keep the .env that came with it
+#    instead: its database passwords are what unlock that data.
 
 # 4. the cluster key, then register the public half it prints
 make new-key

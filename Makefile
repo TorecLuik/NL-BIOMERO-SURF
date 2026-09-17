@@ -12,12 +12,13 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init render-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init render-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Setup"
 	@echo "  make provision          prepare a fresh VM: packages, submodule, nginx"
+	@echo "  make init-env           write .env, generating every secret"
 	@echo "  make init               submodules, runtime config, hostname, /logs auth"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
@@ -61,6 +62,13 @@ help:
 # and the SURF Research Cloud port rules cannot be set from inside the VM.
 provision:
 	@./scripts/provision-vm.sh
+
+# .env, with every secret generated. Only the Spider account has to be supplied,
+# because it is the one value that means something outside this VM. Refuses to
+# overwrite an existing .env, whose database passwords may be the only record of
+# what unlocks the storage volume.
+init-env:
+	@./scripts/init-env.sh $(if $(SPIDER_USER),--user $(SPIDER_USER),) $(if $(SPIDER_PROJECT),--project $(SPIDER_PROJECT),) $(if $(FORCE),--force,)
 
 # Everything between filling in .env and deploying. Each step derives what it
 # needs from .env or the host, so there is no decision to make between them, and
