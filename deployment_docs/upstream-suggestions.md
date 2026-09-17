@@ -171,10 +171,27 @@ resolves it by keeping `.ssh` at `0600` and mounting a second, group-readable
 copy, `.ssh-worker`, at `0640`.
 
 That works and keeps the key off-limits to other accounts, but it is two copies
-of a secret and a gid that has to track the image. Running the worker with a
-uid that matches the host, or installing the key at build time, would delete
-the whole class: no second copy, no `WORKER_GID`, no mode arithmetic. More
-invasive, and worth doing when the worker image is next touched.
+of a secret and a gid that has to track the image.
+
+Three tidier-looking fixes were tested and do not work:
+
+- **Group-read on the single `.ssh`.** OpenSSH refuses a private key with any
+  group or other bit, *even when the group is the owner's own primary group*:
+  `chmod 640` yields `WARNING: UNPROTECTED PRIVATE KEY FILE!` and the key is
+  ignored. This is unconditional, so no mode on one shared file satisfies both
+  consumers.
+- **`group_add` on the service.** Adding the host `.ssh` gid as a supplementary
+  group does not help while the directory is `0700`/`0600`, because the owner
+  bits are all that matter, and loosening them runs into the point above.
+- **World-readable key**, the arrangement this replaced, which exposes the
+  cluster key to every account on the VM.
+
+What would actually remove the split is changing the container side rather than
+the host side: run `biomeroworker` as a uid that owns the host files, or install
+the key into the image at build time so nothing is mounted. Both mean editing
+the worker image, whose `USER omero-server` is inherited from
+`openmicroscopy/omero-server`. Worth doing when that image is next touched;
+until then the two-copy split is the working arrangement, not a shortcut.
 
 ### Smoke tests report consequences as failures
 
