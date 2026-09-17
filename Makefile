@@ -139,7 +139,11 @@ doctor:
 	@echo "== Installed vs pins =="
 	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
-	@for f in .env .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+	@for f in .env web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+# .ssh/config is written by make deploy, not by make init, so it is legitimately
+# absent between the two. Reporting it as [FAIL] there sent people looking for a
+# file they were never meant to create by hand.
+	@if [ -e .ssh/config ]; then printf '  [ ok ] %s\n' ".ssh/config"; 		else printf '  [warn] %s not written yet; make deploy creates it\n' ".ssh/config"; fi
 	@echo "== Public hostname =="
 	@host=$$(hostname -f 2>/dev/null); \
 	envfile=.env; \
