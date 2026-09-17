@@ -73,14 +73,19 @@ fi
 # VM. Use the one that is actually mounted rather than the example's default.
 MOUNTED_VOL="$(awk '$2 ~ "^/data/" {print $2}' /proc/mounts | head -1)"
 
+# OMERO_IMPORTER_USER ships as root, so the importer's password is root's
+# password. Generating two different strings leaves the importer unable to log
+# in, and it exits after five minutes of retries rather than failing loudly.
+OMERO_ROOT_PASSWORD_VAL="$(gen 32)"
+
 # Metabase requires an email-shaped admin login and rejects a bare word.
 declare -A VALUES=(
   [SPIDER_USER]="${SPIDER_USER_IN}"
   [SPIDER_PROJECT]="${SPIDER_PROJECT_IN}"
   [POSTGRES_PASSWORD]="$(gen 32)"
   [BIOMERO_POSTGRES_PASSWORD]="$(gen 32)"
-  [OMERO_ROOT_PASSWORD]="$(gen 32)"
-  [OMERO_IMPORTER_PASSWORD]="$(gen 32)"
+  [OMERO_ROOT_PASSWORD]="${OMERO_ROOT_PASSWORD_VAL}"
+  [OMERO_IMPORTER_PASSWORD]="${OMERO_ROOT_PASSWORD_VAL}"
   [METABASE_USER]="admin@${SPIDER_PROJECT_IN}.local"
   [METABASE_PASSWORD]="$(gen 24)"
   [FORMS_MASTER_USER]="formsadmin"

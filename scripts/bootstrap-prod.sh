@@ -172,6 +172,21 @@ else
   fail ".env is missing; copy .env.example to .env and fill it in"
 fi
 
+# The importer logs in to OMERO as OMERO_IMPORTER_USER. When that is root --
+# which is what .env.example ships -- its password is root's password, and two
+# different values leave it unable to log in. It then retries for five minutes
+# and exits, nothing restarts it, and imports queued from the UI are silently
+# never picked up. Cheap to check, expensive to diagnose.
+IMP_USER="$(grep -hE '^OMERO_IMPORTER_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+IMP_PASS="$(grep -hE '^OMERO_IMPORTER_PASSWORD=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+ROOT_PASS="$(grep -hE '^OMERO_ROOT_PASSWORD=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+if [[ "${IMP_USER}" == "root" && -n "${IMP_PASS}" && "${IMP_PASS}" != "${ROOT_PASS}" ]]; then
+  fail "OMERO_IMPORTER_USER is root but OMERO_IMPORTER_PASSWORD differs from OMERO_ROOT_PASSWORD"
+  fail "  they are the same account, so the importer could not log in"
+elif [[ "${IMP_USER}" == "root" ]]; then
+  ok "importer credentials agree with the root account"
+fi
+
 # Spider identity and reachability. Non-fatal: the stack still starts without
 # Slurm, it just cannot run workflows.
 SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
