@@ -368,6 +368,42 @@ submodule, and a context with no git at all. Without it, no consumer can build
 an image that knows its own version, and any check comparing the installed
 version against a pin has to be disabled or special-cased.
 
+## 11. A half-initialised importer database can never migrate itself
+
+**Repo:** BIOMERO.importer (`biomero_importer/db_migrate.py`)
+
+On a fresh volume the importer creates its tables from the SQLAlchemy models,
+then stamps Alembic to head -- but only when `CREATED_ANY_TABLES` is true, i.e.
+when the tables were created *in the same process*:
+
+```python
+allow_stamp = os.getenv("ADI_ALLOW_AUTO_STAMP", "0") == "1"
+from .utils.ingest_tracker import CREATED_ANY_TABLES
+allow_stamp = allow_stamp or CREATED_ANY_TABLES
+```
+
+If that process later dies before stamping -- here it exited on an unrelated
+OMERO login failure -- the tables exist and `alembic_version_omeroadi` does not.
+Every subsequent start then takes the un-stamped path, replays the migrations
+from zero against a schema that already matches head, and dies on the first one:
+
+```text
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.DuplicateColumn)
+column "description" of relation "imports" already exists
+[SQL: ALTER TABLE imports ADD COLUMN description TEXT]
+```
+
+The container cannot recover on its own. `ADI_ALLOW_AUTO_STAMP=1` fixes it,
+which is the documented escape hatch for adopting Alembic on an existing
+database, but nothing in the failure points at it: the error names a column,
+not a missing version table.
+
+**Suggested:** treat "the known tables exist and the version table does not" as
+sufficient to stamp, rather than requiring that this process created them. The
+existing `known_tables` check right below already establishes that the schema is
+the importer's own. Failing that, catch `DuplicateColumn` on the first upgrade
+and say which variable resolves it.
+
 ## Reporting
 
 Repositories:
