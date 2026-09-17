@@ -86,20 +86,28 @@ them. Everything is a thin wrapper, so the underlying `docker compose` call
 always works too.
 
 ```text
+make provision             prepare a fresh VM: packages, submodule, nginx
 make init                  fetch submodules, then run doctor
 make deploy                set up, start and smoke test the stack
 make doctor                diagnose drift, changes nothing
+make set-host HOST=fqdn    set the per-VM public hostname
+make docs-dates            refresh the date stamps in deployment_docs/
+make reference-data        re-download and verify the test datasets
 make up / down / ps        whole stack, log stack included
 make build                 rebuild images and restart
 make rebuild:SVC           rebuild one service
+make restart:SVC           restart one service
 make logs / logs:SVC       tail everything, or follow one service
 make shell:SVC             shell in a container
 make check / smoke         preflight, or full deploy and smoke test
 make gpu                   effective Slurm params per workflow
 make config                BIOMERO settings as the worker resolves them
-make spider                ssh to Spider from inside the worker
+make spider / snellius     ssh to a cluster from inside the worker
 make psql / psql-biomero   psql into either database
 ```
+
+`make` on its own lists them, and that listing is the one to trust: this table
+goes stale, the help target cannot.
 
 Service-scoped targets use a colon, not a slash: `logs/omeroweb` would collide
 with the real `logs/` directory and make would treat it as already built.

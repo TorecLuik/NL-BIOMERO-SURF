@@ -6,7 +6,7 @@ Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
 one manual stop between them:
 
 ```bash
-scripts/provision-vm.sh     # host packages, submodule, hostname, nginx
+make provision              # host packages, submodule, hostname, nginx
 # restore .env and .ssh/, open ports 4063 and 4064
 make deploy                 # build, start, smoke test
 ```
@@ -47,8 +47,12 @@ cd NL-BIOMERO
 ## 2. Prepare the host
 
 ```bash
-scripts/provision-vm.sh
+make provision
 ```
+
+`make provision` takes no arguments. For the flags, call the script directly:
+`scripts/provision-vm.sh --skip-packages` when the host already has Docker and
+git, or `--no-nginx` to leave the host's nginx alone.
 
 It installs docker, compose, git, make and htpasswd; fetches the
 `biomero-importer` submodule; sets the three per-VM hostname values from
@@ -74,7 +78,7 @@ ssh -F .ssh/config spider 'sinfo -s | head'   # confirm the key works
 ## 4. Open the OMERO.insight ports
 
 In the SURF Research Cloud interface, open `4063` and `4064` to the networks
-that need OMERO.insight. Re-run `scripts/provision-vm.sh` to confirm; it probes
+that need OMERO.insight. Re-run `make provision` to confirm; it probes
 both and warns while either is unreachable.
 
 ## 5. Deploy
