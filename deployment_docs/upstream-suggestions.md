@@ -113,18 +113,26 @@ In OMERO.web this shows as a missing thumbnail; in iviewer as a `getTileSize`
 **Suggested:** validate the levels the `multiscales` metadata declares at
 registration, and fail there with a message naming the missing level.
 
-## 6. Workflow versions differ from those the developers suggest
+## 6. The Analyzer offers workflows the deployment has not configured
 
-**Repo:** deployment-side, but worth flagging
+**Repo:** OMERO.biomero
 
-The BIOMERO developers' suggested workflows for a workshop included
-`Cellpose4 v0.10.1` and `stardist5d v1.2.2`. This deployment registers
-`cellpose v1.4.0` and `stardist5d v1.2.1`, and Cellpose4 is not installed.
-A workflow absent from `slurm-config.ini` fails at submission, before any Slurm
-job exists, which is not obvious from the UI.
+`slurm-config.ini` registers 7 workflows here. The Analyzer lists 12, the extra
+five coming from the descriptor catalog rather than from what this deployment
+can run:
 
-**Suggested:** the Analyzer could distinguish "not installed" from "failed",
-since the two are indistinguishable in the workflow list today.
+```text
+registered   cellpose, stardist, stardist5d, cellexpansion, spotcounting,
+             nuclei_measurements, aggregates_measurements
+also listed  CellExpansionAdvanced, Fractal-Cellpose-SAM-Segmentation,
+             SimpleZarrPlateProcessor, W_CIDeconvolve, BilayersTest
+```
+
+Nothing marks the difference, so picking one of the five fails at submission,
+before any Slurm job exists.
+
+**Suggested:** list only what `slurm-config.ini` registers, or mark the rest as
+unavailable.
 
 ## Reporting
 
