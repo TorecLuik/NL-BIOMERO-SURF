@@ -7,6 +7,8 @@ LOGIN_HOME="$(getent passwd "${LOGIN_USER}" | cut -d: -f6)"
 ENV_PATH="${PROJECT_ROOT_DIR}/.env"
 START_LOG_STACK="${START_LOG_STACK:-1}"
 SSH_DIR="${PROJECT_ROOT_DIR}/.ssh"
+# Group-readable copy of SSH_DIR for biomeroworker; see the permissions block below.
+WORKER_SSH_DIR="${PROJECT_ROOT_DIR}/.ssh-worker"
 # L-Drive and the secrets live on the attached storage volume, not in the repo.
 # Resolve it the way docker-compose.yml does. See
 # deployment_docs/storage-architecture.md.
@@ -214,21 +216,42 @@ sudo chmod -R 777 "${LDRIVE_DIR}" "${PROJECT_ROOT_DIR}/logs"
 # template rendering, or rebuilds recreate them with normal 0644 permissions.
 sudo chmod 666 "${SLURM_CONFIG_PATH}" "${BIOMERO_CONFIG_PATH}" "${GROUP_MAPPINGS_CONFIG_PATH}"
 
-# biomeroworker mounts this directory read-only at /tmp/.ssh and copies it to
-# /opt/omero/server/.ssh, where 10-mount-ssh.sh re-tightens its own copy to
-# 0600. It runs as omero-server, uid 1000 gid 994, matching neither the owner
-# nor the group of these files, so it would read them as "other" and the copy
-# would fail with "cp: cannot stat '/tmp/.ssh/.': Permission denied".
-#
-# Granting the group instead of "other" is what keeps the key off-limits to
-# other accounts on this VM: the group is the container's gid, so the worker
-# reads the key and nobody else does. WORKER_GID must track the uid/gid the
-# biomeroworker image runs as.
-WORKER_GID=994
-sudo chgrp -R "${WORKER_GID}" "${SSH_DIR}"
-chmod 750 "${SSH_DIR}"
-chmod 640 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
+# .ssh/ is the canonical copy and stays locked to the owner, because OpenSSH
+# refuses a private key that any group or other can read ("Permissions 0640 for
+# ... are too open"). Host-side SSH -- preflight's Spider check, make spider --
+# reads this one.
+chmod 700 "${SSH_DIR}"
+chmod 600 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
 chmod 644 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" "${SSH_DIR}/known_hosts" "${SSH_DIR}/config"
+
+# biomeroworker needs the opposite. It mounts a directory read-only at
+# /tmp/.ssh and copies it to /opt/omero/server/.ssh, running as omero-server,
+# which matches neither the owner nor the group of the files above; it would
+# read them as "other" and fail with
+# "cp: cannot stat '/tmp/.ssh/.': Permission denied".
+#
+# No single mode satisfies both: OpenSSH wants 0600, the container wants group
+# or world read. So the worker gets its own copy, group-owned by the container's
+# gid at 0640. The key is never world-readable, and .ssh/ keeps working for
+# ordinary ssh. 10-mount-ssh.sh re-tightens the container's copy to 0600.
+#
+# The gid comes from the image rather than a constant, because a base-image bump
+# that renumbers omero-server would otherwise reintroduce the copy failure with
+# no hint of the cause.
+WORKER_GID="$(sudo docker compose run --rm --no-deps --entrypoint id -T biomeroworker -g 2>/dev/null \
+              | tr -cd '0-9')"
+if [[ -z "${WORKER_GID}" ]]; then
+  WORKER_GID=994
+  echo "  [warn] could not read biomeroworker's gid from the image; assuming ${WORKER_GID}"
+fi
+mkdir -p "${WORKER_SSH_DIR}"
+cp -f "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}" "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" \
+      "${SSH_DIR}/known_hosts" "${SSH_DIR}/config" "${WORKER_SSH_DIR}/"
+sudo chgrp -R "${WORKER_GID}" "${WORKER_SSH_DIR}"
+chmod 750 "${WORKER_SSH_DIR}"
+chmod 640 "${WORKER_SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
+chmod 644 "${WORKER_SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" \
+          "${WORKER_SSH_DIR}/known_hosts" "${WORKER_SSH_DIR}/config"
 
 # The importer container runs as uid/gid 1000 and needs write access to its log mount.
 sudo chown -R 1000:1000 "${PROJECT_ROOT_DIR}/logs/biomero-importer"

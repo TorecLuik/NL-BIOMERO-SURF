@@ -154,7 +154,10 @@ services:
     volumes:
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
       # Spider SSH material, repo-local and separate from the login user's keys.
-      - "./.ssh:/tmp/.ssh:ro"
+      # .ssh-worker is deploy-local-stack.sh's group-readable copy of .ssh: the
+      # container reads the key as "other", while OpenSSH refuses a group-
+      # readable key on the host, so the two cannot share one directory.
+      - "./.ssh-worker:/tmp/.ssh:ro"
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./config/biomero-importer:/opt/omero/server/config-importer:ro"

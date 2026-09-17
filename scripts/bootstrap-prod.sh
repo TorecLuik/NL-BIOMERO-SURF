@@ -75,6 +75,26 @@ else
   fail ".ssh/${SLURM_KEY_NAME} missing; generate one with: make new-key"
 fi
 
+# Preflight resolves the key through $SLURM_ACCESS_KEY, so it passes happily on
+# a deploy script that hardcodes some other name -- which is exactly how a
+# renamed key once got past this point and aborted the deploy seconds later on
+# "chmod: cannot access .ssh/id_rsa". Check the literal .ssh paths the deploy
+# script will act on, not only the ones preflight knows how to build.
+STALE_SSH=()
+while IFS= read -r name; do
+  [[ -z "${name}" ]] && continue
+  [[ "${name}" == "${SLURM_KEY_NAME}" || "${name}" == "${SLURM_KEY_NAME}.pub" ]] && continue
+  [[ -e ".ssh/${name}" ]] && continue
+  STALE_SSH+=("${name}")
+done < <(grep -oE '\$\{SSH_DIR\}/[A-Za-z0-9._-]+' scripts/deploy-local-stack.sh 2>/dev/null \
+         | sed 's#.*/##' | sort -u)
+if [[ "${#STALE_SSH[@]}" -gt 0 ]]; then
+  fail "deploy script references .ssh files that do not exist: ${STALE_SSH[*]}"
+  fail "  SLURM_ACCESS_KEY is ${SLURM_KEY_NAME}; the deploy would abort on the missing path"
+else
+  ok "deploy script's .ssh paths all resolve"
+fi
+
 # Public ingress. nginx is host-managed on SURF Research Cloud, so this only
 # reports; it never edits host configuration.
 NGINX_LOCATION=/etc/nginx/app-location-conf.d/omero-web.conf

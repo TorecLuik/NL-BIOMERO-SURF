@@ -24,11 +24,20 @@ ADD server/00-restore-config.sh* /startup/
 # ADD "https://api.github.com/repos/NL-BioImaging/biomero-scripts/commits/dev-bilayers" /latest_commit_biomero_scripts
 # We don't need the example scripts
 RUN test -n "$BIOMERO_VERSION" || (echo "BIOMERO_VERSION build arg is required" >&2; exit 1)
-# BIOMERO_VERSION is a package version (2.8.2) because the worker and web
-# images feed it to pip, but biomero-scripts tags releases with a v prefix
-# (v2.8.2), so the tag is derived here rather than carried in .env.
+
+# One .env value, two naming conventions. BIOMERO_VERSION is a PyPI version
+# (2.8.2) because biomeroworker and web pass it straight to pip, where a v
+# prefix does not resolve; biomero-scripts tags its releases the other way
+# (v2.8.2). The tag is therefore derived here, named, and checked, so a third
+# consumer cannot quietly pick the wrong form: passing the bare version to
+# git clone fails with "Remote branch 2.8.2 not found in upstream origin"
+# several minutes into the build.
+ENV BIOMERO_SCRIPTS_TAG="v${BIOMERO_VERSION}"
+RUN git ls-remote --exit-code --tags https://github.com/NL-BioImaging/biomero-scripts.git \
+      "refs/tags/${BIOMERO_SCRIPTS_TAG}" >/dev/null \
+    || (echo "biomero-scripts has no tag ${BIOMERO_SCRIPTS_TAG} (from BIOMERO_VERSION=${BIOMERO_VERSION})" >&2; exit 1)
 RUN cd $OMERO_DIST/lib/scripts/ && \
-    git clone --depth 1 --branch "v$BIOMERO_VERSION" --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
+    git clone --depth 1 --branch "$BIOMERO_SCRIPTS_TAG" --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
     rm -f biomero/admin/Example_Minimal_Slurm_Script.py && \
     rm -f biomero/__workflows/SLURM_CellPose_Segmentation.py
 
