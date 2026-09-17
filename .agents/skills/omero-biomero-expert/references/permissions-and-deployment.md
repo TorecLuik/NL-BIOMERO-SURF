@@ -325,7 +325,28 @@ Stale `~/.vscode-server` installs from failed/interrupted remote connections can
 
 ### Runaway container logs
 
-Docker's `json-file` log driver has no size cap unless a service sets one. A container stuck retrying a failing action logs one entry per attempt and can grow a single log file to tens of GB, which is a much larger and faster space drain than image/volume growth. Find the actual offender by log file size, not just image/volume size:
+Docker's `json-file` log driver has no size cap unless a service sets one.
+
+Since `345af643` every service in `docker-compose.yml`, `docker-compose-dev.yml`,
+`opensearch-compose.yml` and `logs-compose.yml` inherits a 10m x 5 cap from
+`logging-defaults.yml`. Before that, five OMERO services already set the same
+values inline; the commit unified those and covered the three that had none --
+`database`, `database-biomero`, `metabase` -- plus the whole log stack, where
+`opensearch` had grown a single 2.6 GB file.
+
+**Caps apply on container re-creation, not restart.** `docker compose up -d`
+only recreates services whose config changed, so a container that was already
+running keeps its old (uncapped) setting until something forces it to be
+recreated. Check what is actually in effect rather than what the file says:
+
+```bash
+sudo docker ps --format '{{.Names}}' | while read n; do
+  sudo docker inspect -f '{{.Name}} {{.HostConfig.LogConfig.Config}}' "$n"
+done
+```
+
+`make doctor` reports this. Note the log stack is a separate compose file, so it
+needs its own `docker compose -f opensearch-compose.yml up -d`. A container stuck retrying a failing action logs one entry per attempt and can grow a single log file to tens of GB, which is a much larger and faster space drain than image/volume growth. Find the actual offender by log file size, not just image/volume size:
 
 ```bash
 sudo find /var/lib/docker/containers -name '*-json.log' -exec du -h {} \; | sort -rh | head
