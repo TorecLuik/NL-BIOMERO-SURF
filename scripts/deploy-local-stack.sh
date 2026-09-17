@@ -127,6 +127,19 @@ fi
 # Create the bind-mounted host paths the stack expects.
 mkdir -p "${SSH_DIR}" "${LDRIVE_DIR}" "${LOG_DIRS[@]}"
 
+# /OMERO is bind-mounted from the volume. Docker creates a missing bind-mount
+# source as root:root, but OMERO runs as uid 1000 and builds its repository
+# tree there, so it dies on startup with
+#   PermissionError: [Errno 13] Permission denied: '/OMERO/certs'
+# Postgres does not need the same treatment: its entrypoint chowns its own
+# data directory. Only create and chown when missing, so an existing volume
+# whose tree OMERO already owns is left untouched.
+OMERO_DIR="${OMERO_DATA_PATH_VAL}/omero"
+if [[ ! -d "${OMERO_DIR}" ]]; then
+  sudo mkdir -p "${OMERO_DIR}"
+  sudo chown 1000:1000 "${OMERO_DIR}"
+fi
+
 # .ssh/ holds cluster access material and nothing else. The login user's ~/.ssh is left
 # alone: the key that reaches this VM's git remote is a separate, disposable
 # per-VM credential, while this key represents an authorisation granted on the
@@ -282,13 +295,26 @@ sudo docker compose up -d --build
 # missing; this is a no-op once it exists.
 MB_DB_NAME="${MB_DB_NAME:-metabase}"
 MB_PG_USER="${BIOMERO_POSTGRES_USER:-biomero}"
-for _ in $(seq 1 30); do
+# A fresh volume runs initdb first, which takes appreciably longer than a
+# restart against an existing cluster. Waiting 60s was enough for the latter
+# and not the former, and exhausting the loop used to fall through into the
+# CREATE DATABASE below -- which then failed on a socket that did not exist
+# yet and took the whole deploy with it. Wait longer, and treat running out
+# of patience as the error it is.
+DB_READY=0
+for _ in $(seq 1 90); do
   if sudo docker compose exec -T database-biomero \
        pg_isready -U "${MB_PG_USER}" >/dev/null 2>&1; then
+    DB_READY=1
     break
   fi
   sleep 2
 done
+if [[ "${DB_READY}" -ne 1 ]]; then
+  echo "database-biomero did not become ready within 180s." >&2
+  echo "  check it with: sudo docker compose logs database-biomero" >&2
+  exit 1
+fi
 if sudo docker compose exec -T database-biomero \
      psql -U "${MB_PG_USER}" -d postgres -tAc \
      "SELECT 1 FROM pg_database WHERE datname='${MB_DB_NAME}'" 2>/dev/null \
