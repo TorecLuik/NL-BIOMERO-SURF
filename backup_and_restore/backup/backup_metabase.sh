@@ -74,6 +74,11 @@ OUTPUT FILES:
   metabase.{timestamp}.tar.gz - Contains entire metabase folder
 
 WHAT'S BACKED UP:
+  If Metabase is on Postgres (the default here since 2026-09), no folder exists
+  and the script writes metabase.{timestamp}.pg_dump instead, dumped from the
+  "metabase" database on database-biomero. Restore with pg_restore --clean.
+
+  If Metabase is still on H2, the archive holds the folder:
   - metabase.db (H2 database with dashboards, users, settings)
   - metabase.db.mv.db (H2 database file)
   - metabase.db.trace.db (H2 trace file, if present)
@@ -94,10 +99,38 @@ FINAL_TIMESTAMP="${TIMESTAMP:-$(date -u +%Y-%m-%d_%H-%M-%S-UTC)}"
 mkdir -p "$FINAL_OUTPUT_DIR"
 ABSOLUTE_OUTPUT_DIR=$(realpath "$FINAL_OUTPUT_DIR")
 
-# Validate metabase folder exists
+# Since 2026-09 this deployment keeps Metabase's application database in
+# Postgres (a "metabase" database on database-biomero), not in an H2 file, so
+# there is no folder to archive. Dump the database instead. The folder path is
+# still honoured when one exists, for deployments still on H2.
 if [ ! -d "$FINAL_METABASE_FOLDER" ]; then
+    MB_CONTAINER="${MB_DB_CONTAINER:-nl-biomero-database-biomero-1}"
+    MB_DB="${MB_DB_NAME:-metabase}"
+    MB_USER_PG="${MB_DB_USER:-biomero}"
+    # CONTAINER_ENGINE lets a caller pass e.g. "sudo docker" where the socket
+    # is root-only, as it is on this host.
+    ENGINE_BIN="${CONTAINER_ENGINE:-$(command -v docker || command -v podman)}"
+
+    if [ -n "$ENGINE_BIN" ] && $ENGINE_BIN exec "$MB_CONTAINER" \
+         psql -U "$MB_USER_PG" -d "$MB_DB" -c '\q' >/dev/null 2>&1; then
+        OUT="$ABSOLUTE_OUTPUT_DIR/metabase.$FINAL_TIMESTAMP.pg_dump"
+        echo "Metabase is on Postgres; dumping the $MB_DB database instead of a folder."
+        echo "  Container: $MB_CONTAINER"
+        echo "  Target:    $OUT"
+        if ! $ENGINE_BIN exec "$MB_CONTAINER" \
+               pg_dump -Fc -U "$MB_USER_PG" -f "/tmp/metabase.dump" "$MB_DB"; then
+            echo "[FAIL] pg_dump of $MB_DB failed"
+            exit 1
+        fi
+        $ENGINE_BIN cp "$MB_CONTAINER:/tmp/metabase.dump" "$OUT"
+        $ENGINE_BIN exec "$MB_CONTAINER" rm -f /tmp/metabase.dump
+        echo "[ OK ] $(du -h "$OUT" | cut -f1) written to $OUT"
+        echo "       restore with: pg_restore -U $MB_USER_PG -d $MB_DB --clean"
+        exit 0
+    fi
+
     echo "[FAIL] Metabase folder not found: $FINAL_METABASE_FOLDER"
-    echo "       Expected location based on docker-compose.yml mount"
+    echo "       and the $MB_DB database was not reachable in $MB_CONTAINER"
     echo "       Ensure NL-BIOMERO is deployed or specify correct path with --metabase-folder"
     exit 1
 fi

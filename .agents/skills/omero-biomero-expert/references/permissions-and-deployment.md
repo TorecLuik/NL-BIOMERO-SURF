@@ -229,6 +229,23 @@ sudo docker exec nl-biomero-database-biomero-1 psql -U biomero -d metabase \
   -c "SELECT key,value FROM setting WHERE key LIKE '%embedding%';"
 ```
 
+### Backups
+
+`backup_and_restore/backup/backup_metabase.sh` archived the `./metabase` folder.
+With no folder to archive it now dumps the Postgres database instead, writing
+`metabase.{timestamp}.pg_dump`:
+
+```bash
+CONTAINER_ENGINE="sudo docker" ./backup_and_restore/backup/backup_metabase.sh
+```
+
+`CONTAINER_ENGINE` is needed on this host because the Docker socket is
+root-only. Restore with `pg_restore -U biomero -d metabase --clean`.
+
+The `metabase` database also sits on `database-biomero`, so the existing
+`database-biomero` volume backup already covers it; the dump is for restoring
+Metabase alone without touching the analytics data.
+
 ### File ownership, for an H2 deployment
 
 If you are still on H2, the live file is locked while Metabase runs. For read
