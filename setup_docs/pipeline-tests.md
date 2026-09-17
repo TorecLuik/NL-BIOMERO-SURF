@@ -85,6 +85,23 @@ docker exec nl-biomero-omeroserver-1 bash -lc \
 
 **Pass:** images render; the command prints nothing.
 
+Check for pixel-less duplicates at the same time. An OME-TIFF carrying an
+`Image` `Name` imports as two OMERO images, and the second has no pixels: it
+shows `No preview` in the workflow picker's Thumbnail Grid and fails any
+workflow it reaches.
+
+```bash
+# plate wells legitimately have no fileset, so exclude well samples
+docker exec nl-biomero-database-1 psql -U omero -d omero \
+  -c "SELECT i.id, i.name FROM image i JOIN pixels p ON p.image=i.id
+      WHERE i.fileset IS NULL AND p.path IS NULL
+        AND NOT EXISTS (SELECT 1 FROM wellsample ws WHERE ws.image=i.id);"
+```
+
+**Pass:** no rows. Delete any that appear before going further -- and never use
+*Select ALL* in the picker while one exists, because a single bad image aborts
+the whole batch and every other image in that run is lost.
+
 ## T1 — Segmentation, the whole chain
 
 The core test. Nuclei on the DNA channel of `$FIG7`.

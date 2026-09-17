@@ -76,6 +76,27 @@ The `.ome.tiff` files are the ones to import. BIOMERO hands BIAFLOWS workflows
 TIFF, so the Zarr copies are kept as the verifiable upstream original, not as
 workflow input.
 
+### One file should give one image
+
+An OME-TIFF that declares an `Image` `Name` in its OME-XML imports as **two**
+OMERO images: the file-level one, which holds the pixels, and a second one
+named after the OME metadata, which holds none. The empty one shows `No preview`
+in the workflow picker and fails any workflow that reaches it, the same way a
+broken by-reference import does.
+
+The files here are written without a `Name` for that reason. If you import an
+OME-TIFF from elsewhere and see a pixel-less twin, delete it:
+
+```sql
+-- pixel-less images have no fileset and no pixels path. Plate wells legitimately
+-- look the same, so exclude anything belonging to a well sample.
+SELECT i.id, i.name FROM image i JOIN pixels p ON p.image=i.id
+WHERE i.fileset IS NULL AND p.path IS NULL
+  AND NOT EXISTS (SELECT 1 FROM wellsample ws WHERE ws.image=i.id);
+```
+
+Delete those in OMERO.web under Data; do not run workflows on them.
+
 Through the UI, either route works:
 
 ```text
@@ -115,7 +136,7 @@ import zarr, numpy as np, tifffile
 a = zarr.open('<name>.zarr/0', mode='r')
 vol = np.asarray(a[0, :, 0])          # (c, y, x)
 tifffile.imwrite('<name>.ome.tiff', vol, photometric='minisblack',
-                 metadata={'axes': 'CYX', 'Name': '<name>'})
+                 metadata={'axes': 'CYX'})
 ```
 
 ## Gaps

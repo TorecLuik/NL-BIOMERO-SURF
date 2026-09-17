@@ -47,8 +47,11 @@ import zarr, numpy as np, tifffile
 d = '/data/reference-data/$name/$name'
 a = zarr.open(d + '.zarr/0', mode='r')
 vol = np.asarray(a[0, :, 0])
+# No 'Name' in the OME metadata: Bio-Formats registers the OME Image name as a
+# second, pixel-less OMERO image on import, which shows as 'No preview' and
+# fails any workflow it reaches. See setup_docs/reference-data.md.
 tifffile.imwrite(d + '.ome.tiff', vol, photometric='minisblack',
-                 metadata={'axes': 'CYX', 'Name': '$name'})
+                 metadata={'axes': 'CYX'})
 print(vol.shape, vol.dtype)
 "
 }
