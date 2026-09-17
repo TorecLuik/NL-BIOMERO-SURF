@@ -133,6 +133,15 @@ command.
   2026-09-15 backup `metabase-h2.tar.gz`, which verified against its SHA256SUMS.
   `make doctor` now checks the Postgres setup and both embedded dashboard IDs.
   `metabase/metabase.db/` is leftover and can be deleted once you are satisfied.
+- The BIOMERO Importer v1.4.2 hardcodes `--transfer=ln_s`, so every image it
+  imports is a symlink into `/data` and its pixels are outside the volume
+  backup. 40 such links exist here, none broken yet; workflow results link into
+  `/data/root/.analyzed/`, which is scratch. No setting changes this. Use
+  OMERO.insight for anything that must survive. Detail in the expert skill under
+  "The Importer Always Links, Never Copies".
+- Importing a `.zarr` through the BIOMERO Importer half-succeeds: it writes
+  image and pixels rows with correct dimensions but ingests no data, leaving a
+  previewless image that fails any workflow. Import the `.ome.tiff` instead.
 - A single `pip install` of `biomero-importer` and `biomero[full]` fails with
   ResolutionImpossible over conflicting ezomero pins. The two-step install is
   deliberate; see `deployment.md`.

@@ -66,11 +66,15 @@ that exercises tiling.
 
 ## Importing into OMERO
 
-Import **as copies, not by reference**. Importing with `--transfer=ln_s` leaves
-the managed repository holding symlinks into `/data`; if that path is later
-removed the images become permanently unreadable and the volume backup does not
-cover them. This deployment has lost images that way. Plain import copies the
-pixels into the `/OMERO` volume, which the backup does cover.
+Import **as copies, not by reference**, and note that the BIOMERO Importer
+cannot do this: v1.4.2 hardcodes `--transfer=ln_s`, so it always leaves symlinks
+into `/data` in the managed repository. Delete or move the source and the image
+becomes permanently unreadable; the volume backup archives the dangling link
+rather than the pixels. This deployment has lost images that way.
+
+Use OMERO.insight, or `omero import` without `--transfer`, to get the pixels
+copied into the `/OMERO` volume. See the expert skill, "The Importer Always
+Links, Never Copies".
 
 The `.ome.tiff` files are the ones to import. BIOMERO hands BIAFLOWS workflows
 TIFF, so the Zarr copies are kept as the verifiable upstream original, not as
@@ -102,10 +106,17 @@ Delete those in OMERO.web under Data; do not run workflows on them.
 Through the UI, either route works:
 
 ```text
-BIOMERO tab -> Importer   browse to /data/reference-data and select the two
-                          .ome.tiff files, not the folders
-OMERO.insight             File > Import, standard import dialog
+OMERO.insight             File > Import. Copies the pixels in; preferred.
+BIOMERO tab -> Importer   select the two .ome.tiff files, not the folders.
+                          Links rather than copies -- see the warning above.
 ```
+
+Importing a `.zarr` through the BIOMERO Importer does not work: it registers an
+image and pixels record with the right dimensions but ingests no data, leaving
+an image with no fileset, no pixels path and no preview. The image is named
+after the directory with the suffix dropped, so it is indistinguishable by name
+from the real one; its `biomero.import` annotation records the `.zarr` in
+`Filepath`.
 
 ## Restoring
 

@@ -271,6 +271,45 @@ tar --numeric-owner -czf - metabase | ssh -F .ssh/config biomero-prod '
 
 After cross-host copy, repair datasource credentials for the target environment; the H2 DB carries database passwords, admin users, and embedding settings.
 
+## The Importer Always Links, Never Copies
+
+`BIOMERO.importer` v1.4.2 passes `--transfer=ln_s` to every import. It is a
+hardcoded default in `biomero_importer/utils/importer.py` -- a keyword default
+on `import_to_omero` and `import_dataset`, plus string literals at the call
+sites -- with no setting, environment variable or order field to change it.
+
+So the managed repository holds symlinks into `/data`, not pixels:
+
+```bash
+docker exec nl-biomero-omeroserver-1 \
+  find /OMERO/ManagedRepository -type l -exec readlink {} \;
+```
+
+Two consequences:
+
+- **Delete or move a file under `/data` and its OMERO image dies.** It becomes
+  unreadable with `ResourceError: Error instantiating pixel buffer`, and in a
+  workflow that surfaces two steps later as a misleading
+  `SLURM_Remote_Conversion.py` ValidationException.
+- **The backup does not cover those pixels.** `backup_server.sh` runs a plain
+  `tar -czf` with no `--dereference`, so it archives the dangling symlinks
+  themselves. A restore brings back 0-byte links.
+
+Workflow results are linked out of `/data/root/.analyzed/`, which is scratch
+space, so imported masks are the most exposed of all.
+
+Check for images whose source has already gone:
+
+```bash
+docker exec nl-biomero-omeroserver-1 bash -lc \
+  'find /OMERO/ManagedRepository -type l ! -exec test -e {} \; -print'
+```
+
+To import pixels into the `/OMERO` volume, where the backup does cover them, use
+OMERO.insight or the `omero import` CLI without `--transfer`, not the BIOMERO
+Importer. Adding `--dereference` to the backup tar would capture the pixels but
+not fix the fragility, and would inflate every archive.
+
 ## Importer Privilege Model
 
 `biomero-importer` runs Podman inside the container. The current operational model requires:
