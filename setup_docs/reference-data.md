@@ -126,6 +126,11 @@ or linking pixels, so the image has no fileset and no pixels path by design and
 OMERO reads it in place through `omero-zarr-pixel-buffer`. That is a valid
 import, not a broken one -- provided the pyramid is complete.
 
+Because the registration is only a pointer, fixing the data on disk fixes the
+image: repair the pyramid under the path the `externalinfo.lsid` names and OMERO
+reads it on the next request. No re-import is needed, unlike a TIFF, whose
+channel count and other metadata are captured in the database at import time.
+
 The image is named after the directory with the suffix dropped, so a Zarr and a
 TIFF of the same dataset are indistinguishable by name in the workflow picker.
 The `biomero.import` annotation's `Filepath` is the reliable tell. Workflows
