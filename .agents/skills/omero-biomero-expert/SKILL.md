@@ -19,7 +19,7 @@ make doctor   # read-only: submodule, pin and image drift
 make config   # BIOMERO settings as the worker resolves them
 ```
 
-`make doctor` is the fastest way to find the failure modes this deployment actually hits: a stale `biomero-importer` submodule, `.env` and `.env.shared` disagreeing on pins, or an image that does not match the pin it was supposedly built from.
+`make doctor` is the fastest way to find the failure modes this deployment actually hits: a stale `biomero-importer` submodule, `.env` and `.env.example` disagreeing on pins, or an image that does not match the pin it was supposedly built from.
 
 Known paths:
 

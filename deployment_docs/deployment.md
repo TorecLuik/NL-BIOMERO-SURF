@@ -88,7 +88,7 @@ The same is true of the core services; bring the host back up with `make up` or
 
 ## Versions
 
-Pinned in `.env.shared`, which `.env` overrides locally:
+Pinned in `.env.example`, which `.env` overrides locally:
 
 ```text
 BIOMERO_VERSION           2.8.2
@@ -185,7 +185,7 @@ the runtime patch, and Spider reachability.
 ```
 
 Archive both somewhere safe. `deploy-local-stack.sh` seeds `.env` from
-`.env.shared` when it is absent, which gives a stack that starts but has
+`.env.example` when it is absent, which gives a stack that starts but has
 placeholder credentials, so restore the real file when rebuilding a live
 deployment. Everything else in the repo is reproducible from a clean checkout.
 
@@ -211,7 +211,7 @@ Per workflow in `slurm-config.ini`:
 <workflow>_job_<flag> = value  becomes --<flag>=value
 ```
 
-Global fallbacks in `.env.shared`, applied only to flags a workflow has not set:
+Global fallbacks in `.env.example`, applied only to flags a workflow has not set:
 
 ```text
 BIOMERO_INJECT_GPU_FLAG=true

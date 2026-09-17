@@ -17,9 +17,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # L-Drive moved onto the attached storage volume, so resolve it the same way
 # docker-compose.yml does rather than assuming the old in-repo path.
 DATA_PATH="$(grep -hE '^OMERO_DATA_PATH=' "$ROOT/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
-[ -n "$DATA_PATH" ] || DATA_PATH="$(grep -hE '^OMERO_DATA_PATH=' "$ROOT/.env.shared" 2>/dev/null | tail -1 | cut -d= -f2-)"
 if [ -z "$DATA_PATH" ]; then
-  echo "OMERO_DATA_PATH is not set in .env or .env.shared" >&2
+  echo "OMERO_DATA_PATH is not set in .env" >&2
   exit 1
 fi
 if [ ! -d "$DATA_PATH/L-Drive" ]; then

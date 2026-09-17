@@ -19,7 +19,7 @@ NL-BIOMERO supports multiple deployment scenarios from development to production
 >
 > **Example:**
 > ```bash
-> docker compose -f ./deployment_scenarios/docker-compose-importer-only.yml --env-file .env.shared up -d
+> docker compose -f ./deployment_scenarios/docker-compose-importer-only.yml --env-file .env.example up -d
 > ```
 
 The examples below assume you're in the `deployment_scenarios` directory, but you can run them from the project root with the above pattern. Just double check the relative paths if you run them from somewhere else, especially if they have to build the containers instead of pull them from DockerHub.

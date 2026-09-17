@@ -79,13 +79,11 @@ init:
 #
 #   make link-config DATA_PATH=/data/my-volume
 #
-# It wins over both env files, so pointing at a volume never means editing the
-# tracked .env.shared. After linking, the volume's own .env carries the path.
+# It takes precedence over .env, so a volume can be reached before .env exists.
 link-config:
 	@path="$(DATA_PATH)"; \
 	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
-	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env.shared 2>/dev/null | tail -1 | cut -d= -f2-); \
-	if [ -z "$$path" ]; then echo "  [FAIL] OMERO_DATA_PATH is not set in .env or .env.shared"; exit 1; fi; \
+	if [ -z "$$path" ]; then echo "  [FAIL] OMERO_DATA_PATH is not set in .env; copy .env.example to .env"; exit 1; fi; \
 	if [ ! -d "$$path/config" ]; then \
 		echo "  [FAIL] $$path/config does not exist."; \
 		echo "         Is the storage volume attached? See deployment_docs/storage-architecture.md"; \
@@ -115,16 +113,16 @@ deploy:
 # match the pins they were supposedly built from.
 doctor:
 	@echo "== Submodule =="
-	@if [ -f biomero-importer/Dockerfile ]; then 		printf '  [ ok ] biomero-importer checked out at %s\n' "$$(cd biomero-importer && git describe --tags 2>/dev/null || echo unknown)"; 		pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env.shared | cut -d= -f2); 		have=$$(cd biomero-importer && git describe --tags 2>/dev/null | sed 's/^v//'); 		if [ "$$have" = "$$pin" ]; then printf '  [ ok ] submodule matches BIOMERO_IMPORTER_VERSION (%s)\n' "$$pin"; 		else printf '  [warn] submodule is %s but pin is %s; the importer image would build from the wrong source\n' "$$have" "$$pin"; fi; 	else 		echo "  [FAIL] biomero-importer/ is empty; run: make init"; 	fi
+	@if [ -f biomero-importer/Dockerfile ]; then 		printf '  [ ok ] biomero-importer checked out at %s\n' "$$(cd biomero-importer && git describe --tags 2>/dev/null || echo unknown)"; 		pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); 		have=$$(cd biomero-importer && git describe --tags 2>/dev/null | sed 's/^v//'); 		if [ "$$have" = "$$pin" ]; then printf '  [ ok ] submodule matches BIOMERO_IMPORTER_VERSION (%s)\n' "$$pin"; 		else printf '  [warn] submodule is %s but pin is %s; the importer image would build from the wrong source\n' "$$have" "$$pin"; fi; 	else 		echo "  [FAIL] biomero-importer/ is empty; run: make init"; 	fi
 	@echo "== Pins =="
-	@for v in BIOMERO_VERSION OMERO_BIOMERO_VERSION BIOMERO_IMPORTER_VERSION OMERO_FORMS_VERSION; do 		sh=$$(grep -E "^$$v=" .env.shared 2>/dev/null | cut -d= -f2); 		lo=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); 		if [ -z "$$lo" ]; then printf '  [ ok ] %-26s %s (.env.shared only)\n' "$$v" "$$sh"; 		elif [ "$$sh" = "$$lo" ]; then printf '  [ ok ] %-26s %s\n' "$$v" "$$sh"; 		else printf '  [warn] %-26s .env.shared=%s but .env=%s; .env wins at build time\n' "$$v" "$$sh" "$$lo"; fi; 	done
+	@for v in BIOMERO_VERSION OMERO_BIOMERO_VERSION BIOMERO_IMPORTER_VERSION OMERO_FORMS_VERSION; do 		lo=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); 		if [ -z "$$lo" ]; then printf '  [warn] %-26s not set in .env\n' "$$v"; 		else printf '  [ ok ] %-26s %s\n' "$$v" "$$lo"; fi; 	done
 	@echo "== Installed vs pins =="
-	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null || grep -E '^BIOMERO_VERSION=' .env.shared); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
+	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
 	@for f in .env .ssh/id_rsa .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
 	@echo "== Public hostname =="
 	@host=$$(hostname -f 2>/dev/null); \
-	envfile=.env; [ -f "$$envfile" ] || envfile=.env.shared; \
+	envfile=.env; \
 	bad=0; \
 	for k in OMERO_CSRF_TRUSTED_ORIGINS METABASE_SITE_URL OBSERVABILITY_ROOT_URL; do \
 		val=$$(grep -E "^$$k=" "$$envfile" 2>/dev/null | cut -d= -f2-); \
@@ -143,7 +141,7 @@ doctor:
 		*)       printf '  [warn] https://%s/webclient/login/ returned %s\n' "$$host" "$$code" ;; \
 	esac
 	@echo "== Importer image =="
-	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env.shared | cut -d= -f2); \
+	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); \
 	got=$$(sudo docker run --rm --entrypoint sh nl-biomero-biomero-importer:latest -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
 	if [ -z "$$got" ]; then echo "  [warn] importer image not built yet"; \
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \

@@ -207,7 +207,7 @@ The importer image builds from the `biomero-importer/` git submodule, not from
 images install from pip. The two can disagree silently:
 
 ```text
-.env.shared:  BIOMERO_IMPORTER_VERSION=1.4.2   <- worker and web, via pip
+.env.example:  BIOMERO_IMPORTER_VERSION=1.4.2   <- worker and web, via pip
 submodule:    v1.3.0                           <- the importer image
 ```
 

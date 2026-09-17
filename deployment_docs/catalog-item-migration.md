@@ -434,11 +434,11 @@ block until the 3600-second timeout kills it. `SPIDER_USER` and
 `SPIDER_PROJECT` become parameters. Easy, but it is a behaviour change.
 
 **2. `.env` handling inverts.** Today the scripts *mutate* `.env` in place: seed
-it from `.env.shared`, append `SPIDER_USER=`, `sed -i` values into it, and
+it from `.env.example`, append `SPIDER_USER=`, `sed -i` values into it, and
 `make set-host` rewrites two files. If `.env` arrives as a parameter or secret,
 that pattern is backwards — the playbook should **render** `.env` from a
 template plus parameters, never patch a file handed to it. This is the largest
-design consequence and it changes where `.env.shared` sits in the picture.
+design consequence and it changes where `.env.example` sits in the picture.
 
 **3. `render-slurm-config.sh` self-bootstraps.** If the template is missing it
 reverse-engineers one from an already-rendered config, `sed`-ing known Spider

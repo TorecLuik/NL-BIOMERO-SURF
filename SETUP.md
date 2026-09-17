@@ -55,7 +55,7 @@ being usable.
 
 ## If the Volume Is Not Named `omero-data`
 
-`OMERO_DATA_PATH` in `.env.shared` defaults to `/data/omero-data`, matching a
+`OMERO_DATA_PATH` in `.env.example` defaults to `/data/omero-data`, matching a
 volume named `omero-data`. A volume with a different name mounts elsewhere, and
 `make init` will say it cannot find `config/`.
 
@@ -182,11 +182,11 @@ someone else; `slurm-config.ini` is rewritten from the OMERO.biomero admin UI by
 the `omeroweb` container. `make deploy` sets all of these, so the simplest path
 is to get the files in place and let it fix the modes.
 
-**`.env`** — start from the committed `.env.shared`, then set the values that
+**`.env`** — start from the committed `.env.example`, then set the values that
 are placeholders or machine-specific:
 
 ```bash
-cp .env.shared $V/config/.env
+cp .env.example $V/config/.env
 chmod 600 $V/config/.env
 ```
 
@@ -237,7 +237,7 @@ V=/data/omero-data
 sudo mkdir -p $V/{database,database-biomero,omero,L-Drive,config,backups}
 
 # .env
-cp .env.shared $V/config/.env && chmod 600 $V/config/.env
+cp .env.example $V/config/.env && chmod 600 $V/config/.env
 # then edit $V/config/.env: passwords, SPIDER_USER, SPIDER_PROJECT, OMERO_DATA_PATH
 
 # .ssh -- the authorised Spider key, from wherever your group keeps it

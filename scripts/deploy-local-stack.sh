@@ -12,9 +12,6 @@ HOME_SSH_DIR="${LOGIN_HOME}/.ssh"
 # Resolve it the way docker-compose.yml does. See
 # deployment_docs/storage-architecture.md.
 OMERO_DATA_PATH_VAL="$(grep -hE '^OMERO_DATA_PATH=' "${PROJECT_ROOT_DIR}/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
-if [[ -z "${OMERO_DATA_PATH_VAL}" ]]; then
-  OMERO_DATA_PATH_VAL="$(grep -hE '^OMERO_DATA_PATH=' "${PROJECT_ROOT_DIR}/.env.shared" 2>/dev/null | tail -1 | cut -d= -f2-)"
-fi
 LDRIVE_DIR="${OMERO_DATA_PATH_VAL}/L-Drive"
 SLURM_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/slurm-config.ini"
 SLURM_TEMPLATE_PATH="${PROJECT_ROOT_DIR}/web/slurm-config-template.ini"
@@ -58,13 +55,13 @@ if [[ ! -e "${ENV_PATH}" && -f "${OMERO_DATA_PATH_VAL}/config/.env" ]]; then
   echo "Linked ${ENV_PATH} -> ${OMERO_DATA_PATH_VAL}/config/.env"
 fi
 
-# Nothing on the volume, so fall back to placeholder credentials. This gives a
-# stack that starts but cannot reach Spider or serve real data.
+# Without .env there is nothing to deploy from. Seeding one from a template
+# would produce a stack that starts with placeholder database passwords and
+# fails later, so stop here instead.
 if [[ ! -e "${ENV_PATH}" ]]; then
-  cp "${PROJECT_ROOT_DIR}/.env.shared" "${ENV_PATH}"
-  chmod 600 "${ENV_PATH}"
-  echo "Seeded ${ENV_PATH} from .env.shared; it has placeholder credentials."
-  echo "For a real deployment, put the secrets in ${OMERO_DATA_PATH_VAL}/config/ and run: make link-config"
+  echo "Missing ${ENV_PATH}." >&2
+  echo "  cp .env.example .env    then fill in every value marked CHANGE ME" >&2
+  exit 1
 fi
 
 if ! grep -q '^SPIDER_USER=' "${ENV_PATH}"; then

@@ -154,7 +154,7 @@ Upstream behaviour that is not fixable here is collected in
   Spider rejects. Overrides use `_job_gres`. Caught by simulating the upstream
   parser before building.
 - The previous prod image ran biomero 2.7.0 and importer 1.3.0, not the 2.5.3
-  and 1.2.1 that `.env.shared` claimed. The ignored local `.env` was the real
+  and 1.2.1 that `.env.example` claimed. The ignored local `.env` was the real
   source of truth. Both files now agree.
 
 ## Verified

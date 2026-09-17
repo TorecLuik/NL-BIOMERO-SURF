@@ -161,9 +161,9 @@ git clone <repo> && cd NL-BIOMERO
 make provision
 
 # 3. point OMERO_DATA_PATH at the mount
-#    .env arrives with the volume in step 4, so edit .env.shared here, or
+#    .env arrives with the volume in step 4, so edit .env.example here, or
 #    export it, if the volume name differs from the committed default
-grep OMERO_DATA_PATH .env.shared
+grep OMERO_DATA_PATH .env.example
 
 # 4. link the repo at the volume's secrets
 make link-config
@@ -264,7 +264,7 @@ by root — the containers set them up. The directories that need populating are
 `config/` cannot be generated, because it is the secrets:
 
 ```text
-.env                seed from .env.shared, then set the real passwords, the
+.env                seed from .env.example, then set the real passwords, the
                     Spider username, and the hostname via make set-host
 .ssh/               the Spider keypair. It must be a key Spider has already
                     authorised -- a generated one will not work, and the stack
