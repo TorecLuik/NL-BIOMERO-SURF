@@ -102,13 +102,19 @@ deploy:
 # host state rather than repository content: nothing generates it, and without
 # it /logs answers 401 while the rest of the site works. Credentials come from
 # NGINX_LOGS_USER and NGINX_LOGS_PASSWORD in .env.
+#
+# htpasswd is installed here rather than by provision, because this is the only
+# thing that uses it and /logs is optional.
 logs-auth:
 	@user=$$(grep -hE '^NGINX_LOGS_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
 	pass=$$(grep -hE '^NGINX_LOGS_PASSWORD=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
 	if [ -z "$$user" ] || [ -z "$$pass" ] || [ "$$pass" = "CHANGE ME" ]; then \
 		echo "  [FAIL] set NGINX_LOGS_USER and NGINX_LOGS_PASSWORD in .env first"; exit 1; fi; \
 	if ! command -v htpasswd >/dev/null 2>&1; then \
-		echo "  [FAIL] htpasswd is missing; sudo apt-get install -y apache2-utils"; exit 1; fi; \
+		echo "  installing apache2-utils for htpasswd..."; \
+		sudo apt-get install -y -qq apache2-utils >/dev/null 2>&1 || { \
+			echo "  [FAIL] could not install apache2-utils; install it and re-run"; exit 1; }; \
+	fi; \
 	sudo htpasswd -b -c /etc/nginx/.htpasswd "$$user" "$$pass" >/dev/null 2>&1; \
 	sudo chmod 644 /etc/nginx/.htpasswd; \
 	if sudo nginx -t >/dev/null 2>&1; then sudo systemctl reload nginx; \

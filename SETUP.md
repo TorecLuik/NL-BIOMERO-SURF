@@ -134,7 +134,6 @@ checkout, skip the package step instead:
 
 ```bash
 ./scripts/provision-vm.sh --skip-packages
-sudo apt-get install -y apache2-utils     # not part of the conflict
 ```
 
 Do not resolve it by letting apt install `docker.io`: that removes Docker CE and

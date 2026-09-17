@@ -48,7 +48,7 @@ elif command -v apt-get >/dev/null 2>&1; then
   # pulls in, and apt then refuses the whole transaction -- including the
   # unrelated packages below. Docker CE is newer and works with this stack, so
   # leave it in place and install only what is missing around it.
-  PACKAGES=(git make apache2-utils curl)
+  PACKAGES=(git make curl)
   if dpkg -s docker-ce >/dev/null 2>&1; then
     ok "docker-ce already installed; leaving it alone"
   else
@@ -64,7 +64,7 @@ elif command -v apt-get >/dev/null 2>&1; then
   sudo systemctl enable --now docker
   ok "installed: ${PACKAGES[*]}"
 else
-  warn "no apt-get; install docker, docker-compose-plugin, git, make and htpasswd by hand"
+  warn "no apt-get; install docker, docker-compose-plugin, git and make by hand"
 fi
 
 # Docker needs sudo on this deployment, which every make target already assumes,
