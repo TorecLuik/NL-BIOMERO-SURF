@@ -28,7 +28,6 @@ Everything below needs real data, a browser, or a fresh machine, so none of it
 is covered by the automated smoke tests:
 
 ```text
-the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
 ```
 
@@ -57,9 +56,11 @@ reference images: one needs a Z-stack or time series, the other two need an
 aggregate mask that nothing here produces. Gaps are listed in
 [reference-data.md](reference-data.md).
 
-Both remaining items need something outside the VM: the Research Cloud portal
-for 4063/4064, and a browser pointed at `/logs` with the basic-auth credentials
-`make logs-auth` wrote.
+*`/logs`.* Answers 401 without credentials and 302 into the dashboards app with
+the ones `make logs-auth` wrote, on the rebuilt VM.
+
+The one remaining item needs something outside the VM: 4063/4064 are opened in
+the Research Cloud portal, so nothing inside can test them.
 
 ## Planned
 

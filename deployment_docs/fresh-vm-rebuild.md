@@ -80,6 +80,26 @@ That last number is the point. The same input through an independently built
 stack, with different credentials on a volume that started empty, produces the
 same measurement.
 
+## The second rebuild
+
+Run against the fixed tree, from the same starting point: empty volume, no
+repository, no images, no nginx configuration.
+
+```text
+make provision    full report, no early exit
+make init-env     one command; 10 secrets generated, OMERO_DATA_PATH read from
+                  the mount, root and importer passwords in step
+make new-key      comment Spider's form accepts
+make init         no [FAIL]; the remaining warnings are all correct pre-deploy
+make deploy       exit 0, all smoke tests passed
+```
+
+Then, with nothing done by hand in between: reference data fetched and verified
+against its checksums, both images imported through the Importer panel, and A1
+run to a nucleus mask back in OMERO. The importer came up saying READY TO UPLOAD
+DATA TO OMERO on its first start, and `/logs` answered 401 without credentials
+and 302 with them.
+
 ## Still not covered
 
 ```text
