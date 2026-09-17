@@ -354,6 +354,10 @@ backup_and_restore/restore/restore_db.sh      database restore
                                               (plus _metabase and server paths)
 ```
 
+The Metabase pair writes and reads a `.pg_dump` since Metabase moved off H2;
+the older `.tar.gz` archives are folder backups of the H2 store and restore
+down a separate path in the same script. Both were re-tested on 2026-09-17.
+
 Useful for phase 3: both sides support **folder targets as well as Docker
 volumes** (`--omero-folder`), which is exactly what a bind-mounted layout
 needs. The README's own restore workflow is `docker-compose down`, restore,

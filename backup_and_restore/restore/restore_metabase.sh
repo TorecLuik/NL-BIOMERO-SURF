@@ -142,6 +142,44 @@ echo "  Extract To: $EXTRACT_TO_DIRECTORY"
 echo "  Force Overwrite: $([ "$FORCE" = true ] && echo "YES" || echo "NO")"
 echo ""
 
+# Since 2026-09 Metabase keeps its application database in Postgres, and
+# backup_metabase.sh writes a .pg_dump rather than a folder archive. Restore
+# that straight into the database and stop; the H2 path below is only for
+# archives taken before the move.
+case "$ABSOLUTE_BACKUP_FILE" in
+  *.pg_dump)
+    MB_CONTAINER="${MB_DB_CONTAINER:-nl-biomero-database-biomero-1}"
+    MB_DB="${MB_DB_NAME:-metabase}"
+    MB_USER_PG="${MB_DB_USER:-biomero}"
+    ENGINE_BIN="${CONTAINER_ENGINE:-$(command -v docker || command -v podman)}"
+
+    echo "Postgres dump detected; restoring into database '$MB_DB'."
+    echo "  Container: $MB_CONTAINER"
+    if [ "$FORCE" != true ]; then
+        echo "[FAIL] This replaces the contents of '$MB_DB'. Re-run with --force."
+        exit 1
+    fi
+    $ENGINE_BIN cp "$ABSOLUTE_BACKUP_FILE" "$MB_CONTAINER:/tmp/metabase.restore"
+    # pg_restore --clean warns for every object it cannot drop, which is normal
+    # when restoring into an empty or partial database, and it exits non-zero on
+    # warnings alone. Judge the result by the data instead.
+    $ENGINE_BIN exec "$MB_CONTAINER" \
+        pg_restore -U "$MB_USER_PG" -d "$MB_DB" --clean --if-exists \
+        /tmp/metabase.restore || true
+    $ENGINE_BIN exec "$MB_CONTAINER" rm -f /tmp/metabase.restore
+    dash=$($ENGINE_BIN exec "$MB_CONTAINER" \
+        psql -U "$MB_USER_PG" -d "$MB_DB" -tAc \
+        'SELECT count(*) FROM report_dashboard' 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$dash" ]; then
+        echo "[FAIL] $MB_DB has no readable report_dashboard table after restore"
+        exit 1
+    fi
+    echo "[ OK ] restored; $dash dashboards present."
+    echo "       restart Metabase to pick it up: docker compose restart metabase"
+    exit 0
+    ;;
+esac
+
 # Check if we'll overwrite existing metabase folder
 TARGET_METABASE_PATH="$EXTRACT_TO_DIRECTORY/metabase"
 if [ -d "$TARGET_METABASE_PATH" ]; then
