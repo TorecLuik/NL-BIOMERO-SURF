@@ -177,10 +177,19 @@ if [[ ! -f "${SLURM_TEMPLATE_PATH}" && -f "${SLURM_CONFIG_PATH}" ]]; then
   echo "Generated ${SLURM_TEMPLATE_PATH} from ${SLURM_CONFIG_PATH}"
 fi
 
-# Render the runtime Slurm config from the parameterized template.
-if [[ -f "${SLURM_TEMPLATE_PATH}" ]]; then
-  "${PROJECT_ROOT_DIR}/scripts/render-slurm-config.sh"
+# Render the runtime Slurm config from the parameterized template. Not guarded
+# on the template existing: the block above recreates it from a runtime config,
+# and it is committed, so by here its absence is a broken checkout rather than a
+# state to tolerate. Skipping quietly would leave no slurm-config.ini for the
+# bind mounts, so Docker would mount a directory in its place and the stack
+# would come up misconfigured -- or the chmod below would abort the deploy on a
+# missing file, naming the symptom and not the cause.
+if [[ ! -f "${SLURM_TEMPLATE_PATH}" ]]; then
+  echo "Missing ${SLURM_TEMPLATE_PATH}, and no runtime config to rebuild it from." >&2
+  echo "  It is committed; restore it with: git checkout -- web/slurm-config-template.ini" >&2
+  exit 1
 fi
+"${PROJECT_ROOT_DIR}/scripts/render-slurm-config.sh"
 
 # Keep the worker startup script on the fixed SSH-copy implementation so
 # restarts do not leave stale nested .ssh directories behind.
