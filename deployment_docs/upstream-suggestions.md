@@ -273,9 +273,26 @@ sits about ten lines below it and never executes.
 `SLURM_Get_Results.py` reads the parameter the same unguarded way, so the same
 failure is reachable through it.
 
-This arrived with 2.8.2. The parameter does not exist in v2.7.0 at all, and the
-runs on this deployment split exactly on the version rather than on options or
-data:
+2.8.2 looks like a version nobody ran this path on. Upstream NL-BIOMERO never
+pairs anything with it -- its releases go `v2.7.0` (through v1.8.0-beta.1)
+straight to `2.9.0b6`, skipping 2.8.x -- and the 2.9.0 betas have already
+replaced the call with a helper that guards the empty case:
+
+```python
+def get_images_in_id_order(conn, image_ids):
+    requested_ids = [int(image_id) for image_id in image_ids]
+    if not requested_ids:
+        return []
+```
+
+So the fix exists upstream; 2.8.2 is the gap between the version that predates
+the parameter and the version that guards it. Nothing in the pins forces that
+choice: `omero-biomero 1.6.1` requires `biomero<3,>=2.8.2`, the `biomero`
+package pins no scripts version at all, and the scripts tag is this
+deployment's own.
+
+The parameter does not exist in v2.7.0 at all, and the runs on this deployment
+split exactly on the version rather than on options or data:
 
 ```text
 v2.7.0   09-17 09:52 .. 11:07   cellpose, stardist, cellexpansion, ...   DONE
