@@ -30,6 +30,34 @@ BASE="https://dmss3gw.riken.jp/globias/zarr/v0.4"
 # zarr and tifffile live in the worker venv, not the container default python
 PYBIN="/opt/omero/server/venv-3.11/bin/python"
 
+# Address the worker through compose rather than by container name. Compose
+# derives that name from the project directory, so a checkout in any directory
+# not called nl-biomero got a name this script did not match -- and the tiff
+# regeneration below was skipped with a note saying the stack was not running.
+COMPOSE=(sudo docker compose)
+worker_running() {
+  "${COMPOSE[@]}" ps --status running --format '{{.Service}}' 2>/dev/null \
+    | grep -qx biomeroworker
+}
+worker_py() { "${COMPOSE[@]}" exec -T biomeroworker "$PYBIN" "$@"; }
+
+# The .ome.tiff files are written from inside biomeroworker, which runs as
+# omero-server, while the directories around them are created here on the host
+# by the login user. Hand the tree to the worker's group and make it group
+# writable, or the conversion dies on
+#   PermissionError: [Errno 13] Permission denied: '.../fig7....ome.tiff'
+# The gid comes from the image rather than a constant, for the same reason
+# deploy-local-stack.sh reads it there: a base-image bump that renumbers
+# omero-server would otherwise reintroduce this with no hint of the cause.
+grant_worker_write() {
+  local gid
+  gid="$("${COMPOSE[@]}" exec -T biomeroworker id -g 2>/dev/null \
+         | tr -d '\r' | grep -oE '^[0-9]+$' | tail -1)"
+  [ -n "$gid" ] || return 0
+  sudo chgrp -R "$gid" "$DEST"
+  sudo chmod -R g+w "$DEST"
+}
+
 # Fetch every resolution level the .zattrs declares. The downsampled levels are
 # not optional: OMERO's NGFF pixel buffer reads the multiscales list and opens
 # every path in it, so a pyramid missing a level fails with
@@ -84,7 +112,7 @@ print(' '.join(str(math.ceil(s/c)) for s,c in zip(d['shape'], d['chunks'])))")
 make_tiff() {
   local name="$1"
   echo "==> $name.ome.tiff"
-  sudo docker exec nl-biomero-biomeroworker-1 "$PYBIN" -c "
+  worker_py -c "
 import zarr, numpy as np, tifffile
 d = '/data/reference-data/$name/$name'
 a = zarr.open(d + '.zarr/0', mode='r')   # level 0
@@ -101,7 +129,8 @@ print(vol.shape, vol.dtype)
 fetch_zarr fig7_RSAdetection_16w
 fetch_zarr 6E3rd4hrSTFBGlc-1_Render_SeriesRGB
 
-if sudo docker ps --format '{{.Names}}' | grep -qx nl-biomero-biomeroworker-1; then
+if worker_running; then
+  grant_worker_write
   make_tiff fig7_RSAdetection_16w
   make_tiff 6E3rd4hrSTFBGlc-1_Render_SeriesRGB
 else
@@ -127,9 +156,9 @@ else
       | sort -z | xargs -0 sha256sum > SHA256SUMS )
 fi
 
-if sudo docker ps --format '{{.Names}}' | grep -qx nl-biomero-biomeroworker-1; then
+if worker_running; then
   echo "Verifying .ome.tiff pixels against the Zarr..."
-  sudo docker exec nl-biomero-biomeroworker-1 "$PYBIN" -c "
+  worker_py -c "
 import zarr, numpy as np, tifffile, sys
 ok = True
 for name in ['fig7_RSAdetection_16w', '6E3rd4hrSTFBGlc-1_Render_SeriesRGB']:
