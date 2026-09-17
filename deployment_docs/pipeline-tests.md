@@ -19,8 +19,15 @@ top bar carries a **BIOMERO** tab alongside Data, Figure and Forms; it lands on
 `/omero_biomero/biomero/`, which is a single page holding the Importer, Analyzer
 and Admin panels.
 
-Confirm Spider is reachable: **BIOMERO → Admin** shows cluster status. If it is
-red, no workflow test can pass and the problem is not in these steps.
+Confirm Spider is reachable: **BIOMERO → Analyze → Admin** shows cluster status.
+If it is red, no workflow test can pass and the problem is not in these steps.
+
+Give it a minute before believing it. The check queries Spider over SSH for
+every workflow's available versions, and until it returns, each workflow card
+reads **Offline** -- the same word it would show if the cluster really were
+unreachable. Settled, the panel says "SLURM cluster is available. 11 workflows
+ready." The underlying call is `/omero_biomero/api/analyzer/slurm/status/`,
+which is worth hitting directly when in doubt.
 
 Import both reference images, **as copies, not by reference** — see the warning
 in [reference-data.md](reference-data.md):
