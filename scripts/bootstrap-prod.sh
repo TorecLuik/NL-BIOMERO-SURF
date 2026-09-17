@@ -80,10 +80,19 @@ fi
 # renamed key once got past this point and aborted the deploy seconds later on
 # "chmod: cannot access .ssh/id_rsa". Check the literal .ssh paths the deploy
 # script will act on, not only the ones preflight knows how to build.
+#
+# Only the paths the deploy reads have to exist. It writes .ssh/config and
+# .ssh/known_hosts itself, so requiring those up front blocked every fresh VM
+# on a file that the next step was about to create. Derive the written ones
+# from the script rather than listing them here, so a new one does not
+# reintroduce the same false failure.
+WRITTEN_SSH="$(grep -oE '(cat >|touch|ssh-keyscan[^>]*>>) *"\$\{SSH_DIR\}/[A-Za-z0-9._${}-]+' \
+               scripts/deploy-local-stack.sh 2>/dev/null | sed 's#.*/##' | sort -u)"
 STALE_SSH=()
 while IFS= read -r name; do
   [[ -z "${name}" ]] && continue
   [[ "${name}" == "${SLURM_KEY_NAME}" || "${name}" == "${SLURM_KEY_NAME}.pub" ]] && continue
+  grep -qxF "${name}" <<<"${WRITTEN_SSH}" && continue
   [[ -e ".ssh/${name}" ]] && continue
   STALE_SSH+=("${name}")
 done < <(grep -oE '\$\{SSH_DIR\}/[A-Za-z0-9._-]+' scripts/deploy-local-stack.sh 2>/dev/null \
