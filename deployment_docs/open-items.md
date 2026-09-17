@@ -28,10 +28,8 @@ Everything below needs real data, a browser, or a fresh machine, so none of it
 is covered by the automated smoke tests:
 
 ```text
-BIOMERO importer picking up files under /data
 the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
-scripts/provision-vm.sh and the new-vm.md checklist on a genuinely bare VM
 ```
 
 The end-to-end workflow run is no longer among them; see below. The procedures
@@ -39,15 +37,29 @@ and public test data are in [pipeline-tests.md](pipeline-tests.md) and
 [reference-data.md](reference-data.md), which tracks which of its checks have
 been run.
 
+Two items closed on 2026-09-17 by rebuilding `biomeroqa` from an empty volume:
+
+*The bare-VM sequence.* `make provision` through `make deploy` was run twice
+from nothing -- no repo, no images, no containers, an empty storage volume --
+following SETUP.md as written. It failed the first time in eight distinct
+places, every one of them invisible on a machine that had deployed before; the
+fixes are on this branch. The second run, against the fixed tree, is what the
+Status block in pipeline-tests.md reports.
+
+*The importer.* All nine checks in pipeline-tests.md now pass there, including
+I2 and I3, which had never been run. Note what the importer actually does:
+it polls its database for queued orders rather than watching a directory, so
+a file copied into `/data` is not picked up on its own.
+
 Three registered workflows (`stardist5d`, `spotcounting`,
 `aggregates_measurements`) cannot be tested at all with the current two
 reference images: one needs a Z-stack or time series, the other two need an
 aggregate mask that nothing here produces. Gaps are listed in
 [reference-data.md](reference-data.md).
 
-The last one matters most. `make deploy` has only ever run here, where Docker,
-the repo, the secrets and nginx already existed. `deployment_docs/new-vm.md` writes
-down the manual steps around it, but that sequence is itself unverified.
+Both remaining items need something outside the VM: the Research Cloud portal
+for 4063/4064, and a browser pointed at `/logs` with the basic-auth credentials
+`make logs-auth` wrote.
 
 ## Planned
 
