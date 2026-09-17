@@ -37,6 +37,16 @@ BIOMERO -> Importer -> browse to /data/reference-data
 select both .ome.tiff files -> Import
 ```
 
+**Pick the destination dataset first.** Until one is selected the panel reads
+"Select OMERO dataset, project or screen to get started!" and *Add to import
+list* stays disabled however many files are ticked -- the file selection is not
+what enables it. Create the dataset in **Data** beforehand if none exists.
+
+The importer imports by reference: the files under `ManagedRepository` are
+symlinks back to `/data/reference-data`. That is fine while the reference data
+stays put, and is why P1 below is worth running -- deleting the source would
+leave every image unreadable.
+
 Below, `$FIG7` is `fig7_RSAdetection_16w` (2 channels, DNA on **C0**) and `$RGB`
 is `6E3rd4hrSTFBGlc-1_Render_SeriesRGB` (3 channels, DNA on **C2**).
 
@@ -465,19 +475,25 @@ exists.
 
 ## Status
 
-As of 2026-09-17:
+As of 2026-09-17, re-run end to end on a VM rebuilt from an empty volume
+(biomeroqa), which is also where the Status column below comes from:
 
 ```text
-P1  pass
-A1  pass      cellpose on $FIG7, mask imported back
-A2  pass      cell mask, chained from A1's name
-B1  pass      cellpose on $RGB
-B2  pass      cell mask, chained from B1's name
-B3  pass      56 nuclei measured, tables attached to the dataset
-I1  pass      stardist on $RGB
+P1  pass      both images render; no dangling links, no pixel-less rows
+A1  pass      cellpose on $FIG7, mask imported back into "A1 nuclei"
+A2  pass      cell mask in "A2 cells", named _Cells_Mask by the workflow itself
+B1  pass      cellpose on $RGB, mask returned at the full 1757x1114
+B2  pass      cell mask in "B2 cells"
+B3  pass      56 nuclei measured; Nuclei/Cells/Cytoplasm/Experiment/metadata
+              tables attached, 56 rows each
+I1  pass      stardist on $RGB, mask in "I1 stardist"
 I2  not run
 I3  not run
 ```
+
+The 56 figure matches what the development VM recorded, on a stack built from
+an empty volume with independently generated credentials -- so the chain
+reproduces, not just the deployment.
 
 Upstream behaviour these tests surfaced is collected in
 [upstream-suggestions.md](upstream-suggestions.md).
