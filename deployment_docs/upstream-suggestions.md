@@ -273,10 +273,11 @@ sits about ten lines below it and never executes.
 `SLURM_Get_Results.py` reads the parameter the same unguarded way, so the same
 failure is reachable through it.
 
-2.8.2 looks like a version nobody ran this path on. Upstream NL-BIOMERO never
-pairs anything with it -- its releases go `v2.7.0` (through v1.8.0-beta.1)
-straight to `2.9.0b6`, skipping 2.8.x -- and the 2.9.0 betas have already
-replaced the call with a helper that guards the empty case:
+**This is live in the current stable release.** `biomero 2.8.2` is the newest
+version on PyPI, as are `omero-biomero 1.6.1` and `biomero-importer 1.4.2`, so
+a deployment installing the latest of everything today gets this. The fix
+exists only on the unreleased 2.9 line, where the call has been replaced by a
+helper that returns early:
 
 ```python
 def get_images_in_id_order(conn, image_ids):
@@ -285,14 +286,19 @@ def get_images_in_id_order(conn, image_ids):
         return []
 ```
 
-So the fix exists upstream; 2.8.2 is the gap between the version that predates
-the parameter and the version that guards it. Nothing in the pins forces that
-choice: `omero-biomero 1.6.1` requires `biomero<3,>=2.8.2`, the `biomero`
-package pins no scripts version at all, and the scripts tag is this
-deployment's own.
+So the defect is bounded on both sides: `ROI_Target_Image_IDs` does not exist
+in v2.7.0, and 2.9 guards it. 2.8.x is the only line that both declares the
+parameter and reads it unchecked -- and it is the line users get by default.
 
-The parameter does not exist in v2.7.0 at all, and the runs on this deployment
-split exactly on the version rather than on options or data:
+This is not a mispairing on our side. `omero-biomero 1.6.1` requires
+`biomero<3,>=2.8.2`, so 2.8.2 is what its own constraint selects; the `biomero`
+package pins no scripts version, so the scripts tag follows the library
+version. Upstream NL-BIOMERO's own releases skip 2.8.x -- `v2.7.0` through
+v1.8.0-beta.1, then `2.9.0b6` -- which is likely why the gap went unnoticed,
+but it does not make 2.8.2 a wrong choice for anyone installing from PyPI.
+
+The runs on this deployment split exactly on the version rather than on options
+or data:
 
 ```text
 v2.7.0   09-17 09:52 .. 11:07   cellpose, stardist, cellexpansion, ...   DONE
@@ -305,13 +311,14 @@ Both 2.8.2 runs fail identically, and no run on 2.8.2 has succeeded. Both had
 which is the ordinary configuration for a segmentation workflow writing masks to
 a dataset.
 
-**Suggested:** skip the lookup when the ID list is empty, as the three other
-ID-resolving paths in the same script already do -- they guard with
-`if not image_ids` and log `No input IDs available...`. An empty
-`ROI_Target_Image_IDs` is the normal case for a workflow that does not create
-ROIs, so it should not reach the server at all. More generally, no call should
-pass an empty list into `ids=`, since OMERO renders it as `in ()` and the
-resulting error names neither the parameter nor the script line.
+**Suggested:** backport the 2.9 guard to the 2.8 line and release it. The fix
+is already written and needs no design -- `get_images_in_id_order`, or simply
+returning early when the list is empty, as the three other ID-resolving paths
+in the same script already do. What matters is that it ships somewhere users
+can install: until a 2.8.3 exists, every deployment on the current stable
+release fails every workflow run without ROIs, and the error names neither the
+parameter nor the script line. Yanking 2.8.2 would work too, but leaves 2.7.0
+as the newest stable, which predates the parameter entirely.
 
 ## Reporting
 
@@ -327,11 +334,12 @@ Items 1 and 3 are the ones that cost the most time here, and both have a
 one-line workaround worth including in any report: clear the dataset chip, and
 use OMERO.insight for anything that must outlive its source file.
 
-Item 9 is the one to report first and the only regression here: it is new in
-2.8.2, it has failed every run since this deployment reached that version, and
-a workflow that ran correctly on Slurm still reports FAILED with its results
-left on disk, so it reads as a compute failure and is not. Any segmentation
-workflow run without ROIs should reproduce it.
+Item 9 is the one to report first, and the only one that is live in a current
+stable release rather than a local choice: biomero 2.8.2 is the newest on PyPI,
+every workflow run without ROIs fails under it, and the fix is already written
+on the unreleased 2.9 line. A workflow that ran correctly on Slurm still
+reports FAILED with its results left on disk, so it reads as a compute failure
+and is not. The ask is a 2.8.3, not a diagnosis.
 
 Item 8 is the one to raise first for anyone deploying outside a developer
 laptop: it cannot be worked around without either exposing the cluster key to
