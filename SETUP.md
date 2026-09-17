@@ -83,7 +83,7 @@ Note that spaces in a volume name become underscores in the mount path.
 
 | Step | Fails if |
 | --- | --- |
-| `make provision` | no sudo, or no network for apt |
+| `make provision` | no sudo, no network for apt, or the image already ships Docker CE |
 | `make init` | volume not attached, or no `config/` on it |
 | `./scripts/render-slurm-config.sh` | `SPIDER_USER`/`SPIDER_PROJECT` unset in `.env` |
 | `make set-host` | — |
@@ -92,6 +92,49 @@ Note that spaces in a volume name become underscores in the mount path.
 `make init` is the one that most often stops people, and it is almost always
 the volume: either not attached, attached under a different name, or attached
 but empty. Check `mount | grep /data/` first.
+
+## If `make provision` Fails on Docker
+
+On an image that already has Docker CE, `make provision` stops in the package
+step:
+
+```text
+containerd.io : Conflicts: containerd
+E: Error, pkgProblemResolver::Resolve generated breaks, this may be caused by
+   held packages.
+```
+
+Nothing is broken. `provision` installs Ubuntu's `docker.io`, which depends on
+Ubuntu's `containerd`; some SURF Research Cloud images already carry Docker's
+own packages from `download.docker.com`, and `containerd.io` conflicts with
+`containerd`. apt cannot hold both, so it refuses the whole transaction --
+including the unrelated packages in the same command.
+
+Check what is already there:
+
+```bash
+docker --version && docker compose version
+dpkg -l | grep -E 'docker-ce|containerd'
+```
+
+If Docker CE and the compose plugin are present, skip the package step:
+
+```bash
+./scripts/provision-vm.sh --skip-packages
+```
+
+`provision` also installs `apache2-utils` for `htpasswd`, which is not part of
+the conflict and may still be missing. Install it on its own:
+
+```bash
+sudo apt-get install -y apache2-utils
+```
+
+Do **not** resolve the conflict by letting apt install `docker.io`: it removes
+Docker CE and swaps the container runtime underneath a volume that may hold
+live Postgres data. Docker CE is the newer of the two and works with this
+stack; the deployment needs a working `docker` and `docker compose`, not
+Ubuntu's specific packaging of them.
 
 ## What the Storage Volume Needs
 

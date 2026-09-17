@@ -43,10 +43,26 @@ step "Host packages"
 if [[ "${SKIP_PACKAGES}" -eq 1 ]]; then
   ok "skipped"
 elif command -v apt-get >/dev/null 2>&1; then
+  # Some Research Cloud images already ship Docker CE from download.docker.com.
+  # Its containerd.io conflicts with the containerd that Ubuntu's docker.io
+  # pulls in, and apt then refuses the whole transaction -- including the
+  # unrelated packages below. Docker CE is newer and works with this stack, so
+  # leave it in place and install only what is missing around it.
+  PACKAGES=(git make apache2-utils curl)
+  if dpkg -s docker-ce >/dev/null 2>&1; then
+    ok "docker-ce already installed; leaving it alone"
+  else
+    PACKAGES+=(docker.io)
+  fi
+  if docker compose version >/dev/null 2>&1; then
+    ok "compose plugin already installed"
+  else
+    PACKAGES+=(docker-compose-plugin)
+  fi
   sudo apt-get update -qq
-  sudo apt-get install -y -qq docker.io docker-compose-plugin git make apache2-utils curl
+  sudo apt-get install -y -qq "${PACKAGES[@]}"
   sudo systemctl enable --now docker
-  ok "docker, compose, git, make, htpasswd installed"
+  ok "installed: ${PACKAGES[*]}"
 else
   warn "no apt-get; install docker, docker-compose-plugin, git, make and htpasswd by hand"
 fi
@@ -121,12 +137,27 @@ fi
 
 if [[ -s .ssh/id_rsa ]]; then
   ok "Spider SSH key present"
-  if timeout 25 ssh -F .ssh/config -o BatchMode=yes -o ConnectTimeout=15 spider 'true' 2>/dev/null; then
+  # config/.ssh/id_rsa is deliberately 0644 so biomeroworker (uid 1000) can read
+  # it, but the host ssh client refuses a key that group- and world-readable and
+  # would report an authorised key as rejected. Test through a private copy, the
+  # same thing the container does when it copies .ssh/ at startup.
+  KEY_PROBE="$(mktemp)"
+  trap 'rm -f "${KEY_PROBE}"' EXIT
+  install -m 600 .ssh/id_rsa "${KEY_PROBE}"
+  # .ssh/config sets UserKnownHostsFile to ~/.ssh/known_hosts, which is right
+  # inside biomeroworker -- it copies .ssh/ into its own home -- but on the host
+  # points at the login user's file rather than the volume's. Override it, or
+  # every host key is unknown here and an authorised key reads as rejected.
+  if timeout 25 ssh -F .ssh/config -o BatchMode=yes -o ConnectTimeout=15 \
+      -o IdentitiesOnly=yes -i "${KEY_PROBE}" \
+      -o UserKnownHostsFile=.ssh/known_hosts spider 'true' 2>/dev/null; then
     ok "Spider accepts the key"
   else
     warn "Spider did not accept the key; authorise the public key for SPIDER_USER"
     MISSING=1
   fi
+  rm -f "${KEY_PROBE}"
+  trap - EXIT
 else
   warn ".ssh/id_rsa missing: run make link-config; is the storage volume attached?"
   MISSING=1
