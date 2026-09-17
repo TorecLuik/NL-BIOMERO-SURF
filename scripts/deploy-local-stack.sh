@@ -47,13 +47,24 @@ cd "${PROJECT_ROOT_DIR}"
 echo "Reminder: access the web UIs via SSH port forwarding:"
 echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601 <user>@<server>"
 
-# .env holds the deployment secrets and is not in git. Seeding it from
-# .env.shared gives a stack that starts but has placeholder credentials, so
-# restore the real .env from your archive when rebuilding a live deployment.
-if [[ ! -f "${ENV_PATH}" ]]; then
+# .env holds the deployment secrets and is not in git. It normally lives in
+# config/ on the attached storage volume, with .env here as a symlink to it --
+# see deployment_docs/storage-architecture.md.
+#
+# If the volume has one, link it rather than seeding a local copy: a real file
+# here would shadow the volume's and then block `make link-config`.
+if [[ ! -e "${ENV_PATH}" && -f "${OMERO_DATA_PATH_VAL}/config/.env" ]]; then
+  ln -s "${OMERO_DATA_PATH_VAL}/config/.env" "${ENV_PATH}"
+  echo "Linked ${ENV_PATH} -> ${OMERO_DATA_PATH_VAL}/config/.env"
+fi
+
+# Nothing on the volume, so fall back to placeholder credentials. This gives a
+# stack that starts but cannot reach Spider or serve real data.
+if [[ ! -e "${ENV_PATH}" ]]; then
   cp "${PROJECT_ROOT_DIR}/.env.shared" "${ENV_PATH}"
   chmod 600 "${ENV_PATH}"
-  echo "Seeded ${ENV_PATH} from .env.shared; restore the real secrets before going live."
+  echo "Seeded ${ENV_PATH} from .env.shared; it has placeholder credentials."
+  echo "For a real deployment, put the secrets in ${OMERO_DATA_PATH_VAL}/config/ and run: make link-config"
 fi
 
 if ! grep -q '^SPIDER_USER=' "${ENV_PATH}"; then

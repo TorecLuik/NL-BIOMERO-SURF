@@ -40,6 +40,10 @@ Follow the **Quickstart** section below for Windows deployment with Docker Deskt
 For Ubuntu/Linux deployments (with SSL support), see our dedicated guide:
 📖 **[Ubuntu/Linux Deployment Guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/linux-deployment.html)**
 
+> **Running the SURF deployment of this stack?** Its data and secrets live on an
+> attached storage volume, so setup differs from the quickstart below. Start at
+> **[SETUP.md](SETUP.md)**.
+
 ---
 
 ## Quickstart (Windows)
