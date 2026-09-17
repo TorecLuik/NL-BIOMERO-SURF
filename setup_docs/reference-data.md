@@ -76,14 +76,15 @@ The `.ome.tiff` files are the ones to import. BIOMERO hands BIAFLOWS workflows
 TIFF, so the Zarr copies are kept as the verifiable upstream original, not as
 workflow input.
 
-### One file should give one image
+### One file can give two OMERO images
 
-These files carry no `Image` `Name` in their OME-XML. One that does imports as
-**two** OMERO images: the file-level one holding the pixels, and a second named
-after the OME metadata holding none. The empty one shows `No preview` in the
-workflow picker and fails any workflow that reaches it.
+An OME-TIFF imports as **two** OMERO images: the file-level one holding the
+pixels, and a second named after the `Image` element in the OME-XML holding
+none. The empty one shows `No preview` in the workflow picker and fails any
+workflow that reaches it. `tifffile` always writes an `Image` element, naming it
+`Image0` when no name is given, so this is not avoidable by omitting the name.
 
-After importing an OME-TIFF from elsewhere, check for a pixel-less twin:
+After importing, check for a pixel-less twin and delete it:
 
 ```sql
 -- pixel-less images have no fileset and no pixels path. Plate wells legitimately
@@ -127,7 +128,13 @@ their pixels against it. Checksumming the TIFFs would fail after every restore.
 
 The conversion runs inside `biomeroworker` — `zarr` and `tifffile` are in
 `/opt/omero/server/venv-3.11/bin/python`, not the container's default python. It
-slices `(t,c,z,y,x)` at `t=0,z=0` and writes `CYX`:
+slices `(t,c,z,y,x)` at `t=0,z=0` and writes `CYX`.
+
+**Write to a path ending `.ome.tiff`.** `tifffile` decides whether to emit OME
+metadata from the filename, so writing to a buffer or a plain `.tif` produces a
+file with no `SizeC`. Bio-Formats then reads a 2-channel image as 1 channel and
+the ZARR export fails with `Invalid C index: 1/1`, which surfaces two steps
+later as a misleading `SLURM_Remote_Conversion.py` ValidationException.
 
 ```python
 import zarr, numpy as np, tifffile

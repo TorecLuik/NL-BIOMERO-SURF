@@ -64,9 +64,15 @@ new images or tables appear in the target dataset under **Data**.
 Only if something fails, from a terminal:
 
 ```bash
+# recent tasks, with the error text
 docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
   -c "SELECT task_name, status, error_type, start_time, end_time
       FROM biomero_task_execution ORDER BY start_time DESC LIMIT 10;"
+
+# one run by its UUID. biomero_task_execution has no workflow_id column,
+# so look the run up in the progress view.
+docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
+  -c "SELECT * FROM biomero_workflow_progress_view WHERE workflow_id='<uuid>';"
 ```
 
 ## T0 — Import is self-contained
@@ -140,9 +146,10 @@ visually match the DNA channel when flipped between the two in **Data**.
 **Fail, and where to look:**
 
 ```text
-transfer CREATED but nothing lands on Spider
-  -> the zarr export failed and the error was swallowed; the next task reports a
-     misleading ValidationException. Real cause:
+ValidationException: "Input data": biomero_<uuid> not in [...]
+  -> the zarr export failed and the error was swallowed, so no folder was ever
+     created on Spider and conversion had nothing to pick from. The message
+     names the missing folder, not the real fault. Real cause:
      docker exec nl-biomero-biomeroworker-1 \
        grep -i "Critical error\|ResourceError" \
        /opt/omero/server/OMERO.server/var/log/biomero.log | tail
@@ -155,6 +162,11 @@ Slurm job FAILED
 
 ValueError: operands could not be broadcast together ... (2,2) and (4,2)
   -> a 3D or multi-channel stack reached a 2D-only workflow. See the trap below.
+
+Invalid C index: 1/1  (in the biomero.log traceback)
+  -> OMERO's channel count disagrees with what Bio-Formats reads from the file.
+     For a hand-built OME-TIFF this usually means the OME metadata is missing;
+     see the conversion note in reference-data.md.
 ```
 
 ## T2 — Cell expansion
