@@ -25,7 +25,9 @@ Slurm access         the cluster key registered for SPIDER_USER
 # 1. confirm the volume mounted (the portal name becomes the directory name)
 mount | grep /data/
 
-# 2. clone and prepare the host
+# 2. clone and prepare the host. A fresh VM has never seen the git host, so
+#    record its key first, otherwise the clone fails on host key verification
+ssh-keyscan -H git.ia.surf.nl >> ~/.ssh/known_hosts
 git clone <this repo> && cd NL-BIOMERO
 make provision
 
