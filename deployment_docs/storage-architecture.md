@@ -19,8 +19,8 @@ ATTACHED VOLUME                        THE VM
 state, irreplaceable                   compute, rebuildable
 
 both Postgres databases                the git clone, .env, .ssh/
-the OMERO image repository             Docker images (~34 GB)
-L-Drive user data                      build cache (~9 GB)
+the OMERO image repository             Docker images
+L-Drive user data                      build cache
 volume-identity                        containers
 backups                                logs/
                                        OpenSearch and Loki indices
@@ -38,12 +38,12 @@ Three things sit deliberately on the VM despite looking like state:
   values that are fixed by a volume's data live on that volume, so a rebuilt VM
   needs a filled-in template, not a restored file.
 
-- **`logs/`** is written by the containers and shipped to OpenSearch. It is
-  ~780 MB and grows. Losing it loses history, not data.
+- **`logs/`** is written by the containers and shipped to OpenSearch. It grows
+  without bound. Losing it loses history, not data.
 
-- **OpenSearch indices** are ~7 GB — larger than everything on the volume
-  combined, and derived by reindexing `logs/`. Putting them on the volume would
-  mean most of the storage budget was spent preserving logs.
+- **OpenSearch indices** are larger than everything on the volume combined, and
+  derived by reindexing `logs/`. Putting them on the volume would mean most of
+  the storage budget was spent preserving logs.
 
 ## What Is on the Volume
 
@@ -291,19 +291,16 @@ sudo test -f /data/<volume-name>/config/volume-identity && echo present
 
 ## Sizing
 
-The current deployment uses 4.5 GB of a 100 GB volume:
+The volume is nowhere near full, and `L-Drive` dominates what it does hold:
+user data is larger than the OMERO repository and both databases together.
+Measure rather than assume, since this moves with every import:
 
-```text
-L-Drive             3.0 GB      the largest item by far
-omero                569 MB
-database             128 MB
-database-biomero     106 MB
-config                24 KB
+```bash
+sudo du -sh /data/<volume-name>/*
 ```
 
-100 GB leaves room for roughly twenty times the current image data. Size up
-only if you intend to move the OpenSearch indices onto the volume, or expect a
-large influx of real imaging data.
+Size up only if you intend to move the OpenSearch indices onto the volume, or
+expect a large influx of real imaging data.
 
 Note that the volume is not what constrains this deployment today. The boot
 disk is, and Docker images plus build cache are the reason — `docker system
