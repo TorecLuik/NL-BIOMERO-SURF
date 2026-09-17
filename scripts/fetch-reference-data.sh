@@ -16,37 +16,49 @@ BASE="https://dmss3gw.riken.jp/globias/zarr/v0.4"
 # zarr and tifffile live in the worker venv, not the container default python
 PYBIN="/opt/omero/server/venv-3.11/bin/python"
 
-# Fetch every resolution level the .zattrs declares. Levels 1 and 2 are not
-# optional: OMERO's NGFF pixel buffer reads the multiscales list and opens each
-# path in it, so a pyramid missing a level fails with
+# Fetch every resolution level the .zattrs declares. The downsampled levels are
+# not optional: OMERO's NGFF pixel buffer reads the multiscales list and opens
+# every path in it, so a pyramid missing a level fails with
 # "'.zarray' expected but is not readable or missing in store" and the image
 # registers with no readable pixels and no thumbnail.
 #
-# name : chunk grid (channels, y-chunks, x-chunks) at level 0. Levels 1 and 2 are
-# a single chunk each for both datasets.
+# The level count and chunk grid differ per dataset -- fig7 has 3 levels, the RGB
+# one has 6 -- so both are read from the served metadata rather than assumed.
 fetch_zarr() {
-  local name="$1" nc="$2" ny="$3" nx="$4"
+  local name="$1"
   local url="$BASE/${name}.zarr/0"
   local out="$DEST/$name/${name}.zarr"
   echo "==> $name"
   mkdir -p "$out"
-  curl -fsS -m 30 "$url/.zattrs"   -o "$out/.zattrs"
-  curl -fsS -m 30 "$url/.zgroup"   -o "$out/.zgroup"
+  curl -fsS -m 30 "$url/.zattrs" -o "$out/.zattrs"
+  curl -fsS -m 30 "$url/.zgroup" -o "$out/.zgroup"
 
-  local lvl gy gx
+  local lvl
   for lvl in $(python3 -c "
-import json,sys
+import json
 d=json.load(open('$out/.zattrs'))
 print(' '.join(x['path'] for x in d['multiscales'][0]['datasets']))"); do
     mkdir -p "$out/$lvl"
     curl -fsS -m 30 "$url/$lvl/.zarray" -o "$out/$lvl/.zarray"
-    if [ "$lvl" = "0" ]; then gy=$ny; gx=$nx; else gy=1; gx=1; fi
-    # chunk layout follows the t/c/z/y/x axis order declared in .zattrs
-    for ((c=0; c<nc; c++)); do
-      for ((y=0; y<gy; y++)); do
-        mkdir -p "$out/$lvl/0/$c/0/$y"
-        for ((x=0; x<gx; x++)); do
-          curl -fsS -m 60 "$url/$lvl/0/$c/0/$y/$x" -o "$out/$lvl/0/$c/0/$y/$x"
+    # chunk grid per axis, from this level's own shape and chunk size
+    local grid
+    grid=$(python3 -c "
+import json,math
+d=json.load(open('$out/$lvl/.zarray'))
+print(' '.join(str(math.ceil(s/c)) for s,c in zip(d['shape'], d['chunks'])))")
+    local nt nc nz ny nx
+    read -r nt nc nz ny nx <<<"$grid"
+    local t c z y x
+    for ((t=0; t<nt; t++)); do
+      for ((c=0; c<nc; c++)); do
+        for ((z=0; z<nz; z++)); do
+          for ((y=0; y<ny; y++)); do
+            mkdir -p "$out/$lvl/$t/$c/$z/$y"
+            for ((x=0; x<nx; x++)); do
+              curl -fsS -m 60 "$url/$lvl/$t/$c/$z/$y/$x" \
+                   -o "$out/$lvl/$t/$c/$z/$y/$x"
+            done
+          done
         done
       done
     done
@@ -72,8 +84,8 @@ print(vol.shape, vol.dtype)
 "
 }
 
-fetch_zarr fig7_RSAdetection_16w              2 1 1
-fetch_zarr 6E3rd4hrSTFBGlc-1_Render_SeriesRGB 3 2 2
+fetch_zarr fig7_RSAdetection_16w
+fetch_zarr 6E3rd4hrSTFBGlc-1_Render_SeriesRGB
 
 if sudo docker ps --format '{{.Names}}' | grep -qx nl-biomero-biomeroworker-1; then
   make_tiff fig7_RSAdetection_16w

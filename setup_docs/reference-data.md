@@ -12,10 +12,10 @@ Under `web/L-Drive/reference-data/`, which OMERO sees as `/data/reference-data`:
 ```text
 fig7_RSAdetection_16w/
   fig7_RSAdetection_16w.ome.tiff      2 x 512 x 512   uint8
-  fig7_RSAdetection_16w.zarr/         OME-Zarr v0.4, levels 0-2
+  fig7_RSAdetection_16w.zarr/         OME-Zarr v0.4, 3 levels
 6E3rd4hrSTFBGlc-1_Render_SeriesRGB/
   6E3rd4hrSTFBGlc-1_Render_SeriesRGB.ome.tiff   3 x 1114 x 1757  uint8
-  6E3rd4hrSTFBGlc-1_Render_SeriesRGB.zarr/      OME-Zarr v0.4, levels 0-2
+  6E3rd4hrSTFBGlc-1_Render_SeriesRGB.zarr/      OME-Zarr v0.4, 6 levels
 SHA256SUMS                            covers the Zarr files
 ```
 
@@ -23,11 +23,15 @@ Both are 2D (`sizeZ=1`, `sizeT=1`). Most workflows registered here are 2D-only,
 so this is deliberate — see the dimensionality warning in
 [pipeline-tests.md](pipeline-tests.md).
 
-All three resolution levels are kept. They are not optional: OMERO's NGFF pixel
-buffer reads the `multiscales` list in `.zattrs` and opens every path it names,
-so a pyramid missing a level fails with `'.zarray' expected but is not readable
-or missing in store` and the image registers with no readable pixels and no
-thumbnail.
+Every resolution level each dataset declares is kept, and the count differs per
+dataset: `fig7` has 3, the RGB one has 6. They are not optional. OMERO's NGFF
+pixel buffer reads the `multiscales` list in `.zattrs` and opens every path it
+names, so a pyramid missing any level fails with `'.zarray' expected but is not
+readable or missing in store` -- as a `getTileSize` InternalException in
+iviewer, and as a missing thumbnail elsewhere.
+
+`scripts/fetch-reference-data.sh` reads the level list from `.zattrs` and each
+level's chunk grid from its own `.zarray`, so neither is assumed.
 
 Both datasets come from RIKEN SSBD, a public OMERO instance, and were suggested
 by the BIOMERO developers as representative of their workshop material.
