@@ -444,7 +444,7 @@ P1  pass
 A1  pass      cellpose on $FIG7, mask imported back
 A2  pass      cell mask, chained from A1's name
 B1  pass      cellpose on $RGB
-B2  not run
+B2  pass      cell mask, chained from B1's name
 B3  not run   the earlier attempt used A-chain masks and failed on channel count
 I1  pass      stardist on $RGB
 I2  not run
