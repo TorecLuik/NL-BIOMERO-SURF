@@ -55,7 +55,14 @@ fi
 # Alphanumeric only: these travel through URLs, .pgpass, htpasswd and compose
 # interpolation, and every one of those has its own quoting or $-expansion
 # rules. Length, not punctuation, is what makes them hard to guess.
-gen() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "${1:-32}"; }
+#
+# Read a bounded amount and trim, rather than piping /dev/urandom into head:
+# head exits at its byte count and SIGPIPEs tr, which under `set -o pipefail`
+# fails the whole script with 141.
+gen() {
+  local n="${1:-32}"
+  LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c $(( n * 8 )) /dev/urandom) | cut -c1-"${n}"
+}
 
 if [[ -z "${SPIDER_USER_IN}" ]]; then
   read -rp "Spider username (the cluster account, e.g. biomero-jdoe): " SPIDER_USER_IN
