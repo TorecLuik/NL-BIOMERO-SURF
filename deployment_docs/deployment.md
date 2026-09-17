@@ -32,7 +32,7 @@ $OMERO_DATA_PATH/
 ├── database-biomero/    BIOMERO Postgres
 ├── omero/               OMERO image repository
 ├── L-Drive/             user data, /data in the containers
-├── config/              .env, .ssh/, slurm-config.ini
+├── config/              volume-identity
 └── backups/             backup_master.sh output
 ```
 
@@ -314,7 +314,9 @@ runs back into one.
 `scripts/render-slurm-config.sh` renders `web/slurm-config-template.ini` into
 `web/slurm-config.ini`, substituting `SPIDER_USER` and `SPIDER_PROJECT` and
 setting mode 0666 because OMERO.biomero writes that file from `omeroweb` as
-uid 999.
+uid 999. `make deploy` runs it every time, so an edit made through the admin UI
+survives only until the next deploy -- a change worth keeping goes in the
+template.
 
 ## Verifying a Change
 

@@ -81,20 +81,12 @@ fresh `.env` from it, and refuses to start when the two disagree.
 It is mode 0600 beside the database files it opens, so it is no more exposed
 than they are. `scripts/volume-identity.sh` is the only thing that writes it.
 
-`slurm-config.ini` is not on the volume. It lives in the repository at
-`web/slurm-config.ini`, gitignored, rendered from the committed
-`web/slurm-config-template.ini` by `make render-config` and by every deploy. It
-is mode 0666 because the containers bind-mount it read-write.
-
-The OMERO.biomero admin UI can write that file from the `omeroweb` container,
-and those edits are not preserved: the next render overwrites them. A change
-worth keeping belongs in the template, where it is reviewable and reaches every
-VM.
-
-Nothing else on the volume is configuration. `.env` is an ordinary file in the
-repository, per-VM and gitignored, copied from `.env.example`; `.ssh/` holds the
-cluster key, which is an authorisation granted on Spider rather than a property
-of the data, and is generated per VM with `make new-key`.
+Nothing else on the volume is configuration. The rest lives in the repository,
+per-VM and gitignored: `.env`, copied from `.env.example`; `.ssh/`, holding a
+cluster key that is an authorisation granted on Spider rather than a property of
+the data, generated with `make new-key`; and `web/slurm-config.ini`, rendered
+from the committed `web/slurm-config-template.ini` by `make render-config` and
+by every deploy.
 
 ## The variable that ties it together
 
