@@ -104,24 +104,25 @@ doctor:
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
-	@echo "== Metabase H2 store =="
-	@d=metabase/metabase.db; \
-	if [ ! -d "$$d" ]; then printf '  [ ok ] %s absent; H2 will create it on start\n' "$$d"; \
-	elif [ ! -f "$$d/metabase.db.mv.db" ]; then \
-	     printf '  [FAIL] %s exists but holds no .mv.db\n' "$$d"; \
-	     echo "         H2 cannot create its store at that prefix and will retry the lock"; \
-	     echo "         forever, filling trace.db at ~2.5GB/day while still answering 200."; \
-	     echo "         fix: docker compose stop metabase && sudo rm -rf $$d && docker compose up -d metabase"; \
+	@echo "== Metabase app DB =="
+	@if grep -q 'MB_DB_TYPE: postgres' docker-compose.yml; then \
+	  printf '  [ ok ] compose points Metabase at Postgres\n'; \
+	  got=$$(sudo docker exec nl-biomero-database-biomero-1 psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc 'SELECT count(*) FROM report_dashboard' 2>/dev/null); \
+	  if [ -n "$$got" ]; then printf '  [ ok ] metabase database reachable, %s dashboards\n' "$$got"; \
+	  else echo "  [warn] cannot read the metabase database; is database-biomero up?"; fi; \
+	  for v in METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID; do \
+	    id=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); \
+	    [ -n "$$id" ] || continue; \
+	    ok=$$(sudo docker exec nl-biomero-database-biomero-1 psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc "SELECT enable_embedding FROM report_dashboard WHERE id=$$id" 2>/dev/null); \
+	    case "$$ok" in t) printf '  [ ok ] %-40s id %s embeddable\n' "$$v" "$$id" ;; \
+	      f) printf '  [warn] %s id %s exists but embedding is off\n' "$$v" "$$id" ;; \
+	      *) printf '  [warn] %s id %s not found in Metabase\n' "$$v" "$$id" ;; esac; \
+	  done; \
+	  if [ -d metabase/metabase.db ]; then \
+	    echo "  [warn] metabase/metabase.db/ is leftover H2 data; Metabase no longer reads it"; \
+	    echo "         remove it once you are satisfied the migration held"; fi; \
 	else \
-	     printf '  [ ok ] H2 store present\n'; \
-	     t=$$d/metabase.db.trace.db; \
-	     if [ -f "$$t" ]; then \
-	       sz=$$(du -m "$$t" 2>/dev/null | cut -f1); \
-	       if [ "$${sz:-0}" -ge 100 ]; then \
-	         printf '  [warn] trace.db is %sMB; H2 is logging errors in a loop\n' "$$sz"; \
-	         echo "         inspect: tail -c 2000 $$t"; \
-	       else printf '  [ ok ] trace.db is %sMB\n' "$$sz"; fi; \
-	     fi; \
+	  echo "  [warn] Metabase is still on H2; migrate to Postgres, see the expert skill"; \
 	fi
 	@echo "== Container log caps =="
 	@uncapped=$$(sudo docker ps --format '{{.Names}}' 2>/dev/null | while read n; do \

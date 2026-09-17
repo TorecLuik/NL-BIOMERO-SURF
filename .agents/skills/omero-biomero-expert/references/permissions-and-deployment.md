@@ -154,15 +154,86 @@ Development `docker-compose-dev.yml`:
 
 Do not assume dev compose behavior is suitable for prod.
 
-## Metabase File Ownership
+## Metabase Application Database
 
-Metabase H2 lives under:
+Metabase stores its own dashboards, users and settings in an **application
+database**, separate from the BIOMERO analytics data it charts. Since
+2026-09-17 that is Postgres, in a `metabase` database on `database-biomero`:
 
-```text
-metabase/metabase.db/metabase.db.mv.db
+```yaml
+MB_DB_TYPE: postgres
+MB_DB_HOST: database-biomero
+MB_DB_DBNAME: metabase
 ```
 
-The live file is locked while Metabase runs. For read inspection, copy it inside the container and query the copy. For writes, stop Metabase first and back up the folder:
+There is no bind mount any more. The data lives in the `database-biomero`
+volume and is covered by that volume's backup.
+
+### Why not H2
+
+Upstream shipped `MB_DB_FILE: /metabase-data/metabase.db` with `./metabase`
+bind-mounted, unchanged since 2024-08. H2 treats the value as a path *prefix*
+and creates `metabase/metabase.db/metabase.db.mv.db`; the nesting is correct,
+and `.gitignore` lists exactly those paths.
+
+The trap is an **empty** `metabase/metabase.db/` directory, left by deleting the
+`.mv.db` files without the folder, or by restoring a backup that archived the
+directory but not its contents. H2 cannot create its store at the prefix and
+retries forever:
+
+```text
+MVStoreException: The file is locked: /metabase-data/metabase.db/metabase.db.mv.db
+Caused by: java.nio.channels.OverlappingFileLockException
+```
+
+It hides well: `/api/health` still returns 200 and dashboards still render,
+because one connection holds the real file while a background task loops. The
+only visible symptom is `metabase.db.trace.db` growing without bound, measured
+at ~2.5 GB/day on this host -- roughly eighteen days to a full disk, and a full
+disk is what corrupts the store in the first place.
+
+Do not "fix" this by pointing `MB_DB_FILE` deeper. H2 appends another directory
+level and the problem recurs one level down.
+
+`make doctor` checks the Postgres setup, including that both embedded dashboard
+IDs in `.env` exist and have embedding enabled.
+
+### Migrating H2 to Postgres
+
+Metabase's own `load-from-h2` preserves dashboard **IDs**, which matters because
+OMERO.web embeds them by number via `METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID` and
+`METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID`.
+
+```bash
+sudo docker compose stop metabase
+sudo docker exec nl-biomero-database-biomero-1 \
+  psql -U biomero -d postgres -c "CREATE DATABASE metabase OWNER biomero;"
+
+# the H2 file must be WRITABLE: load-from-h2 runs migrations on the source first
+sudo docker run --rm --network nl-biomero_omero -v "$PWD/h2dir:/h2" \
+  -e MB_DB_TYPE=postgres -e MB_DB_HOST=database-biomero -e MB_DB_PORT=5432 \
+  -e MB_DB_DBNAME=metabase -e MB_DB_USER=biomero -e MB_DB_PASS=<pass> \
+  --entrypoint java metabase/metabase@sha256:<pin> \
+  -jar /app/metabase.jar load-from-h2 /h2/metabase.db
+```
+
+Pass the H2 path **without** the `.mv.db` suffix. Then switch `MB_DB_*` in
+compose and drop the `./metabase` volume.
+
+Note that `/api/session/properties` reports `enable-embedding: null` to
+unauthenticated callers even when embedding is on; read the `setting` table to
+check it for real:
+
+```bash
+sudo docker exec nl-biomero-database-biomero-1 psql -U biomero -d metabase \
+  -c "SELECT key,value FROM setting WHERE key LIKE '%embedding%';"
+```
+
+### File ownership, for an H2 deployment
+
+If you are still on H2, the live file is locked while Metabase runs. For read
+inspection, copy it inside the container and query the copy. For writes, stop
+Metabase first and back up the folder:
 
 ```bash
 sudo docker compose stop metabase
@@ -182,66 +253,6 @@ tar --numeric-owner -czf - metabase | ssh -F .ssh/config biomero-prod '
 ```
 
 After cross-host copy, repair datasource credentials for the target environment; the H2 DB carries database passwords, admin users, and embedding settings.
-
-### Never leave an empty directory at the H2 path
-
-`MB_DB_FILE` is `/metabase-data/metabase.db`, and `./metabase` is bind-mounted
-to `/metabase-data`. H2 treats that value as a *path prefix*, not a filename, so
-on a clean start it creates:
-
-```text
-metabase/metabase.db/metabase.db.mv.db      <- the database
-metabase/metabase.db/metabase.db.trace.db   <- H2's error log
-```
-
-The nesting is correct and expected; `.gitignore` lists exactly these paths.
-
-The failure mode is an **empty** `metabase/metabase.db/` directory left behind,
-typically by deleting the `.mv.db` files without removing the folder, or by
-restoring a backup that archived the directory but not its contents. H2 then
-cannot create its store at the prefix and retries forever:
-
-```text
-MVStoreException: The file is locked: /metabase-data/metabase.db/metabase.db.mv.db
-Caused by: java.nio.channels.OverlappingFileLockException
-```
-
-Metabase still answers `/api/health` with 200 and dashboards may still render,
-because one connection holds the real file while a background task loops. The
-visible symptom is `metabase.db.trace.db` growing without bound — measured at
-~2.5 GB/day on this host, which fills the disk and can corrupt the store,
-producing more lock errors in turn.
-
-Check for it with:
-
-```bash
-ls -la metabase/metabase.db/                 # empty directory is the bug
-curl -s localhost:3000/api/session/properties | grep -o '"enable-embedding":[^,]*'
-```
-
-`enable-embedding: null` while `docker-compose.yml` sets `MB_ENABLE_EMBEDDING:
-"true"` means Metabase is not reading the store the compose file points at.
-
-Fix by removing the directory entirely and letting H2 recreate it:
-
-```bash
-sudo docker compose stop metabase
-sudo rm -rf metabase/metabase.db          # remove the DIRECTORY, not just the files
-sudo docker compose up -d metabase        # H2 recreates the correct layout
-```
-
-Do **not** "fix" this by pointing `MB_DB_FILE` deeper (e.g.
-`/metabase-data/metabase.db/metabase.db`). H2 appends another level and the
-problem recurs one directory down. The compose value is correct as it stands,
-unchanged from upstream since 2024-08.
-
-This destroys the dashboards, so migrate off H2 for anything that matters —
-`metabase/README.md` upstream documents moving to the `database-biomero`
-Postgres, and Metabase itself logs a production warning on every H2 start.
-
-Container log growth is a separate cap, set by `logging-defaults.yml`; it does
-not apply to `trace.db`, which is written inside the bind mount rather than to
-the container's stdout.
 
 ## Importer Privilege Model
 

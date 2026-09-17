@@ -223,15 +223,24 @@ services:
     container_name: metabase
     hostname: metabase
     environment:
-      MB_DB_FILE: /metabase-data/metabase.db
+      # Postgres application database. H2 was the upstream default but is not
+      # recommended for production: it is a single file on a bind mount, and an
+      # empty directory left at MB_DB_FILE sends H2 into a permanent lock-retry
+      # loop that fills the disk. See the expert skill, "Metabase File Ownership".
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: database-biomero
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: ${BIOMERO_POSTGRES_USER}
+      MB_DB_PASS: ${BIOMERO_POSTGRES_PASSWORD}
       MB_USER: ${METABASE_USER}
       MB_PASSWORD: ${METABASE_PASSWORD}
     networks:
       - omero
     ports:
       - "3000:3000" # Expose Metabase on port 3000
-    volumes:
-      - "./metabase:/metabase-data" # Mount existing H2 db
+    depends_on:
+      - database-biomero
     extends:
       file: logging-defaults.yml
       service: default-logging

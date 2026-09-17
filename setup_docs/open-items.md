@@ -123,12 +123,16 @@ command.
   `SLURM_Remote_Conversion.py` ValidationException. Upstream behaviour, not
   configuration; [pipeline-tests.md](pipeline-tests.md) says where the real
   cause is logged.
-- Metabase filled `metabase.db.trace.db` at ~2.5 GB/day on 2026-09-17. An empty
-  `metabase/metabase.db/` directory sat where H2 expects to create its store, so
-  it retried the lock forever while still serving 200s. Fixed by removing the
-  directory and letting H2 recreate it; `MB_DB_FILE` was correct and unchanged.
-  The dashboards were lost, which was acceptable here. Details in the expert
-  skill under "Never leave an empty directory at the H2 path".
+- Metabase filled `metabase.db.trace.db` at ~2.5 GB/day on 2026-09-17: an empty
+  `metabase/metabase.db/` directory sat where H2 creates its store, so H2
+  retried the lock forever while still serving 200s. Rather than patch the H2
+  layout, Metabase was migrated to a `metabase` database on `database-biomero`,
+  which removes the failure mode entirely and puts the dashboards inside a
+  backed-up volume. `load-from-h2` preserved dashboard IDs 2 and 6, so the
+  OMERO.web embeds still resolve and `.env` needed no change. The source was the
+  2026-09-15 backup `metabase-h2.tar.gz`, which verified against its SHA256SUMS.
+  `make doctor` now checks the Postgres setup and both embedded dashboard IDs.
+  `metabase/metabase.db/` is leftover and can be deleted once you are satisfied.
 - A single `pip install` of `biomero-importer` and `biomero[full]` fails with
   ResolutionImpossible over conflicting ezomero pins. The two-step install is
   deliberate; see `deployment.md`.

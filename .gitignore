@@ -12,6 +12,7 @@ local.env
 /.idea
 web/L-Drive/*
 backup_and_restore/backups/
+/backups/
 backup_and_restore/biomero*
 backup_and_restore/omero*
 
