@@ -21,7 +21,7 @@ help:
 	@echo "  make init               fetch submodules and run preflight"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
-	@echo "  make link-config        link .env/.ssh/slurm-config to the storage volume"
+	@echo "  make link-config        link slurm-config.ini to the storage volume"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make adopt-volume       record an existing volume's database credentials"
 	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
@@ -68,21 +68,12 @@ init:
 	@$(MAKE) --no-print-directory link-config
 	@$(MAKE) --no-print-directory doctor
 
-# The stack's state -- both databases, the OMERO repository, L-Drive and the
-# secrets -- lives on an attached storage volume at $$OMERO_DATA_PATH, so that
-# it survives the VM. A fresh clone has no secrets: they arrive with the volume,
-# and this points the repo at them. Idempotent, and safe to re-run.
+# slurm-config.ini is runtime state: the OMERO.biomero admin UI rewrites it from
+# the omeroweb container, so it belongs with the volume rather than the repo.
+# This points the repo's copy at it. Idempotent, and safe to re-run.
 #
-# Existing real files are left alone rather than replaced, so running this on a
-# machine that predates the volume layout reports them instead of destroying
-# them.
-#
-# DATA_PATH overrides where the volume is mounted, for a volume whose name is
-# not omero-data:
-#
-#   make link-config DATA_PATH=/data/my-volume
-#
-# It takes precedence over .env, so a volume can be reached before .env exists.
+# DATA_PATH overrides the mountpoint for a volume not named omero-data, for the
+# case where .env does not carry it yet.
 link-config:
 	@path="$(DATA_PATH)"; \
 	[ -n "$$path" ] || path=$$(grep -hE '^OMERO_DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2-); \
@@ -92,21 +83,11 @@ link-config:
 		echo "         Is the storage volume attached? See deployment_docs/storage-architecture.md"; \
 		exit 1; \
 	fi; \
-	rc=0; \
-	for pair in ".env:.env" ".ssh:.ssh" "slurm-config.ini:web/slurm-config.ini"; do \
-		src="$$path/config/$${pair%%:*}"; dst="$${pair##*:}"; \
-		if [ -L "$$dst" ]; then \
-			if [ "$$(readlink "$$dst")" = "$$src" ]; then printf '  [ ok ] %s\n' "$$dst"; \
-			else ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (repointed)\n' "$$dst"; fi; \
-		elif [ -e "$$dst" ]; then \
-			printf '  [warn] %s is a real file, not a link; move it to %s and re-run\n' "$$dst" "$$src"; rc=1; \
-		elif [ ! -e "$$src" ]; then \
-			printf '  [warn] %s missing on the volume; nothing to link\n' "$$src"; rc=1; \
-		else \
-			ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (linked)\n' "$$dst"; \
-		fi; \
-	done; \
-	exit $$rc
+	src="$$path/config/slurm-config.ini"; dst=web/slurm-config.ini; \
+	if [ -L "$$dst" ] && [ "$$(readlink "$$dst")" = "$$src" ]; then printf '  [ ok ] %s\n' "$$dst"; \
+	elif [ -e "$$dst" ] && [ ! -L "$$dst" ]; then \
+		printf '  [warn] %s is a real file; move it to %s and re-run\n' "$$dst" "$$src"; exit 1; \
+	else ln -sfn "$$src" "$$dst"; printf '  [ ok ] %s (linked)\n' "$$dst"; fi
 
 deploy:
 	@./scripts/bootstrap-prod.sh
@@ -234,7 +215,7 @@ reference-data:
 set-host:
 	@test -n "$(HOST)" || { echo "usage: make set-host HOST=my.vm.example.org"; exit 2; }
 	@if [ ! -f .env ]; then \
-		echo "  [FAIL] .env does not exist; run make link-config first"; \
+		echo "  [FAIL] .env does not exist; copy .env.example to .env"; \
 		exit 1; \
 	fi
 	@tmp=$$(mktemp); \

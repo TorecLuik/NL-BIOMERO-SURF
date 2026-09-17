@@ -47,7 +47,7 @@ echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601
 # see deployment_docs/storage-architecture.md.
 #
 # If the volume has one, link it rather than seeding a local copy: a real file
-# here would shadow the volume's and then block `make link-config`.
+# here would shadow the volume's copy of slurm-config.ini.
 if [[ ! -e "${ENV_PATH}" && -f "${OMERO_DATA_PATH_VAL}/config/.env" ]]; then
   ln -s "${OMERO_DATA_PATH_VAL}/config/.env" "${ENV_PATH}"
   echo "Linked ${ENV_PATH} -> ${OMERO_DATA_PATH_VAL}/config/.env"

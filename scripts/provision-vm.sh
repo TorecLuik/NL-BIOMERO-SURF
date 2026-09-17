@@ -5,8 +5,8 @@
 # submodule, the per-VM hostname values, and the nginx location block. It stops
 # before deploying, because three things cannot be automated from inside the VM:
 #
-#   1. .env and .ssh/ hold the deployment secrets and live on the attached
-#      storage volume; `make link-config` points the repo at them
+#   1. .env holds this VM's settings: copy .env.example and fill it in. The
+#      credentials that unlock an attached volume come from the volume itself
 #   2. ports 4063 and 4064 are opened in the SURF Research Cloud interface
 #   3. the SSH public key must be authorised on Spider for SPIDER_USER
 #
@@ -15,7 +15,7 @@
 #   scripts/provision-vm.sh --skip-packages # host already has docker and git
 #   scripts/provision-vm.sh --no-nginx      # leave host nginx alone
 #
-# After it finishes: `make link-config` (or `make init`), then `make deploy`.
+# After it finishes: `make init`, then `make deploy`.
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -94,7 +94,7 @@ if [[ -f .env ]]; then
   make --no-print-directory set-host "HOST=${PUBLIC_HOST}" >/dev/null
   ok "set to ${PUBLIC_HOST}"
 else
-  warn ".env is missing; run make link-config, then make set-host HOST=${PUBLIC_HOST}"
+  warn ".env is missing; cp .env.example .env, then make set-host HOST=${PUBLIC_HOST}"
 fi
 
 # --------------------------------------------------------------------- nginx --
@@ -132,7 +132,7 @@ SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env 2>/dev/null | tail -1 | cut -d=
 if [[ -f .env ]]; then
   ok ".env present"
 else
-  warn ".env missing: run make link-config; is the storage volume attached?"
+  warn ".env missing; copy .env.example to .env and fill it in"
   MISSING=1
 fi
 

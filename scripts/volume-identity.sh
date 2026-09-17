@@ -1,32 +1,35 @@
 #!/usr/bin/env bash
-# The database credentials a storage volume was initialised with.
+# The credentials that unlock a storage volume's data, kept with that volume.
 #
-# Postgres seeds POSTGRES_PASSWORD into the cluster the first time it starts
-# and ignores it on every start after that. The password in .env is therefore
-# authoritative exactly once, when the volume is empty; from then on the truth
-# lives in the data. A .env that disagrees is not rejected at startup -- the
-# containers come up and then fail to authenticate.
+# Postgres seeds POSTGRES_PASSWORD into the cluster the first time it starts and
+# ignores it afterwards, so these values are decided once, when the volume is
+# empty, and are fixed by the data from then on. They open that volume and
+# nothing else, and without them its databases cannot be read at all.
 #
-# So the deployment records what it initialised the volume with, in
-# <volume>/config/volume-identity, and compares on every later deploy. The file
-# holds salted hashes, never the passwords: it exists to detect drift, not to
-# reveal or restore a credential.
+# So they live on the volume, in <volume>/config/volume-identity, and a VM that
+# attaches it gets them from there. .env carries what belongs to the VM --
+# hostnames, cluster identity, generated secrets -- and nothing that a
+# reattached volume would need supplied back to it.
 #
-# It is never an input to compose. Compose reads .env and only .env; this file
-# can agree with it or stop the deployment, but it cannot quietly supply a
-# value.
+# Compose still reads .env alone. This file fills a missing value in before the
+# stack starts and refuses to continue when the two disagree, but it is never a
+# second source compose consults.
 #
 # Usage:
-#   volume-identity.sh check    compare .env against the volume, if stamped
+#   volume-identity.sh check    fill .env from the volume, or report a conflict
 #   volume-identity.sh write    record the current .env (empty volume only)
-#   volume-identity.sh adopt    stamp a populated volume, verifying first
+#   volume-identity.sh adopt    record a populated volume, verifying first
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_ROOT_DIR}"
 
-STAMPED_KEYS=(POSTGRES_USER POSTGRES_DB POSTGRES_PASSWORD
-              BIOMERO_POSTGRES_USER BIOMERO_POSTGRES_DB BIOMERO_POSTGRES_PASSWORD)
+# Fixed by the volume's data: the databases cannot be opened without them.
+# METABASE_SECRET_KEY belongs here too -- it decrypts secrets Metabase has
+# already written into its application database.
+VOLUME_KEYS=(POSTGRES_USER POSTGRES_DB POSTGRES_PASSWORD
+             BIOMERO_POSTGRES_USER BIOMERO_POSTGRES_DB BIOMERO_POSTGRES_PASSWORD
+             METABASE_SECRET_KEY)
 
 env_value() { grep -hE "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 
@@ -37,74 +40,70 @@ data_path() {
   printf '%s' "${p}"
 }
 
-# Salted so the file does not become an offline dictionary target. The salt sits
-# beside the hashes: it defends a weak password against a stolen file, not
-# against someone who can already read the volume.
-#
-# The key name is part of the input, so two settings that happen to share a
-# value -- POSTGRES_USER, _DB and _PASSWORD are all "omero" by default -- do not
-# produce the same hash and advertise that they match.
-hash_value() { printf '%s\n%s\n%s' "$1" "$2" "$3" | sha256sum | cut -d' ' -f1; }
-
 stamp_path() { printf '%s/config/volume-identity' "$(data_path)"; }
 
-# A volume is "populated" once Postgres has initialised a cluster in it.
+# A volume is populated once Postgres has initialised a cluster in it.
 volume_has_data() { sudo test -s "$(data_path)/database/PG_VERSION"; }
 
-read_stamp_field() { sudo grep -hE "^$1=" "$(stamp_path)" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+stamp_value() { sudo grep -hE "^$1=" "$(stamp_path)" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 
+# Written 0600 and owned by the login user: it sits beside the database files it
+# opens, so it is no more exposed than they are, but it should not be world
+# readable on a shared mount.
 write_stamp() {
-  local path salt tmp
+  local path tmp key value
   path="$(stamp_path)"
-  salt="$(openssl rand -hex 16)"
   tmp="$(mktemp)"
   {
-    echo "# Database credentials this volume was initialised with."
-    echo "# Hashes, not passwords. Written by scripts/volume-identity.sh."
-    echo "# Deleting this file only disables drift detection."
-    echo "stamped_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "salt=${salt}"
-    for key in "${STAMPED_KEYS[@]}"; do
-      echo "${key}=$(hash_value "${key}" "$(env_value "${key}")" "${salt}")"
+    echo "# Credentials that unlock this volume's data."
+    echo "# Written by scripts/volume-identity.sh. Keep this with the volume:"
+    echo "# without it the databases here cannot be opened."
+    echo "written_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    for key in "${VOLUME_KEYS[@]}"; do
+      value="$(env_value "${key}")"
+      [[ -n "${value}" ]] && echo "${key}=${value}"
     done
   } > "${tmp}"
   sudo mkdir -p "$(dirname "${path}")"
   sudo cp "${tmp}" "${path}"
-  sudo chmod 0644 "${path}"
+  sudo chmod 0600 "${path}"
+  sudo chown "$(id -u):$(id -g)" "${path}"
   rm -f "${tmp}"
-  echo "  [ ok ] recorded database identity in ${path}"
+  echo "  [ ok ] recorded the volume's credentials in ${path}"
 }
 
-# Every stamped key must still hash to what the volume recorded.
-compare_stamp() {
-  local salt drift=() key
-  salt="$(read_stamp_field salt)"
-  if [[ -z "${salt}" ]]; then
-    echo "  [FAIL] $(stamp_path) has no salt; it is corrupt" >&2
-    return 1
+# Append a value .env is missing. This is the reattach case: a fresh .env from
+# .env.example has placeholders where the volume has the real values.
+fill_env() {
+  local key="$1" value="$2"
+  if grep -qE "^${key}=" .env 2>/dev/null; then
+    # A placeholder or empty value is replaced in place; a real one never is.
+    python3 - "$key" "$value" <<'PY'
+import sys, re
+key, value = sys.argv[1], sys.argv[2]
+lines = open('.env').read().split('\n')
+for i, line in enumerate(lines):
+    if line.startswith(key + '='):
+        lines[i] = f'{key}={value}'
+        break
+open('.env', 'w').write('\n'.join(lines))
+PY
+  else
+    printf '%s=%s\n' "${key}" "${value}" >> .env
   fi
-  for key in "${STAMPED_KEYS[@]}"; do
-    local recorded current
-    recorded="$(read_stamp_field "${key}")"
-    [[ -n "${recorded}" ]] || continue
-    current="$(hash_value "${key}" "$(env_value "${key}")" "${salt}")"
-    [[ "${recorded}" == "${current}" ]] || drift+=("${key}")
-  done
-  if [[ "${#drift[@]}" -gt 0 ]]; then
-    echo "  [FAIL] .env disagrees with the volume on: ${drift[*]}" >&2
-    echo "         These are fixed by the data in $(data_path)/database." >&2
-    echo "         Correct .env to match; the volume cannot adopt a new password." >&2
-    return 1
-  fi
-  echo "  [ ok ] database credentials match the volume"
-  return 0
 }
 
-# Prove a password before trusting it. pg_hba trusts local connections, so
-# `docker compose exec psql` succeeds whatever the password is -- only a TCP
-# connection from outside the container actually authenticates.
+needs_value() {
+  local current="$1"
+  [[ -z "${current}" || "${current}" == *"CHANGE ME"* || "${current}" == *"CHANGE-ME"* ]]
+}
+
+# Prove a password before recording it. pg_hba matches the first rule that fits,
+# and both "local" and 127.0.0.1 are trusted, so `compose exec psql` succeeds
+# whatever the password is. Only a connection from another address reaches the
+# scram-sha-256 rule and actually authenticates.
 verify_live_password() {
-  local user db pass cid
+  local user db pass cid net addr
   user="$(env_value POSTGRES_USER)"
   db="$(env_value POSTGRES_DB)"
   pass="$(env_value POSTGRES_PASSWORD)"
@@ -113,18 +112,13 @@ verify_live_password() {
     echo "  [FAIL] the database container is not running; start it with: make up" >&2
     return 1
   fi
-  # pg_hba matches the first rule that fits, and both "local" and 127.0.0.1 are
-  # trusted -- so `compose exec psql` and any loopback connection succeed
-  # whatever the password is. Only a connection from another address falls
-  # through to the scram-sha-256 rule and actually proves the credential.
-  local addr
   addr="$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "${cid}" | awk '{print $1}')"
-  if [[ -z "${addr}" ]]; then
+  net="$(sudo docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "${cid}" | awk '{print $1}')"
+  if [[ -z "${addr}" || -z "${net}" ]]; then
     echo "  [FAIL] could not resolve the database container address" >&2
     return 1
   fi
-  sudo docker run --rm --network "$(sudo docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "${cid}" | head -1)" \
-      -e PGPASSWORD="${pass}" postgres:16 \
+  sudo docker run --rm --network "${net}" -e PGPASSWORD="${pass}" postgres:16 \
       psql -h "${addr}" -U "${user}" -d "${db}" -c 'SELECT 1' >/dev/null 2>&1
 }
 
@@ -135,16 +129,39 @@ case "${1:-check}" in
       exit 0
     fi
     if ! sudo test -f "$(stamp_path)"; then
-      echo "  [warn] this volume holds data but was never stamped"
-      echo "         Credential drift cannot be detected until it is:"
+      echo "  [warn] this volume holds data but carries no credentials"
+      echo "         Record them so a future VM can open it:"
       echo "           make adopt-volume"
       exit 0
     fi
-    compare_stamp
+    filled=()
+    drift=()
+    for key in "${VOLUME_KEYS[@]}"; do
+      recorded="$(stamp_value "${key}")"
+      [[ -n "${recorded}" ]] || continue
+      current="$(env_value "${key}")"
+      if needs_value "${current}"; then
+        fill_env "${key}" "${recorded}"
+        filled+=("${key}")
+      elif [[ "${current}" != "${recorded}" ]]; then
+        drift+=("${key}")
+      fi
+    done
+    if [[ "${#drift[@]}" -gt 0 ]]; then
+      echo "  [FAIL] .env disagrees with the volume on: ${drift[*]}" >&2
+      echo "         The volume's values are fixed by its data. Remove these from" >&2
+      echo "         .env to take the volume's, or attach the matching volume." >&2
+      exit 1
+    fi
+    if [[ "${#filled[@]}" -gt 0 ]]; then
+      echo "  [ ok ] took from the volume: ${filled[*]}"
+    else
+      echo "  [ ok ] .env matches the volume"
+    fi
     ;;
   write)
     if volume_has_data && sudo test -f "$(stamp_path)"; then
-      echo "  [ ok ] volume already stamped"
+      echo "  [ ok ] volume already carries its credentials"
       exit 0
     fi
     write_stamp
@@ -152,11 +169,11 @@ case "${1:-check}" in
   adopt)
     if ! volume_has_data; then
       echo "  [FAIL] this volume holds no database; nothing to adopt." >&2
-      echo "         Deploy normally and the stamp is written for you." >&2
+      echo "         Deploy normally and the credentials are recorded for you." >&2
       exit 1
     fi
     if sudo test -f "$(stamp_path)"; then
-      echo "  [ ok ] already stamped; nothing to do"
+      echo "  [ ok ] already recorded; nothing to do"
       exit 0
     fi
     echo "  verifying POSTGRES_PASSWORD against the running database..."
