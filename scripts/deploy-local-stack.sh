@@ -214,10 +214,20 @@ sudo chmod -R 777 "${LDRIVE_DIR}" "${PROJECT_ROOT_DIR}/logs"
 # template rendering, or rebuilds recreate them with normal 0644 permissions.
 sudo chmod 666 "${SLURM_CONFIG_PATH}" "${BIOMERO_CONFIG_PATH}" "${GROUP_MAPPINGS_CONFIG_PATH}"
 
-# biomeroworker copies .ssh/ and chmods its own copy, so the key can keep
-# ordinary private-key permissions here.
-chmod 700 "${SSH_DIR}"
-chmod 600 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
+# biomeroworker mounts this directory read-only at /tmp/.ssh and copies it to
+# /opt/omero/server/.ssh, where 10-mount-ssh.sh re-tightens its own copy to
+# 0600. It runs as omero-server, uid 1000 gid 994, matching neither the owner
+# nor the group of these files, so it would read them as "other" and the copy
+# would fail with "cp: cannot stat '/tmp/.ssh/.': Permission denied".
+#
+# Granting the group instead of "other" is what keeps the key off-limits to
+# other accounts on this VM: the group is the container's gid, so the worker
+# reads the key and nobody else does. WORKER_GID must track the uid/gid the
+# biomeroworker image runs as.
+WORKER_GID=994
+sudo chgrp -R "${WORKER_GID}" "${SSH_DIR}"
+chmod 750 "${SSH_DIR}"
+chmod 640 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
 chmod 644 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" "${SSH_DIR}/known_hosts" "${SSH_DIR}/config"
 
 # The importer container runs as uid/gid 1000 and needs write access to its log mount.
