@@ -138,6 +138,14 @@ services:
       # Used by the runtime BIOMERO patch for effective GPU jobs only. CPU-only
       # jobs omit --partition and use Spider's normal/default partition.
       BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
+      # Read only the config the deploy renders and mounts. Without this,
+      # BIOMERO merges its default search path, which begins with the
+      # /etc/slurm-config.ini baked into the worker image -- upstream's
+      # localslurm dev defaults. The merge order happens to override every
+      # key today, so this is what makes that a guarantee rather than luck,
+      # and it is what the Admin panel asks for to stop removed settings
+      # reappearing from the layered config.
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/server/slurm-config.ini
       BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
       BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}
       BIOMERO_APPTAINER_TMPDIR: ${BIOMERO_APPTAINER_TMPDIR:-}
@@ -203,6 +211,14 @@ services:
       # sacct range override.
       BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME}
       BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
+      # Read only the config the deploy renders and mounts. Without this,
+      # BIOMERO merges its default search path, which begins with the
+      # /etc/slurm-config.ini baked into the worker image -- upstream's
+      # localslurm dev defaults. The merge order happens to override every
+      # key today, so this is what makes that a guarantee rather than luck,
+      # and it is what the Admin panel asks for to stop removed settings
+      # reappearing from the layered config.
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/web/OMERO.web/var/slurm-config.ini
       BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
       BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}
       BIOMERO_APPTAINER_TMPDIR: ${BIOMERO_APPTAINER_TMPDIR:-}
