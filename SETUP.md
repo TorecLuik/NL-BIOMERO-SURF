@@ -38,28 +38,26 @@ cp .env.example .env
 # 4. the cluster key, then register the public half it prints
 make new-key
 
-# 5. submodules and runtime config
+# 5. submodules, runtime config, hostname, /logs auth
 make init
 
-# 6. public hostname
-make set-host HOST=$(hostname -f)
-
-# 7. basic auth for /logs
-make logs-auth
-
-# 8. build and start -- about an hour, most of it image builds
+# 6. build and start -- about an hour, most of it image builds
 make deploy
 ```
 
-Then verify:
+`make init` derives everything from `.env` and the host, and every step in it is
+safe to re-run. Pass `HOST=` to override the public hostname if `hostname -f` is
+not the name the VM is reached by.
+
+`make deploy` ends with smoke tests. After it, check the containers and log in
+to the web UI -- the smoke tests passing is not the same as the stack being
+usable:
 
 ```bash
-make doctor      # config drift, hostname, pins, public URL
-make ps          # every container running
+make ps
 ```
 
-and log in to the web UI. `make doctor` passing is not the same as the stack
-being usable.
+`make doctor` diagnoses drift at any later point, and changes nothing.
 
 ## Where Each Value Lives
 
@@ -115,8 +113,7 @@ Until the key is registered, the stack runs but cannot reach the cluster.
 | Step | Fails if |
 | --- | --- |
 | `make provision` | no sudo, or no network for apt |
-| `make init` | volume not attached, or no `config/` on it |
-| `make logs-auth` | `NGINX_LOGS_*` unset in `.env`, or `htpasswd` missing |
+| `make init` | volume not attached, or `NGINX_LOGS_*` unset in `.env` |
 | `make deploy` | `.env` incomplete, disagrees with the volume, or Spider unreachable |
 
 If `make init` cannot find `config/`, check `mount | grep /data/` first: the

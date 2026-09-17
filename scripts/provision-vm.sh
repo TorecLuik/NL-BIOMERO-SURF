@@ -15,7 +15,7 @@
 #   scripts/provision-vm.sh --skip-packages # host already has docker and git
 #   scripts/provision-vm.sh --no-nginx      # leave host nginx alone
 #
-# After it finishes: `make init`, then `make deploy`.
+# After it finishes: fill in .env, `make new-key`, `make init`, `make deploy`.
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -86,15 +86,6 @@ else
   else
     warn "submodule is still empty; the importer image cannot build"
   fi
-fi
-
-# ------------------------------------------------------------------ hostname --
-step "Per-VM hostname"
-if [[ -f .env ]]; then
-  make --no-print-directory set-host "HOST=${PUBLIC_HOST}" >/dev/null
-  ok "set to ${PUBLIC_HOST}"
-else
-  warn ".env is missing; cp .env.example .env, then make set-host HOST=${PUBLIC_HOST}"
 fi
 
 # --------------------------------------------------------------------- nginx --
@@ -172,8 +163,8 @@ done
 printf '\n'
 if [[ "${MISSING}" -eq 1 ]]; then
   echo "Host prepared, but the items above need attention first."
-  echo "Then run: make deploy"
+  echo "Then: cp .env.example .env and fill it in, make new-key, make init, make deploy"
   exit 1
 fi
 
-echo "Host prepared. Next: make deploy"
+echo "Host prepared. Next: cp .env.example .env and fill it in, then make init"

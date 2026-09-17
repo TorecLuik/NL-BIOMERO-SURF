@@ -18,7 +18,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 help:
 	@echo "Setup"
 	@echo "  make provision          prepare a fresh VM: packages, submodule, nginx"
-	@echo "  make init               fetch submodules and run preflight"
+	@echo "  make init               submodules, runtime config, hostname, /logs auth"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
 	@echo "  make link-config        link slurm-config.ini to the storage volume"
@@ -62,11 +62,16 @@ help:
 provision:
 	@./scripts/provision-vm.sh
 
-# A fresh clone has an empty biomero-importer/, and the importer image builds
-# from that directory, so this has to run before the first build.
+# Everything between filling in .env and deploying. Each step derives what it
+# needs from .env or the host, so there is no decision to make between them, and
+# all of them are safe to re-run.
+#
+# HOST overrides the public hostname, which otherwise comes from hostname -f.
 init:
 	git submodule update --init --recursive
 	@$(MAKE) --no-print-directory link-config
+	@$(MAKE) --no-print-directory set-host HOST=$(if $(HOST),$(HOST),$$(hostname -f))
+	@$(MAKE) --no-print-directory logs-auth
 	@$(MAKE) --no-print-directory doctor
 
 # slurm-config.ini is runtime state: the OMERO.biomero admin UI rewrites it from
