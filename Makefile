@@ -22,7 +22,7 @@ help:
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
-	@echo "  make docs-dates         refresh the date stamps in setup_docs/"
+	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
@@ -132,11 +132,11 @@ doctor:
 	else printf '  [warn] uncapped container logs: %s\n' "$$(echo $$uncapped | tr '\n' ' ')"; \
 	     echo "         these grow without bound; re-create them: make up"; fi
 
-# Refresh the Created/last updated stamps in setup_docs/ from git history. The
+# Refresh the Created/last updated stamps in deployment_docs/ from git history. The
 # stamp goes stale as soon as a doc is edited, so run this before committing
 # documentation changes.
 docs-dates:
-	@for f in setup_docs/*.md; do \
+	@for f in deployment_docs/*.md; do \
 		c=$$(git log --diff-filter=A --format=%ad --date=short -- "$$f" | tail -1); \
 		m=$$(git log -1 --format=%ad --date=short -- "$$f"); \
 		[ -n "$$c" ] || continue; \

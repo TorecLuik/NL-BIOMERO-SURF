@@ -7,7 +7,7 @@
 # Fetches the Zarr, regenerates the .ome.tiff files from it, then verifies
 # everything against SHA256SUMS. Safe to re-run.
 #
-# See setup_docs/reference-data.md.
+# See deployment_docs/reference-data.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -93,7 +93,7 @@ if sudo docker ps --format '{{.Names}}' | grep -qx nl-biomero-biomeroworker-1; t
 else
   echo "NOTE: biomeroworker is not running; skipped .ome.tiff regeneration."
   echo "      Start the stack and re-run, or convert by hand -- see"
-  echo "      setup_docs/reference-data.md."
+  echo "      deployment_docs/reference-data.md."
 fi
 
 echo

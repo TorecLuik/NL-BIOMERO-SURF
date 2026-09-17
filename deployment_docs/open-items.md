@@ -46,7 +46,7 @@ aggregate mask that nothing here produces. Gaps are listed in
 [reference-data.md](reference-data.md).
 
 The last one matters most. `make deploy` has only ever run here, where Docker,
-the repo, the secrets and nginx already existed. `setup_docs/new-vm.md` writes
+the repo, the secrets and nginx already existed. `deployment_docs/new-vm.md` writes
 down the manual steps around it, but that sequence is itself unverified.
 
 ## Planned
@@ -108,6 +108,9 @@ from each workflow's descriptor, and converter images are built on Slurm.
 command.
 
 ### Problems found along the way
+
+Upstream behaviour that is not fixable here is collected in
+[upstream-suggestions.md](upstream-suggestions.md).
 
 - Two cellpose runs failed on 2026-09-16, neither caused by the rebuild: one fed
   a `(3,2,2048,2048)` stack to a 2D-only workflow, the other ran on a

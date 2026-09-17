@@ -472,6 +472,9 @@ I2  not run
 I3  not run
 ```
 
+Upstream behaviour these tests surfaced is collected in
+[upstream-suggestions.md](upstream-suggestions.md).
+
 ## Recording results
 
 The Status block above is where per-check results live; keep it current.
