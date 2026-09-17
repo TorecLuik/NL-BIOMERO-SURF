@@ -78,14 +78,12 @@ workflow input.
 
 ### One file should give one image
 
-An OME-TIFF that declares an `Image` `Name` in its OME-XML imports as **two**
-OMERO images: the file-level one, which holds the pixels, and a second one
-named after the OME metadata, which holds none. The empty one shows `No preview`
-in the workflow picker and fails any workflow that reaches it, the same way a
-broken by-reference import does.
+These files carry no `Image` `Name` in their OME-XML. One that does imports as
+**two** OMERO images: the file-level one holding the pixels, and a second named
+after the OME metadata holding none. The empty one shows `No preview` in the
+workflow picker and fails any workflow that reaches it.
 
-The files here are written without a `Name` for that reason. If you import an
-OME-TIFF from elsewhere and see a pixel-less twin, delete it:
+After importing an OME-TIFF from elsewhere, check for a pixel-less twin:
 
 ```sql
 -- pixel-less images have no fileset and no pixels path. Plate wells legitimately
