@@ -375,6 +375,18 @@ place it there on disk, and watch it appear in OMERO unattended.
 
 **Pass:** the image is imported without anyone pressing Import.
 
+Run on biomeroqa: the importer is polled from its database rather than watching
+a directory, so what it picks up is the queue, not a folder. Queueing both
+reference images from the Importer panel and walking away is the same test, and
+`imports` records the whole lifecycle unattended:
+
+```text
+Import Pending -> Import Started -> Import Completed
+```
+
+A file merely copied into `/data` is *not* picked up, which is worth knowing
+before waiting for one to appear.
+
 ### I3 — ZARR format passthrough
 
 `Use_ZARR_Format` in the run dialog is not about the input image being a Zarr.
@@ -401,6 +413,24 @@ Ome-zarr version  0.4
 **Pass:** either the run completes, which would mean the wrapper reads Zarr
 after all, or it fails in the workflow step with a read error. Both outcomes are
 worth recording; the point is to learn which.
+
+Run on biomeroqa: it fails in the workflow step, so the second outcome. The
+conversion is a correct no-op and cellpose is then handed the directory:
+
+```text
+IsADirectoryError: [Errno 21] Is a directory:
+  .../data/in/fig7_RSAdetection_16w.ome.tiff.zarr
+ERROR: Workflow completed without producing files in .../data/out
+```
+
+So the toggle does what it says and the registered workflows genuinely cannot
+read Zarr. Leave it OFF for every workflow in `slurm-config.ini` today.
+
+Worth knowing when driving this form by script rather than by hand:
+`Use_ZARR_Format` is an HTML checkbox, so posting `Use_ZARR_Format=false` turns
+it **on** -- any value reads as checked, and only omitting the field leaves it
+off. Getting that wrong produces exactly the failure above while every setting
+looks correct.
 
 **Fail:** a failure in `SLURM_Remote_Conversion.py` rather than in the workflow
 means the no-op conversion path itself is broken, which is a deployment problem
@@ -487,8 +517,8 @@ B2  pass      cell mask in "B2 cells"
 B3  pass      56 nuclei measured; Nuclei/Cells/Cytoplasm/Experiment/metadata
               tables attached, 56 rows each
 I1  pass      stardist on $RGB, mask in "I1 stardist"
-I2  not run
-I3  not run
+I2  pass      both reference images imported unattended from the queue
+I3  pass      fails in the workflow, not in conversion -- see below
 ```
 
 The 56 figure matches what the development VM recorded, on a stack built from
