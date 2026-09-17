@@ -102,10 +102,20 @@ Mask passwords in user-facing output.
 BIOMERO.importer:
 
 - stores orders in the BIOMERO Postgres DB
-- imports files in-place from `/data`
+- imports files in-place from `/data`, always with `--transfer=ln_s`. This is
+  hardcoded in `biomero_importer/utils/importer.py` -- keyword defaults on
+  `import_to_omero` and `import_dataset` plus literals at both call sites -- so
+  no setting changes it. The managed repository holds symlinks, not pixels: move
+  or delete a source file and its image is permanently unreadable, and a backup
+  that does not dereference archives the dangling link. Use OMERO.insight for
+  anything that must outlive its source. See `permissions-and-deployment.md`,
+  "The Importer Always Links, Never Copies".
 - uses `/OMERO` and `/data` shared with OMERO.server
 - authenticates to OMERO as root initially, then switches context to the requesting user/group
 - writes preprocessing outputs under `.processed`
+- registers a `.zarr` by external reference (`com.glencoesoftware.ngff:multiscales`)
+  rather than copying or linking, so such images have no fileset and no pixels
+  path by design; see `workflow-runs.md`
 - marks failed imports failed and does not retry automatically
 
 For preprocessing, BIOMERO.importer runs external containers through Podman-in-Podman. That requires the privilege model documented in `permissions-and-deployment.md`.
