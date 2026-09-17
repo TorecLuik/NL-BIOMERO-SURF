@@ -174,7 +174,8 @@ doctor:
 	esac
 	@echo "== Importer image =="
 	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); \
-	got=$$(sudo docker run --rm --entrypoint sh nl-biomero-biomero-importer:latest -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
+	img=$$($(COMPOSE) config --images 2>/dev/null | grep -m1 'biomero-importer'); \
+	got=$$([ -n "$$img" ] && sudo docker run --rm --entrypoint sh "$$img" -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
 	if [ -z "$$got" ]; then echo "  [warn] importer image not built yet"; \
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
@@ -182,13 +183,13 @@ doctor:
 	@echo "== Metabase app DB =="
 	@if grep -q 'MB_DB_TYPE: postgres' docker-compose.yml; then \
 	  printf '  [ ok ] compose points Metabase at Postgres\n'; \
-	  got=$$(sudo docker exec nl-biomero-database-biomero-1 psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc 'SELECT count(*) FROM report_dashboard' 2>/dev/null); \
+	  got=$$($(COMPOSE) exec -T database-biomero psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc 'SELECT count(*) FROM report_dashboard' 2>/dev/null); \
 	  if [ -n "$$got" ]; then printf '  [ ok ] metabase database reachable, %s dashboards\n' "$$got"; \
 	  else echo "  [warn] cannot read the metabase database; is database-biomero up?"; fi; \
 	  for v in METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID; do \
 	    id=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); \
 	    [ -n "$$id" ] || continue; \
-	    ok=$$(sudo docker exec nl-biomero-database-biomero-1 psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc "SELECT enable_embedding FROM report_dashboard WHERE id=$$id" 2>/dev/null); \
+	    ok=$$($(COMPOSE) exec -T database-biomero psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc "SELECT enable_embedding FROM report_dashboard WHERE id=$$id" 2>/dev/null); \
 	    case "$$ok" in t) printf '  [ ok ] %-40s id %s embeddable\n' "$$v" "$$id" ;; \
 	      f) printf '  [warn] %s id %s exists but embedding is off\n' "$$v" "$$id" ;; \
 	      *) printf '  [warn] %s id %s not found in Metabase\n' "$$v" "$$id" ;; esac; \
