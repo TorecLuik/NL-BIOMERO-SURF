@@ -21,7 +21,7 @@ state, irreplaceable                   compute, rebuildable
 both Postgres databases                the git clone, .env, .ssh/
 the OMERO image repository             Docker images (~34 GB)
 L-Drive user data                      build cache (~9 GB)
-volume-identity                        containers, web/slurm-config.ini
+volume-identity                        containers
 backups                                logs/
                                        OpenSearch and Loki indices
 ```
