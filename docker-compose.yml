@@ -137,8 +137,6 @@ services:
       BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME}
       # Used by the runtime BIOMERO patch for effective GPU jobs only. CPU-only
       # jobs omit --partition and use Spider's normal/default partition.
-      BIOMERO_GPU_PARTITION: ${BIOMERO_GPU_PARTITION}
-      BIOMERO_GPU_GRES: ${BIOMERO_GPU_GRES:-}
       BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
       BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
       BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}
@@ -204,8 +202,6 @@ services:
       # Keep analyzer status/job accounting aligned with the worker-side
       # sacct range override.
       BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME}
-      BIOMERO_GPU_PARTITION: ${BIOMERO_GPU_PARTITION}
-      BIOMERO_GPU_GRES: ${BIOMERO_GPU_GRES:-}
       BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
       BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
       BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}

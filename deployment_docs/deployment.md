@@ -214,17 +214,17 @@ Per workflow in `slurm-config.ini`:
 <workflow>_job_<flag> = value  becomes --<flag>=value
 ```
 
-Global fallbacks in `.env.example`, applied only to flags a workflow has not set:
+`BIOMERO_INJECT_GPU_FLAG=true` in `.env` is what makes BIOMERO emit `--nv` and
+GPU sbatch resources at all, and only for workflows whose `use_gpu` is true.
 
-```text
-BIOMERO_INJECT_GPU_FLAG=true
-BIOMERO_GPU_PARTITION=gpu_a100_mig
-BIOMERO_GPU_GRES=gpu:a100_3g.20gb:1
-```
+There is no global partition or gres default. Each GPU workflow names its own,
+next to the reason it needs that one, because the right answer differs per
+workflow: `deconvolve_plate` runs on MIG but asks for 16 CPUs, more than a MIG
+node's 14, and classic cellpose reports `torch.cuda.device_count() == 0` under
+MIG. A single default would be wrong for one of them either way.
 
-Use `_job_gres`, never `_job_gpus`, for overrides. BIOMERO fills `--gres` and
-`--gpus` gaps independently, so a workflow setting only `_job_gpus` still
-inherits the global MIG `--gres` and emits both flags, which Spider rejects.
+Set `_job_gres` or `_job_gpus`, never both for one workflow: upstream treats
+them as mutually exclusive and Spider rejects `--gres` and `--gpus` together.
 
 CPU-only workflows carry no `use_gpu` and no partition, so Spider routes them to
 its normal default partition.

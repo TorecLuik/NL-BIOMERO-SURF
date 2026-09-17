@@ -30,8 +30,6 @@ Everything else this deployment needs is BIOMERO configuration, not patches:
 
 ```text
 BIOMERO_INJECT_GPU_FLAG         conditional --nv and GPU sbatch resources
-BIOMERO_GPU_PARTITION           fallback GPU partition
-BIOMERO_GPU_GRES                fallback --gres
 BIOMERO_ENV_FILE_SUBMISSION     per-job env files, sourced by generated scripts
 BIOMERO_IMAGE_PULL_VIA_SBATCH   image pulls run as Slurm jobs, not on the login node
 BIOMERO_PULL_CPUS / _MEM        bound those pull jobs
@@ -80,13 +78,12 @@ Per workflow in `slurm-config.ini`:
 <workflow>_job_<flag> = value  becomes --<flag>=value
 ```
 
-The `BIOMERO_GPU_*` env values are fallbacks, applied only to flags a workflow
-has not already set. A runtime `use_gpu` argument overrides the config value; an
-explicit `device=cpu` or `use_gpu=false` receives no GPU params.
+There is no global partition or gres default: each GPU workflow names its own
+in `slurm-config.ini`. A runtime `use_gpu` argument overrides the config value;
+an explicit `device=cpu` or `use_gpu=false` receives no GPU params.
 
-Use `_job_gres`, never `_job_gpus`. BIOMERO fills `--gres` and `--gpus` gaps
-independently, so a workflow setting only `_job_gpus` still inherits the global
-MIG `--gres` and emits both, which Spider rejects.
+Set `_job_gres` or `_job_gpus` for a workflow, never both: upstream treats them
+as mutually exclusive and Spider rejects `--gres` and `--gpus` together.
 
 Check effective parameters without submitting:
 
