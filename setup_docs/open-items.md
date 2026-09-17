@@ -28,17 +28,17 @@ Everything below needs real data, a browser, or a fresh machine, so none of it
 is covered by the automated smoke tests:
 
 ```text
-end-to-end workflow run with results imported back into OMERO
 BIOMERO importer picking up files under /data
-Metabase dashboard embedding in OMERO.web
+quantification: CellProfiler measurements on a 3-channel image
 the /logs viewer rendering behind nginx basic auth
 OMERO.insight connectivity on 4063/4064
 scripts/provision-vm.sh and the new-vm.md checklist on a genuinely bare VM
 ```
 
-The first two now have browser-based procedures and public test data:
-[pipeline-tests.md](pipeline-tests.md) and [reference-data.md](reference-data.md).
-They still need a browser and live Spider, so they remain unrun.
+The end-to-end workflow run is no longer among them; see below. The procedures
+and public test data are in [pipeline-tests.md](pipeline-tests.md) and
+[reference-data.md](reference-data.md), which tracks which of its checks have
+been run.
 
 Three registered workflows (`stardist5d`, `spotcounting`,
 `aggregates_measurements`) cannot be tested at all with the current two
@@ -160,6 +160,10 @@ command.
 On the dev VM against live Spider:
 
 ```text
+pipeline import -> Spider -> Slurm -> results back in OMERO, in the browser,
+         on both reference images: cellpose segmentation, CellExpansion, and
+         stardist. Per-check status is in pipeline-tests.md; quantification
+         and the importer watch path are still open.
 builds   both images build from a clean checkout
 worker   biomero 2.8.2, biomero-importer 1.4.2, zarr 3.1.5, ezomero 1.1.1
 web      omero-biomero 1.6.1, biomero 2.8.2, omero-forms 2.3.1, omero-web 5.33.1

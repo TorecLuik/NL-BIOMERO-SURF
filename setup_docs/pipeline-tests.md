@@ -453,8 +453,19 @@ I3  not run
 
 ## Recording results
 
-These tests need a browser and live Spider, so nothing runs them automatically.
-When a test passes, update the block above and move its line into the `Verified`
-block of [open-items.md](open-items.md) with the date. When one fails, note the
-workflow UUID from the Analyzer; look it up in `biomero_workflow_progress_view`,
-then read `biomero_task_execution` for the error text.
+The Status block above is where per-check results live; keep it current.
+[open-items.md](open-items.md) tracks the deployment as a whole and names this
+file rather than repeating the detail, so it only needs editing when a whole
+capability opens or closes -- not after each check.
+
+When a check fails, note the workflow UUID from the Analyzer, look it up in
+`biomero_workflow_progress_view`, then read `biomero_task_execution` for the
+error text. For a failure inside the workflow itself, the Slurm log on Spider
+has the traceback:
+
+```bash
+docker exec nl-biomero-biomeroworker-1 ssh spider "tail -40 ~/omero-<jobid>.log"
+```
+
+These tests need a browser and live Spider, so nothing runs them
+automatically.
