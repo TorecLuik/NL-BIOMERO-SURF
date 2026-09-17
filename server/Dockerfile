@@ -24,8 +24,11 @@ ADD server/00-restore-config.sh* /startup/
 # ADD "https://api.github.com/repos/NL-BioImaging/biomero-scripts/commits/dev-bilayers" /latest_commit_biomero_scripts
 # We don't need the example scripts
 RUN test -n "$BIOMERO_VERSION" || (echo "BIOMERO_VERSION build arg is required" >&2; exit 1)
+# BIOMERO_VERSION is a package version (2.8.2) because the worker and web
+# images feed it to pip, but biomero-scripts tags releases with a v prefix
+# (v2.8.2), so the tag is derived here rather than carried in .env.
 RUN cd $OMERO_DIST/lib/scripts/ && \
-    git clone --depth 1 --branch $BIOMERO_VERSION --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
+    git clone --depth 1 --branch "v$BIOMERO_VERSION" --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
     rm -f biomero/admin/Example_Minimal_Slurm_Script.py && \
     rm -f biomero/__workflows/SLURM_CellPose_Segmentation.py
 
