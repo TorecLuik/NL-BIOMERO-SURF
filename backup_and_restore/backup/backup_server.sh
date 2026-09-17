@@ -160,6 +160,55 @@ else
     timestamp=$(date '+%Y-%m-%d_%H-%M-%S-UTC')
 fi
 
+# DRY: Utility function for tar backup from folder
+backup_omero_folder() {
+    local folder="$1"
+    local output_dir="$2"
+    local timestamp="$3"
+    local skip_data="$4"
+    
+    if [[ "$skip_data" == "true" ]]; then
+        echo "Data backup skipped (--skipData)."
+        return 0
+    fi
+    
+    local data_file="omero-server.$timestamp.tar.gz"
+    local host_data_file="$output_dir/$data_file"
+    local abs_folder
+    abs_folder=$(realpath "$folder")
+    
+    echo "OMERO Server Folder Backup:"
+    echo "  Source: $abs_folder"
+    echo "  Output: $output_dir"
+    echo "  Timestamp: $timestamp"
+    echo "  Config export: SKIPPED (folder mode - no container access)"
+    echo ""
+    
+    echo "Creating tar.gz archive of OMERO folder (this may take a while)..."
+    if (cd "$(dirname "$abs_folder")" && tar -czf "$host_data_file" "$(basename "$abs_folder")"); then
+        if [[ -f "$host_data_file" ]]; then
+            local data_size
+            data_size=$(stat -c%s "$host_data_file" 2>/dev/null || stat -f%z "$host_data_file")
+            if [[ $data_size -lt 1048576 ]]; then
+                echo "Error: Archive file is suspiciously small ($(echo "scale=2; $data_size / 1024" | bc) KB)" >&2
+                return 1
+            else
+                local data_size_mb
+                data_size_mb=$(awk "BEGIN {printf \"%.2f\", $data_size/1048576}")
+                echo "[OK] OMERO folder backup: $host_data_file ($data_size_mb MB)"
+                echo "[SUCCESS] OMERO server folder backup completed successfully!"
+                return 0
+            fi
+        else
+            echo "Error: Archive file was not created: $host_data_file" >&2
+            return 1
+        fi
+    else
+        echo "Error: Failed to create OMERO folder archive" >&2
+        return 1
+    fi
+}
+
 # Check for folder mode first - if specified, skip all container logic
 if [[ -n "$OMERO_FOLDER" ]]; then
     mkdir -p "$FINAL_OUTPUT_DIR"
@@ -289,54 +338,6 @@ if [[ "$SKIP_DATA" != "true" ]]; then
     fi
 fi
 
-# DRY: Utility function for tar backup from folder
-backup_omero_folder() {
-    local folder="$1"
-    local output_dir="$2"
-    local timestamp="$3"
-    local skip_data="$4"
-    
-    if [[ "$skip_data" == "true" ]]; then
-        echo "Data backup skipped (--skipData)."
-        return 0
-    fi
-    
-    local data_file="omero-server.$timestamp.tar.gz"
-    local host_data_file="$output_dir/$data_file"
-    local abs_folder
-    abs_folder=$(realpath "$folder")
-    
-    echo "OMERO Server Folder Backup:"
-    echo "  Source: $abs_folder"
-    echo "  Output: $output_dir"
-    echo "  Timestamp: $timestamp"
-    echo "  Config export: SKIPPED (folder mode - no container access)"
-    echo ""
-    
-    echo "Creating tar.gz archive of OMERO folder (this may take a while)..."
-    if (cd "$(dirname "$abs_folder")" && tar -czf "$host_data_file" "$(basename "$abs_folder")"); then
-        if [[ -f "$host_data_file" ]]; then
-            local data_size
-            data_size=$(stat -c%s "$host_data_file" 2>/dev/null || stat -f%z "$host_data_file")
-            if [[ $data_size -lt 1048576 ]]; then
-                echo "Error: Archive file is suspiciously small ($(echo "scale=2; $data_size / 1024" | bc) KB)" >&2
-                return 1
-            else
-                local data_size_mb
-                data_size_mb=$(awk "BEGIN {printf \"%.2f\", $data_size/1048576}")
-                echo "[OK] OMERO folder backup: $host_data_file ($data_size_mb MB)"
-                echo "[SUCCESS] OMERO server folder backup completed successfully!"
-                return 0
-            fi
-        else
-            echo "Error: Archive file was not created: $host_data_file" >&2
-            return 1
-        fi
-    else
-        echo "Error: Failed to create OMERO folder archive" >&2
-        return 1
-    fi
-}
 
 echo ""
 if [[ "$config_success" == "true" && "$data_success" == "true" ]]; then
