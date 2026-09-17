@@ -44,16 +44,16 @@ cd "${PROJECT_ROOT_DIR}"
 echo "Reminder: access the web UIs via SSH port forwarding:"
 echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601 <user>@<server>"
 
-# .env holds the deployment secrets and is not in git. It normally lives in
-# config/ on the attached storage volume, with .env here as a symlink to it --
-# see deployment_docs/storage-architecture.md.
+# .env is per-VM and lives here, gitignored, copied from .env.example. The
+# volume carries only what unlocks its data -- volume-identity and
+# slurm-config.ini -- and volume-identity.sh fills the credentials it holds into
+# this file. See deployment_docs/storage-architecture.md.
 #
-# If the volume has one, link it rather than seeding a local copy: a real file
-# here would shadow the volume's copy of slurm-config.ini.
-if [[ ! -e "${ENV_PATH}" && -f "${OMERO_DATA_PATH_VAL}/config/.env" ]]; then
-  ln -s "${OMERO_DATA_PATH_VAL}/config/.env" "${ENV_PATH}"
-  echo "Linked ${ENV_PATH} -> ${OMERO_DATA_PATH_VAL}/config/.env"
-fi
+# An earlier layout kept .env and .ssh/ on the volume and symlinked them here.
+# Adopting a volume's .env is what made that wrong: a fresh VM silently
+# inherited the previous machine's hostname, pins and per-VM values instead of
+# starting from .env.example, and the two copies drifted with no way to tell
+# which was authoritative.
 
 # Without .env there is nothing to deploy from. Seeding one from a template
 # would produce a stack that starts with placeholder database passwords and
