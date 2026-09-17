@@ -133,6 +133,17 @@ sudo chmod -R 775 logs/biomero-importer
 
 Treat broad `777` as a compatibility workaround for mixed host/container users, not a security ideal. Prefer targeted ownership or ACLs once writer UIDs are known.
 
+The cluster key is always addressed as `$SLURM_ACCESS_KEY` (from `.env`, defaulting to `slurm_access_key`), never by a literal filename. A hardcoded `id_rsa` once survived in this script after the key was renamed, and because the script runs under `set -euo pipefail`, the missing path aborted the whole deploy on a message that names no cause:
+
+```text
+chmod: cannot access '.../.ssh/id_rsa': No such file or directory
+make: *** [Makefile:99: deploy] Error 1
+```
+
+When `make deploy` dies on a bare `chmod`/`cp`/`ln` error immediately after preflight passes, suspect a stale hardcoded path rather than a real permission problem: preflight resolves the key through `$SLURM_ACCESS_KEY` and passes, then the deploy script fails on a name preflight never checked. Grep the scripts for the literal name before anything else.
+
+`id_rsa` in `README.md` and `docs/sysadmin/slurm-integration.md` is upstream NL-BIOMERO documentation for a generic local-Slurm dev setup using the developer's own `~/.ssh/id_rsa`. It is unrelated to this deployment's cluster key and is not drift; leave it.
+
 `scripts/render-slurm-config.sh` renders `web/slurm-config.ini` from `web/slurm-config-template.ini` and sets mode `0666` because OMERO.biomero writes the bind-mounted config from `omeroweb` as uid 999.
 
 ## Compose Differences
