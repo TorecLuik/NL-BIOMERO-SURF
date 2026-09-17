@@ -104,6 +104,32 @@ doctor:
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
+	@echo "== Metabase H2 store =="
+	@d=metabase/metabase.db; \
+	if [ ! -d "$$d" ]; then printf '  [ ok ] %s absent; H2 will create it on start\n' "$$d"; \
+	elif [ ! -f "$$d/metabase.db.mv.db" ]; then \
+	     printf '  [FAIL] %s exists but holds no .mv.db\n' "$$d"; \
+	     echo "         H2 cannot create its store at that prefix and will retry the lock"; \
+	     echo "         forever, filling trace.db at ~2.5GB/day while still answering 200."; \
+	     echo "         fix: docker compose stop metabase && sudo rm -rf $$d && docker compose up -d metabase"; \
+	else \
+	     printf '  [ ok ] H2 store present\n'; \
+	     t=$$d/metabase.db.trace.db; \
+	     if [ -f "$$t" ]; then \
+	       sz=$$(du -m "$$t" 2>/dev/null | cut -f1); \
+	       if [ "$${sz:-0}" -ge 100 ]; then \
+	         printf '  [warn] trace.db is %sMB; H2 is logging errors in a loop\n' "$$sz"; \
+	         echo "         inspect: tail -c 2000 $$t"; \
+	       else printf '  [ ok ] trace.db is %sMB\n' "$$sz"; fi; \
+	     fi; \
+	fi
+	@echo "== Container log caps =="
+	@uncapped=$$(sudo docker ps --format '{{.Names}}' 2>/dev/null | while read n; do \
+	    o=$$(sudo docker inspect -f '{{.HostConfig.LogConfig.Config}}' "$$n" 2>/dev/null); \
+	    case "$$o" in *max-size*) ;; *) echo "$$n";; esac; done); \
+	if [ -z "$$uncapped" ]; then echo "  [ ok ] every running container has a log size cap"; \
+	else printf '  [warn] uncapped container logs: %s\n' "$$(echo $$uncapped | tr '\n' ' ')"; \
+	     echo "         these grow without bound; re-create them: make up"; fi
 
 # Refresh the Created/last updated stamps in setup_docs/ from git history. The
 # stamp goes stale as soon as a doc is edited, so run this before committing
