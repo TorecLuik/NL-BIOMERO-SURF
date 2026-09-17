@@ -197,15 +197,21 @@ reference-data:
 
 # Rewrite the three per-VM hostname values. Run after cloning onto a new host:
 # a wrong CSRF origin lets the stack start but blocks OMERO.web login.
+#
+# Only .env is touched. It is per-VM, gitignored, and lives on the storage
+# volume, and it overrides .env.shared for all three values -- so writing them
+# into the tracked .env.shared as well only dirtied the working tree with one
+# machine's hostname.
 set-host:
 	@test -n "$(HOST)" || { echo "usage: make set-host HOST=my.vm.example.org"; exit 2; }
-	@for f in .env .env.shared; do \
-		[ -f "$$f" ] || continue; \
-		sed -i -E "s|^OMERO_CSRF_TRUSTED_ORIGINS=.*|OMERO_CSRF_TRUSTED_ORIGINS=[\"https://$(HOST)\"]|" "$$f"; \
-		sed -i -E "s|^METABASE_SITE_URL=.*|METABASE_SITE_URL=https://$(HOST)/metabase|" "$$f"; \
-		sed -i -E "s|^OBSERVABILITY_ROOT_URL=.*|OBSERVABILITY_ROOT_URL=https://$(HOST)/logs/|" "$$f"; \
-		printf 'updated %s\n' "$$f"; \
-	done
+	@if [ ! -f .env ]; then \
+		echo "  [FAIL] .env does not exist; run make link-config first"; \
+		exit 1; \
+	fi
+	@sed -i -E "s|^OMERO_CSRF_TRUSTED_ORIGINS=.*|OMERO_CSRF_TRUSTED_ORIGINS=[\"https://$(HOST)\"]|" .env
+	@sed -i -E "s|^METABASE_SITE_URL=.*|METABASE_SITE_URL=https://$(HOST)/metabase|" .env
+	@sed -i -E "s|^OBSERVABILITY_ROOT_URL=.*|OBSERVABILITY_ROOT_URL=https://$(HOST)/logs/|" .env
+	@printf 'updated .env\n'
 	@echo "Restart to apply: make up"
 
 # -- stack ------------------------------------------------------------------

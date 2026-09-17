@@ -59,11 +59,23 @@ being usable.
 volume named `omero-data`. A volume with a different name mounts elsewhere, and
 `make init` will say it cannot find `config/`.
 
-Either rename the volume in the portal, or set the path before step 3:
+Either rename the volume in the portal, or point `link-config` at it before
+step 3. `link-config` reads `.env` first and falls back to `.env.shared`, and
+on a fresh clone `.env` is still the symlink it has not created yet, so the
+fallback is what it sees:
 
 ```bash
-echo 'OMERO_DATA_PATH=/data/<volume-name>' >> .env.shared
+sed -i 's|^OMERO_DATA_PATH=.*|OMERO_DATA_PATH=/data/<volume-name>|' .env.shared
 ```
+
+Edit the existing line rather than appending a second one. Only the last match
+is read, so an appended duplicate works, but it leaves the tracked
+`.env.shared` carrying one machine's mount path.
+
+This is a local edit that should not be committed: once `make link-config` has
+run, the volume's own `.env` supplies `OMERO_DATA_PATH` and overrides
+`.env.shared`. If the volume's `.env` already has the right path, you can
+revert the repo file afterwards with `git checkout .env.shared`.
 
 Note that spaces in a volume name become underscores in the mount path.
 

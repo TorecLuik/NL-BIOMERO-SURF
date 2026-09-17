@@ -74,11 +74,11 @@ fi
 
 # ------------------------------------------------------------------ hostname --
 step "Per-VM hostname"
-if [[ -f .env || -f .env.shared ]]; then
+if [[ -f .env ]]; then
   make --no-print-directory set-host "HOST=${PUBLIC_HOST}" >/dev/null
   ok "set to ${PUBLIC_HOST}"
 else
-  warn ".env and .env.shared are both missing; run make link-config, then set-host"
+  warn ".env is missing; run make link-config, then make set-host HOST=${PUBLIC_HOST}"
 fi
 
 # --------------------------------------------------------------------- nginx --
