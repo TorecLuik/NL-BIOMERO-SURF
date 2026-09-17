@@ -21,7 +21,8 @@ state, irreplaceable                   compute, rebuildable
 both Postgres databases                the git clone
 the OMERO image repository             Docker images (~34 GB)
 L-Drive user data                      build cache (~9 GB)
-.env, .ssh/, slurm-config.ini          containers
+volume-identity, slurm-config.ini      containers
+                                       .env, .ssh/
 backups                                logs/
                                        OpenSearch and Loki indices
 ```
@@ -46,7 +47,7 @@ Two things sit deliberately on the VM despite looking like state:
 ├── database-biomero/    BIOMERO Postgres        owner 999:999, mode 0700
 ├── omero/               OMERO image repository  owner 1000:0,  mode 0755
 ├── L-Drive/             user data, /data in the containers
-├── config/              the secrets -- see below
+├── config/              volume-identity, slurm-config.ini -- see below
 └── backups/             backup_master.sh output
 ```
 
@@ -54,51 +55,37 @@ The ownership is not cosmetic. Postgres refuses to start if its data directory
 is not owned by the database user and mode 0700, and OMERO expects uid 1000.
 Any copy of this data must preserve it — use `cp -a`, never a plain `cp`.
 
-### config/ and the symlinks
+### config/
 
-`config/` holds the three files that are gitignored and therefore absent from a
-fresh clone:
-
-```text
-config/.env                the stack's configuration and all its passwords
-config/.ssh/               the Spider key, its public half, config, known_hosts
-config/slurm-config.ini    rendered Slurm configuration
-```
-
-The repository reaches them through symlinks, created by `make link-config`:
+`config/` holds what belongs to the volume rather than to any VM:
 
 ```text
-.env                  -> /data/<volume-name>/config/.env
-.ssh                  -> /data/<volume-name>/config/.ssh
-web/slurm-config.ini  -> /data/<volume-name>/config/slurm-config.ini
+config/volume-identity     the credentials that open this volume's databases
+config/slurm-config.ini    runtime Slurm configuration
 ```
 
-The direction is worth being explicit about, because it reads backwards: the
-**repository holds the links, the volume holds the files**. Detach the volume
-and all three vanish from the clone. That is the intended behaviour — it means
-the repository carries no secrets and the volume is the single source of truth.
+**`volume-identity`** carries the database passwords and `METABASE_SECRET_KEY`.
+These are decided once, when the volume is empty, and fixed by its data
+afterwards: Postgres ignores `POSTGRES_PASSWORD` once the cluster exists, and
+`METABASE_SECRET_KEY` decrypts what Metabase has already written. They open this
+volume and nothing else, so losing them means losing the data. `make deploy`
+writes the file when it initialises an empty volume, fills those values into a
+fresh `.env` from it, and refuses to start when the two disagree.
 
-`.env` is the one that must be a symlink rather than a copy. Docker Compose
-only auto-loads `.env` from the project directory and this repository's
-Makefile passes no `--env-file`, so the link is what lets the volume own the
-configuration without changing every compose invocation.
+It is mode 0600 beside the database files it opens, so it is no more exposed
+than they are. `scripts/volume-identity.sh` is the only thing that writes it.
 
-### Permissions on config/.ssh
+**`slurm-config.ini`** is rewritten by the OMERO.biomero admin UI from the
+`omeroweb` container, so it is deployment state rather than repository content.
+`web/slurm-config.ini` is a symlink to it, created by `make link-config`, and is
+mode 0666 so uid 999 can write it.
 
-`config/.ssh` is mode 0755 with the private key at 0644, which is not what SSH
-would normally accept. It is deliberate: `biomeroworker` runs as uid 1000 and
-copies the directory at startup, and it cannot traverse a 0700 directory owned
-by someone else. `scripts/deploy-local-stack.sh` sets exactly these modes, with
-the comment *"keep the project SSH copy readable for Docker and host SSH locked
-down for manual use"*.
+Nothing else on the volume is configuration. `.env` is an ordinary file in the
+repository, per-VM and gitignored, copied from `.env.example`; `.ssh/` holds the
+cluster key, which is an authorisation granted on Spider rather than a property
+of the data, and is generated per VM with `make new-key`.
 
-The consequence is that a readable private key now travels on a volume that
-moves between machines. The host's own `~/.ssh` stays 0600. If this matters for
-your threat model, the fix is to have the deploy path copy the key from a
-vault-backed secret to a 0600 location at start time rather than storing it
-readable — see the catalog item plan.
-
-## How the Stack Finds It
+## The variable that ties it together
 
 One variable, `OMERO_DATA_PATH`, set in `.env`:
 
@@ -160,29 +147,27 @@ mount | grep /data/
 git clone <repo> && cd NL-BIOMERO
 make provision
 
-# 3. point OMERO_DATA_PATH at the mount
-#    .env arrives with the volume in step 4, so edit .env.example here, or
-#    export it, if the volume name differs from the committed default
-grep OMERO_DATA_PATH .env.example
+# 3. this VM's settings; set OMERO_DATA_PATH to the mountpoint and leave the
+#    database passwords as CHANGE ME -- they come from the volume
+cp .env.example .env
 
-# 4. link the repo at the volume's secrets
-make link-config
+# 4. the cluster key, then register the public half it prints
+make new-key
 
-# 5. this VM's hostname differs from the one baked into .env
+# 5. runtime config, hostname, then build and start
+make init
 make set-host HOST=$(hostname -f)
-
-# 6. build and start
 make deploy
 ```
 
-`make init` runs `link-config` for you, so in practice steps 4 and 6 collapse
-into `make init && make deploy`.
+`make deploy` takes the database passwords and `METABASE_SECRET_KEY` from
+`config/volume-identity` and reports which values it filled in. It stops if
+`.env` carries a different value for any of them, rather than starting a stack
+that cannot read its own databases.
 
-Step 5 is easy to forget and the failure is confusing. `.env` travels with the
-volume, so it carries the *previous* machine's hostname in
-`OMERO_CSRF_TRUSTED_ORIGINS`, `METABASE_SITE_URL` and `OBSERVABILITY_ROOT_URL`.
-The stack starts, but the web UI rejects logins with a CSRF error. `make doctor`
-checks all three against `hostname -f` and reports the mismatch.
+A volume written before `volume-identity` existed carries no credentials: put
+the working passwords in `.env`, `make up`, then `make adopt-volume`, which
+verifies them against the running database before recording them.
 
 What still cannot be automated from inside the VM: creating and attaching the
 volume, and opening ports 4063 and 4064 for OMERO.insight. Both are portal work.
@@ -211,14 +196,10 @@ for v in database database-biomero omero; do
 done
 sudo cp -a web/L-Drive/. $V/L-Drive/
 
-# the secrets
-sudo cp -a .env $V/config/.env
-sudo cp -a .ssh $V/config/.ssh
+# runtime Slurm config; volume-identity is written by the next deploy
 sudo cp -a web/slurm-config.ini $V/config/slurm-config.ini
-sudo chmod 755 $V/config/.ssh
-sudo chmod 644 $V/config/.ssh/*
 
-make link-config && make up
+make link-config && make up && make adopt-volume
 ```
 
 Verify ownership landed correctly before starting — this is the step that most
@@ -258,20 +239,11 @@ sudo mkdir -p $V/{database,database-biomero,omero,L-Drive,config,backups}
 
 Postgres initialises `database/` and `database-biomero/` on first start, and
 OMERO creates its repository under `omero/`. Leave those three empty and owned
-by root — the containers set them up. The directories that need populating are
-`config/` and, if you want the test datasets, `L-Drive/`.
+by root — the containers set them up. Only `L-Drive/` needs populating, and only if you want the test datasets.
 
-`config/` cannot be generated, because it is the secrets:
-
-```text
-.env                seed from .env.example, then set the real passwords, the
-                    Spider username, and the hostname via make set-host
-.ssh/               the Spider keypair. It must be a key Spider has already
-                    authorised -- a generated one will not work, and the stack
-                    comes up unable to reach the cluster
-slurm-config.ini    rendered from web/slurm-config-template.ini, which is
-                    committed
-```
+`config/` fills itself: `make deploy` renders `slurm-config.ini` from the
+committed `web/slurm-config-template.ini` and writes `volume-identity` with the
+credentials it initialised the databases with.
 
 The SSH key is the one thing that cannot come from this repository or be
 generated locally. It has to come from wherever the group keeps it, or be
@@ -299,10 +271,10 @@ sudo ls /data/<volume-name>/omero/.probe    # must exist
 sudo docker compose exec -T omeroserver rm -f /OMERO/.probe
 ```
 
-And that the secrets really live on the volume, not in the clone:
+And that the volume carries what opens it:
 
 ```bash
-ls -la .env .ssh web/slurm-config.ini    # all three must be symlinks
+sudo test -f /data/<volume-name>/config/volume-identity && echo present
 ```
 
 ## Sizing

@@ -121,9 +121,10 @@ The current `biomero-prod` entry points at a deleted VM and refuses connections.
 `scripts/deploy-local-stack.sh` creates expected bind-mount paths and applies pragmatic permissions:
 
 ```bash
-mkdir -p .ssh ~/.ssh web/L-Drive logs/omeroserver logs/omeroworker-1 logs/biomeroworker logs/omeroweb logs/biomero-importer
-chmod 755 .ssh
-chmod 644 .ssh/config .ssh/known_hosts .ssh/id_rsa .ssh/id_rsa.pub
+mkdir -p .ssh web/L-Drive logs/omeroserver logs/omeroworker-1 logs/biomeroworker logs/omeroweb logs/biomero-importer
+chmod 700 .ssh
+chmod 600 .ssh/$SLURM_ACCESS_KEY
+chmod 644 .ssh/$SLURM_ACCESS_KEY.pub .ssh/known_hosts .ssh/config
 sudo chmod -R 777 web/L-Drive logs
 sudo chmod 666 web/slurm-config.ini web/biomero-config.json web/group-mappings.json
 sudo chown -R 1000:1000 logs/biomero-importer
