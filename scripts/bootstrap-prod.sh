@@ -187,6 +187,14 @@ else
   smoke_fail "BIOMERO database did not accept a query"
 fi
 
+# Metabase keeps its application database here too, and it is created by
+# deploy-local-stack.sh rather than by Postgres itself.
+if compose exec -T database-biomero psql -U "${BIOMERO_POSTGRES_USER:-biomero}" -d "${MB_DB_NAME:-metabase}" -c 'SELECT 1' >/dev/null 2>&1; then
+  smoke_ok "Metabase application database accepts queries"
+else
+  smoke_fail "Metabase application database did not accept a query"
+fi
+
 # 3. The web front end responds.
 if curl -fsS -o /dev/null --max-time 30 http://localhost:4080/webclient/login/; then
   smoke_ok "OMERO.web login page responds"

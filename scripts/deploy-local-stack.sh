@@ -233,6 +233,32 @@ sudo chmod -R 775 "${PROJECT_ROOT_DIR}/logs/biomero-importer"
 # Bring up or refresh the full local stack. We keep --build here because
 # biomeroworker startup behavior lives in the image via 10-mount-ssh.sh.
 sudo docker compose up -d --build
+
+# Metabase keeps its application database in Postgres on database-biomero, but
+# Postgres only creates POSTGRES_DB at first init, so the metabase database does
+# not exist on a fresh volume and Metabase would fail to start. Create it if
+# missing; this is a no-op once it exists.
+MB_DB_NAME="${MB_DB_NAME:-metabase}"
+MB_PG_USER="${BIOMERO_POSTGRES_USER:-biomero}"
+for _ in $(seq 1 30); do
+  if sudo docker compose exec -T database-biomero \
+       pg_isready -U "${MB_PG_USER}" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+if sudo docker compose exec -T database-biomero \
+     psql -U "${MB_PG_USER}" -d postgres -tAc \
+     "SELECT 1 FROM pg_database WHERE datname='${MB_DB_NAME}'" 2>/dev/null \
+     | grep -q 1; then
+  echo "Metabase application database '${MB_DB_NAME}' present."
+else
+  echo "Creating Metabase application database '${MB_DB_NAME}'..."
+  sudo docker compose exec -T database-biomero \
+    psql -U "${MB_PG_USER}" -d postgres \
+    -c "CREATE DATABASE ${MB_DB_NAME} OWNER ${MB_PG_USER};"
+  sudo docker compose restart metabase
+fi
 if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.yml" ]]; then
   sudo docker compose -f opensearch-compose.yml up -d
 fi

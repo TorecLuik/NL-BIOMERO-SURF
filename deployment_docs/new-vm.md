@@ -91,12 +91,20 @@ If the host was not fully prepared, preflight says so and refuses to deploy.
 
 ## 6. Restore data, if this replaces an existing deployment
 
-Volumes, the Metabase H2 database and stack configs come from the backup, with
-restore commands in its `MANIFEST.md`:
+Volumes and stack configs come from the backup, with restore commands in its
+`MANIFEST.md`:
 
 ```text
 /data/storage_hpc/biomero-backup-2026-09-15/
 ```
+
+Metabase is the exception. Its dashboards live in a `metabase` database on
+`database-biomero`, so they arrive with that volume; the `metabase-h2.tar.gz` in
+older backups predates the move and is only useful for a one-off
+`load-from-h2` migration. `make deploy` creates the database if it is missing,
+so a genuinely fresh deployment starts with an empty Metabase and the two
+`METABASE_*_DASHBOARD_ID` values in `.env` will not resolve until dashboards
+exist. See the expert skill, "Metabase Application Database".
 
 Restore with the stack stopped (`make down`), then `make up`.
 
