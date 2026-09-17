@@ -317,11 +317,17 @@ else
 fi
 
 if grep -qx omeroserver <<<"${RUNNING}"; then
-  if compose exec -T omeroserver grep -q '\[\] if not _roi_target_ids else \[' \
-       /opt/omero/server/OMERO.server/lib/scripts/biomero/_data/SLURM_Import_Results.py 2>/dev/null; then
+  ROI_GUARD_MISSING=()
+  for _script in SLURM_Import_Results.py SLURM_Get_Results.py; do
+    if ! compose exec -T omeroserver grep -q '\[\] if not _roi_target_ids else \[' \
+         "/opt/omero/server/OMERO.server/lib/scripts/biomero/_data/${_script}" 2>/dev/null; then
+      ROI_GUARD_MISSING+=("${_script}")
+    fi
+  done
+  if [[ "${#ROI_GUARD_MISSING[@]}" -eq 0 ]]; then
     smoke_ok "empty ROI_Target_Image_IDs guard applied in server scripts"
   else
-    smoke_fail "empty ROI_Target_Image_IDs guard missing; imports will fail at 90%"
+    smoke_fail "ROI_Target_Image_IDs guard missing in ${ROI_GUARD_MISSING[*]}; imports will fail at 90%"
   fi
 else
   smoke_skip "ROI_Target_Image_IDs guard (omeroserver is not running)"

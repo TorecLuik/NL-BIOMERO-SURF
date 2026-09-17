@@ -252,11 +252,26 @@ input_images = [
 ]
 ```
 
-Nothing supplies that parameter when ROIs are not requested, so `unwrap` returns
+The producer is in the same repository, at the same tag.
+`SLURM_Run_Workflow.py` forwards the parameter only inside
+`if selected_output.get(OUTPUT_CREATE_ROIS)`; its `else` branch sets
+`OUTPUT_CREATE_ROIS` false and forwards nothing:
+
+```python
+        inputs[constants.results.ROI_TARGET_IMAGE_IDS] = rlist(
+            [rlong(image_id) for image_id in target_image_ids])
+    else:
+        inputs[constants.results.OUTPUT_CREATE_ROIS] = rbool(False)
+```
+
+So a run without ROIs reaches the consumer with nothing set, `unwrap` returns
 `None`, `or []` makes it an empty list, and `getObjects` is called with
 `ids=[]`. This runs unconditionally on every successful extraction, before any
 of the code that would have found the IDs elsewhere: the task-based fallback
 sits about ten lines below it and never executes.
+
+`SLURM_Get_Results.py` reads the parameter the same unguarded way, so the same
+failure is reachable through it.
 
 This arrived with 2.8.2. The parameter does not exist in v2.7.0 at all, and the
 runs on this deployment split exactly on the version rather than on options or
