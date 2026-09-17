@@ -7,7 +7,6 @@ LOGIN_HOME="$(getent passwd "${LOGIN_USER}" | cut -d: -f6)"
 ENV_PATH="${PROJECT_ROOT_DIR}/.env"
 START_LOG_STACK="${START_LOG_STACK:-1}"
 SSH_DIR="${PROJECT_ROOT_DIR}/.ssh"
-HOME_SSH_DIR="${LOGIN_HOME}/.ssh"
 # L-Drive and the secrets live on the attached storage volume, not in the repo.
 # Resolve it the way docker-compose.yml does. See
 # deployment_docs/storage-architecture.md.
@@ -29,7 +28,6 @@ LOG_DIRS=(
   "${PROJECT_ROOT_DIR}/logs/biomero-importer"
 )
 
-GENERATED_PROJECT_SSH_KEY=0
 
 # This helper assumes NL-BIOMERO itself is already cloned, since the script
 # lives inside that checkout. If you are starting from scratch, clone with:
@@ -125,64 +123,47 @@ if [[ ! -f "${IMPORTER_DOCKERFILE_PATH}" ]]; then
 fi
 
 # Create the bind-mounted host paths the stack expects.
-mkdir -p "${SSH_DIR}" "${HOME_SSH_DIR}" "${LDRIVE_DIR}" "${LOG_DIRS[@]}"
+mkdir -p "${SSH_DIR}" "${LDRIVE_DIR}" "${LOG_DIRS[@]}"
 
-touch "${SSH_DIR}/known_hosts"
-touch "${HOME_SSH_DIR}/known_hosts"
-ssh-keyscan -t ed25519 spider.surf.nl >> "${HOME_SSH_DIR}/known_hosts" 2>/dev/null
-sort -u "${HOME_SSH_DIR}/known_hosts" -o "${HOME_SSH_DIR}/known_hosts"
-
-# Generate a host-side SSH keypair if one does not already exist.
-if [[ ! -s "${HOME_SSH_DIR}/id_rsa" || ! -s "${HOME_SSH_DIR}/id_rsa.pub" ]]; then
-  if [[ -e "${HOME_SSH_DIR}/id_rsa" ]]; then
-    mv "${HOME_SSH_DIR}/id_rsa" "${HOME_SSH_DIR}/id_rsa.bak"
-  fi
-  if [[ -e "${HOME_SSH_DIR}/id_rsa.pub" ]]; then
-    mv "${HOME_SSH_DIR}/id_rsa.pub" "${HOME_SSH_DIR}/id_rsa.pub.bak"
-  fi
-  ssh-keygen -t rsa -b 4096 -N '' -C "${LOGIN_USER}@$(hostname)" -f "${HOME_SSH_DIR}/id_rsa"
-  GENERATED_PROJECT_SSH_KEY=1
+# .ssh/ holds cluster access material and nothing else. The login user's ~/.ssh is left
+# alone: the key that reaches this VM's git remote is a separate, disposable
+# per-VM credential, while this key represents an authorisation granted on the
+# cluster and travels between people and machines. Conflating them means a VM
+# rebuild silently becomes a change to who can reach Spider.
+SLURM_ACCESS_KEY_NAME="$(grep -hE '^SLURM_ACCESS_KEY=' "${ENV_PATH}" 2>/dev/null | tail -1 | cut -d= -f2-)"
+SLURM_ACCESS_KEY_NAME="${SLURM_ACCESS_KEY_NAME:-slurm_access_key}"
+if [[ ! -s "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}" ]]; then
+  echo "Missing ${SSH_DIR}/${SLURM_ACCESS_KEY_NAME} -- the cluster SSH key." >&2
+  echo "  make new-key    generate one, then register the public half" >&2
+  exit 1
 fi
 
-# Write a locked-down SSH config for manual host use and a project-local copy for Docker.
-cat > "${HOME_SSH_DIR}/config" <<EOF
-Host localslurm
-    HostName 172.17.0.1
-    User slurm
-    Port 2222
-    IdentityFile ${HOME_SSH_DIR}/id_rsa
-    UserKnownHostsFile ${HOME_SSH_DIR}/known_hosts
-    StrictHostKeyChecking no
+touch "${SSH_DIR}/known_hosts"
+ssh-keyscan -t rsa,ecdsa,ed25519 spider.surf.nl >> "${SSH_DIR}/known_hosts" 2>/dev/null
+sort -u "${SSH_DIR}/known_hosts" -o "${SSH_DIR}/known_hosts"
 
-Host spider
-    HostName spider.surf.nl
-    User ${SPIDER_USER}
-    IdentityFile ${HOME_SSH_DIR}/id_rsa
-    UserKnownHostsFile ${HOME_SSH_DIR}/known_hosts
-    StrictHostKeyChecking yes
-EOF
-
+# One config, written for biomeroworker, which copies this directory to its own
+# ~/.ssh. IdentitiesOnly stops ssh offering any other key it finds before this
+# one. Host-side checks pass -i explicitly rather than using this file, because
+# ~ resolves to a different home on the host than in the container.
 cat > "${SSH_DIR}/config" <<EOF
 Host localslurm
     HostName 172.17.0.1
     User slurm
     Port 2222
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/${SLURM_ACCESS_KEY_NAME}
+    IdentitiesOnly yes
     UserKnownHostsFile ~/.ssh/known_hosts
     StrictHostKeyChecking no
 
 Host spider
     HostName spider.surf.nl
     User ${SPIDER_USER}
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/${SLURM_ACCESS_KEY_NAME}
+    IdentitiesOnly yes
     UserKnownHostsFile ~/.ssh/known_hosts
     StrictHostKeyChecking yes
 EOF
-
-# Copy the host SSH material into the project-local directory mounted into biomeroworker.
-cp "${HOME_SSH_DIR}/id_rsa" "${SSH_DIR}/id_rsa"
-cp "${HOME_SSH_DIR}/id_rsa.pub" "${SSH_DIR}/id_rsa.pub"
-cp "${HOME_SSH_DIR}/known_hosts" "${SSH_DIR}/known_hosts"
 
 # Bootstrap a template from the current runtime config if the template is missing.
 if [[ ! -f "${SLURM_TEMPLATE_PATH}" && -f "${SLURM_CONFIG_PATH}" ]]; then
@@ -236,10 +217,11 @@ sudo chmod -R 777 "${LDRIVE_DIR}" "${PROJECT_ROOT_DIR}/logs"
 # template rendering, or rebuilds recreate them with normal 0644 permissions.
 sudo chmod 666 "${SLURM_CONFIG_PATH}" "${BIOMERO_CONFIG_PATH}" "${GROUP_MAPPINGS_CONFIG_PATH}"
 
-chmod 700 "${HOME_SSH_DIR}"
-chmod 600 "${HOME_SSH_DIR}/id_rsa"
-chmod 600 "${HOME_SSH_DIR}/config"
-chmod 644 "${HOME_SSH_DIR}/id_rsa.pub" "${HOME_SSH_DIR}/known_hosts"
+# biomeroworker copies .ssh/ and chmods its own copy, so the key can keep
+# ordinary private-key permissions here.
+chmod 700 "${SSH_DIR}"
+chmod 600 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}"
+chmod 644 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" "${SSH_DIR}/known_hosts" "${SSH_DIR}/config"
 
 # The importer container runs as uid/gid 1000 and needs write access to its log mount.
 sudo chown -R 1000:1000 "${PROJECT_ROOT_DIR}/logs/biomero-importer"
@@ -282,13 +264,4 @@ if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.
   sudo docker compose -f opensearch-compose.yml ps
 fi
 
-echo "Project-local Docker SSH copy: ${SSH_DIR}"
-echo "Locked-down manual SSH copy: ${HOME_SSH_DIR}"
-
-if [[ "${GENERATED_PROJECT_SSH_KEY}" -eq 1 ]]; then
-  echo "Generated a new SSH keypair:"
-  echo "  Private key: ${HOME_SSH_DIR}/id_rsa"
-  echo "  Public key:  ${HOME_SSH_DIR}/id_rsa.pub"
-  echo "Add the public key to your Spider account before testing BIOMERO SSH connectivity:"
-  cat "${HOME_SSH_DIR}/id_rsa.pub"
-fi
+echo "Cluster SSH material: ${SSH_DIR}"

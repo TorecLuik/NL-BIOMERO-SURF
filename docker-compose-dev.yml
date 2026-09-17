@@ -149,7 +149,7 @@ services:
     # Forward host SSH setup to container
     volumes:
       - "omero:/OMERO"
-      - "~/.ssh:/tmp/.ssh:ro"
+      - "./.ssh:/tmp/.ssh:ro"
       - "./web/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
       - "./web/L-Drive:/data"
       - "tus-destination:/data/tus_destination"

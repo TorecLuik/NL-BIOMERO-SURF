@@ -127,6 +127,7 @@ fi
 step "What this script cannot do"
 
 MISSING=0
+SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
 
 if [[ -f .env ]]; then
   ok ".env present"
@@ -135,31 +136,25 @@ else
   MISSING=1
 fi
 
-if [[ -s .ssh/id_rsa ]]; then
-  ok "Spider SSH key present"
-  # config/.ssh/id_rsa is deliberately 0644 so biomeroworker (uid 1000) can read
-  # it, but the host ssh client refuses a key that group- and world-readable and
-  # would report an authorised key as rejected. Test through a private copy, the
-  # same thing the container does when it copies .ssh/ at startup.
-  KEY_PROBE="$(mktemp)"
-  trap 'rm -f "${KEY_PROBE}"' EXIT
-  install -m 600 .ssh/id_rsa "${KEY_PROBE}"
-  # .ssh/config sets UserKnownHostsFile to ~/.ssh/known_hosts, which is right
-  # inside biomeroworker -- it copies .ssh/ into its own home -- but on the host
-  # points at the login user's file rather than the volume's. Override it, or
-  # every host key is unknown here and an authorised key reads as rejected.
-  if timeout 25 ssh -F .ssh/config -o BatchMode=yes -o ConnectTimeout=15 \
-      -o IdentitiesOnly=yes -i "${KEY_PROBE}" \
-      -o UserKnownHostsFile=.ssh/known_hosts spider 'true' 2>/dev/null; then
+SLURM_KEY_NAME="$(grep -hE '^SLURM_ACCESS_KEY=' .env 2>/dev/null | tail -1 | cut -d= -f2-)"
+SLURM_KEY_NAME="${SLURM_KEY_NAME:-slurm_access_key}"
+if [[ -s ".ssh/${SLURM_KEY_NAME}" ]]; then
+  ok "cluster SSH key present"
+  # .ssh/config is written for biomeroworker, which copies .ssh/ into its own
+  # home, so its ~ paths do not resolve to this directory on the host. Point at
+  # the files directly instead of using -F.
+  if timeout 25 ssh -o BatchMode=yes -o ConnectTimeout=15 \
+      -o IdentitiesOnly=yes -i ".ssh/${SLURM_KEY_NAME}" \
+      -o UserKnownHostsFile=.ssh/known_hosts -o StrictHostKeyChecking=yes \
+      "${SPIDER_USER_VAL}@spider.surf.nl" 'true' 2>/dev/null; then
     ok "Spider accepts the key"
   else
-    warn "Spider did not accept the key; authorise the public key for SPIDER_USER"
+    warn "the cluster has not accepted this key; register it for ${SPIDER_USER_VAL:-SPIDER_USER}:"
+    warn "  make show-key"
     MISSING=1
   fi
-  rm -f "${KEY_PROBE}"
-  trap - EXIT
 else
-  warn ".ssh/id_rsa missing: run make link-config; is the storage volume attached?"
+  warn ".ssh/${SLURM_KEY_NAME} missing; generate one with: make new-key"
   MISSING=1
 fi
 

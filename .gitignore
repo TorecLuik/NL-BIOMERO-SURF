@@ -2,8 +2,8 @@ biomeroworker/slurm-config.ini_*
 DevNotes.md
 .env
 .env.keys
-# Matches both a real directory and the symlink that make link-config creates,
-# so no trailing slash.
+# Cluster access key, its public half, known_hosts and the generated config.
+# No trailing slash, so this also matches a symlink left by an older checkout.
 .ssh
 web/slurm-config.ini
 web/local_omeroweb_edits/omero-script-menu-widget/

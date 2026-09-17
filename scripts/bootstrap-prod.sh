@@ -13,7 +13,7 @@
 # Prerequisites that must exist before running, because they cannot be
 # regenerated from the repository:
 #   .env         deployment secrets; the only copy, so archive it somewhere safe
-#   .ssh/id_rsa  Spider SSH key registered with the SPIDER_USER account
+#   .ssh/slurm_access_key  cluster SSH key registered for the SPIDER_USER account
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,10 +67,12 @@ else
   fail ".env is missing; restore it from your secrets archive before deploying"
 fi
 
-if [[ -f .ssh/id_rsa ]]; then
-  ok "project SSH key present"
+SLURM_KEY_NAME="$(grep -hE '^SLURM_ACCESS_KEY=' .env 2>/dev/null | tail -1 | cut -d= -f2-)"
+SLURM_KEY_NAME="${SLURM_KEY_NAME:-slurm_access_key}"
+if [[ -f ".ssh/${SLURM_KEY_NAME}" ]]; then
+  ok "cluster SSH key present (.ssh/${SLURM_KEY_NAME})"
 else
-  fail ".ssh/id_rsa missing; restore the Spider key from the backup first"
+  fail ".ssh/${SLURM_KEY_NAME} missing; generate one with: make new-key"
 fi
 
 # Public ingress. nginx is host-managed on SURF Research Cloud, so this only
@@ -146,15 +148,20 @@ fi
 SPIDER_USER_VAL="$(grep -hE '^SPIDER_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
 if [[ -n "${SPIDER_USER_VAL}" ]]; then
   ok "SPIDER_USER is set"
-  if timeout 25 ssh -F .ssh/config -o BatchMode=yes -o ConnectTimeout=15 spider 'true' 2>/dev/null; then
+  # .ssh/config is biomeroworker's, and its ~ paths do not resolve here.
+  SPIDER_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15 -o IdentitiesOnly=yes
+              -i ".ssh/${SLURM_KEY_NAME}" -o UserKnownHostsFile=.ssh/known_hosts
+              -o StrictHostKeyChecking=yes "${SPIDER_USER_VAL}@spider.surf.nl")
+  if timeout 25 "${SPIDER_SSH[@]}" 'true' 2>/dev/null; then
     ok "Spider SSH reachable"
-    if timeout 25 ssh -F .ssh/config -o BatchMode=yes spider 'sinfo -h -o "%P"' 2>/dev/null | grep -q .; then
+    if timeout 25 "${SPIDER_SSH[@]}" 'sinfo -h -o "%P"' 2>/dev/null | grep -q .; then
       ok "Spider Slurm responding to sinfo"
     else
       warn "Spider reachable but sinfo returned nothing"
     fi
   else
     warn "Spider SSH not reachable; stack will start but workflows cannot run"
+    warn "  register the key on Spider: make show-key"
   fi
 else
   warn "SPIDER_USER is not set; set it before running workflows"

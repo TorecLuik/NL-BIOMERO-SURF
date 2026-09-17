@@ -153,7 +153,8 @@ services:
     # Forward host SSH setup to container
     volumes:
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/.ssh:/tmp/.ssh:ro"
+      # Spider SSH material, repo-local and separate from the login user's keys.
+      - "./.ssh:/tmp/.ssh:ro"
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/config/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
       - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
       - "./config/biomero-importer:/opt/omero/server/config-importer:ro"

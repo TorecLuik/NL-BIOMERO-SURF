@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init link-config deploy doctor set-host adopt-volume docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init link-config deploy doctor set-host adopt-volume new-key show-key docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -24,6 +24,8 @@ help:
 	@echo "  make link-config        link .env/.ssh/slurm-config to the storage volume"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make adopt-volume       record an existing volume's database credentials"
+	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
+	@echo "  make show-key           print the public half of the cluster key"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
@@ -115,6 +117,18 @@ deploy:
 adopt-volume:
 	@./scripts/volume-identity.sh adopt
 
+# The cluster SSH key, deliberately separate from whatever key this VM uses for
+# its git remote: it represents an authorisation granted on the cluster, so it
+# outlives the VM and is revoked on purpose rather than by rebuilding a machine.
+# Its name comes from SLURM_ACCESS_KEY in .env. Refuses to replace an existing
+# key unless FORCE=1, because the replacement has to be registered again before
+# the cluster is reachable.
+new-key:
+	@./scripts/new-slurm-key.sh $(if $(FORCE),--force,)
+
+show-key:
+	@./scripts/new-slurm-key.sh --show
+
 # Read-only. Checks the things that have actually gone wrong here: a missing or
 # stale submodule, pins that disagree between files, and images that do not
 # match the pins they were supposedly built from.
@@ -126,7 +140,7 @@ doctor:
 	@echo "== Installed vs pins =="
 	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
-	@for f in .env .ssh/id_rsa .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+	@for f in .env .ssh/config web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
 	@echo "== Public hostname =="
 	@host=$$(hostname -f 2>/dev/null); \
 	envfile=.env; \
