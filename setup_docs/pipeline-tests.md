@@ -253,6 +253,41 @@ place it there on disk, and watch it appear in OMERO unattended.
 
 **Pass:** the image is imported without anyone pressing Import.
 
+## T7 — ZARR format passthrough
+
+`Use_ZARR_Format` in the run dialog is not about the input image being a Zarr.
+OMERO always exports to OME-Zarr; the toggle only decides whether that export is
+converted to TIFF before the workflow runs:
+
+```text
+OFF   zarr -> tiff   CONVERT_ZARR_TO_TIFF runs      (T1-T6 take this path)
+ON    zarr -> zarr   conversion is a no-op
+```
+
+Of the workflows registered here, every one declares `requires-zarr: false` and
+takes TIFF. Only `BilayersTest`, which is not in `slurm-config.ini`, declares
+`requires-zarr: true`. So turning the toggle ON hands a Zarr to a workflow that
+expects TIFF.
+
+```text
+image     $FIG7 (the .ome.tiff, as in T1)
+workflow  cellpose, exactly as T1
+Use_ZARR_Format   ON
+Ome-zarr version  0.4
+```
+
+**Pass:** either the run completes, which would mean the wrapper reads Zarr
+after all, or it fails in the workflow step with a read error. Both outcomes are
+worth recording; the point is to learn which.
+
+**Fail:** a failure in `SLURM_Remote_Conversion.py` rather than in the workflow
+means the no-op conversion path itself is broken, which is a deployment problem
+rather than a format mismatch.
+
+Note this tests the *transfer* format, not the registered Zarr images. Running a
+workflow on image 762 or 763 exercises the same path as T1: OMERO exports its
+own Zarr from the pixel buffer, whatever the original storage was.
+
 ## Known trap: workflow dimensionality
 
 Every workflow registered here is 2D-only except `stardist5d`. The cellpose
