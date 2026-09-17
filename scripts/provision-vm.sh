@@ -127,7 +127,7 @@ else
   MISSING=1
 fi
 
-SLURM_KEY_NAME="$(grep -hE '^SLURM_ACCESS_KEY=' .env 2>/dev/null | tail -1 | cut -d= -f2-)"
+SLURM_KEY_NAME="$(grep -hE '^SLURM_ACCESS_KEY=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
 SLURM_KEY_NAME="${SLURM_KEY_NAME:-slurm_access_key}"
 if [[ -s ".ssh/${SLURM_KEY_NAME}" ]]; then
   ok "cluster SSH key present"
