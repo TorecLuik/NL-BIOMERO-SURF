@@ -260,8 +260,14 @@ chmod 644 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" "${SSH_DIR}/known_hosts" "${
 # The gid comes from the image rather than a constant, because a base-image bump
 # that renumbers omero-server would otherwise reintroduce the copy failure with
 # no hint of the cause.
+# compose writes its "Container ... Creating/Created" progress to stdout here,
+# not stderr, so 2>/dev/null does not hide it. Scraping every digit out of the
+# whole stream concatenated the digits of the run container's hex name onto the
+# gid and produced a 600-digit "group" that chgrp rejected. Take the last
+# non-empty line, which is id's own output, and accept it only if it is a
+# plausible gid.
 WORKER_GID="$(sudo docker compose run --rm --no-deps --entrypoint id -T biomeroworker -g 2>/dev/null \
-              | tr -cd '0-9')"
+              | tr -d '\r' | grep -oE '^[0-9]+$' | tail -1)"
 if [[ -z "${WORKER_GID}" ]]; then
   WORKER_GID=994
   echo "  [warn] could not read biomeroworker's gid from the image; assuming ${WORKER_GID}"
