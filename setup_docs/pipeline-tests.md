@@ -294,7 +294,24 @@ Two traps, both silent:
 - `metric_channels` defaults to `1,2,3`, which is correct for `$RGB`. The
   wrapper only reconfigures channels when the value differs from the default.
 
-**Pass:** a table attached in OMERO with one row per cell.
+**Pass:** the CellProfiler pipeline runs to `ExportToSpreadsheet` and writes
+`Nuclei.csv`, `Cells.csv`, `Cytoplasm.csv` and `Image.csv`, one row per object.
+
+**The tables do not reach OMERO.** They stay on the server under
+`/data/root/.analyzed/<workflow-uuid>/<timestamp>/`, and only the Slurm log is
+attached to the dataset. This is a bug in `SLURM_Import_Results.py`, not a
+setting: with `3a) Import into NEW Dataset` set, the script takes the importer
+path, finds no *image* files among the CSVs, and calls `sys.exit(1)` -- about a
+thousand lines before it would have processed the tables. `Measurement Tables`
+being on makes no difference.
+
+```text
+CRITICAL: No image files found for importer processing - workflow failed!
+```
+
+The workflow still reports `DONE` at 100%, because the Slurm job did succeed.
+Read the CSVs off disk, or retry without `3a)` set to see whether the table step
+is then reached.
 
 **Fail:** read the Slurm log before assuming the measurement is at fault:
 
@@ -445,8 +462,9 @@ A1  pass      cellpose on $FIG7, mask imported back
 A2  pass      cell mask, chained from A1's name
 B1  pass      cellpose on $RGB
 B2  pass      cell mask, chained from B1's name
-B3  not run   the earlier attempt used A-chain masks and failed on channel count
+B3  pass*     56 nuclei measured; the CSVs stay on disk, see B3
 I1  pass      stardist on $RGB
+                 * pass with a caveat, described in the test
 I2  not run
 I3  not run
 ```
