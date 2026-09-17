@@ -139,9 +139,11 @@ command.
   `/data/root/.analyzed/`, which is scratch. No setting changes this. Use
   OMERO.insight for anything that must survive. Detail in the expert skill under
   "The Importer Always Links, Never Copies".
-- Importing a `.zarr` through the BIOMERO Importer half-succeeds: it writes
-  image and pixels rows with correct dimensions but ingests no data, leaving a
-  previewless image that fails any workflow. Import the `.ome.tiff` instead.
+- The reference Zarrs were fetched with only pyramid level 0 while their
+  `.zattrs` declared three, so OMERO's NGFF pixel buffer failed on the missing
+  level and both registered without a readable pixel or a thumbnail. Levels 1
+  and 2 are now fetched too. Zarr import by external reference works; it was the
+  incomplete pyramid that did not.
 - A single `pip install` of `biomero-importer` and `biomero[full]` fails with
   ResolutionImpossible over conflicting ezomero pins. The two-step install is
   deliberate; see `deployment.md`.

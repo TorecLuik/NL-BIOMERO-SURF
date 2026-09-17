@@ -91,11 +91,10 @@ docker exec nl-biomero-omeroserver-1 bash -lc \
 
 **Pass:** images render; the command prints nothing.
 
-Check for pixel-less images at the same time. Importing a `.zarr` directory --
-easy to do by selecting a whole reference-data folder, which holds both a
-`.ome.tiff` and a `.zarr` -- creates an OMERO image with no pixels. It shows
-`No preview` in the workflow picker's Thumbnail Grid and fails any workflow it
-reaches.
+A Zarr image legitimately has no fileset and no pixels path -- it is registered
+by external reference and read in place -- so judge it by whether it previews,
+not by those columns. A Zarr that shows `No preview` has an unreadable pyramid;
+check the server log for `'.zarray' expected but is not readable`.
 
 ```bash
 # plate wells legitimately have no fileset, so exclude well samples

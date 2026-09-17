@@ -12,17 +12,22 @@ Under `web/L-Drive/reference-data/`, which OMERO sees as `/data/reference-data`:
 ```text
 fig7_RSAdetection_16w/
   fig7_RSAdetection_16w.ome.tiff      2 x 512 x 512   uint8
-  fig7_RSAdetection_16w.zarr/         OME-Zarr v0.4, level 0
+  fig7_RSAdetection_16w.zarr/         OME-Zarr v0.4, levels 0-2
 6E3rd4hrSTFBGlc-1_Render_SeriesRGB/
   6E3rd4hrSTFBGlc-1_Render_SeriesRGB.ome.tiff   3 x 1114 x 1757  uint8
-  6E3rd4hrSTFBGlc-1_Render_SeriesRGB.zarr/      OME-Zarr v0.4, level 0
+  6E3rd4hrSTFBGlc-1_Render_SeriesRGB.zarr/      OME-Zarr v0.4, levels 0-2
 SHA256SUMS                            covers the Zarr files
 ```
 
 Both are 2D (`sizeZ=1`, `sizeT=1`). Most workflows registered here are 2D-only,
 so this is deliberate — see the dimensionality warning in
-[pipeline-tests.md](pipeline-tests.md). Only full-resolution level 0 is kept;
-upstream also serves downsampled levels 1 and 2, which nothing here needs.
+[pipeline-tests.md](pipeline-tests.md).
+
+All three resolution levels are kept. They are not optional: OMERO's NGFF pixel
+buffer reads the `multiscales` list in `.zattrs` and opens every path it names,
+so a pyramid missing a level fails with `'.zarray' expected but is not readable
+or missing in store` and the image registers with no readable pixels and no
+thumbnail.
 
 Both datasets come from RIKEN SSBD, a public OMERO instance, and were suggested
 by the BIOMERO developers as representative of their workshop material.
@@ -111,12 +116,16 @@ BIOMERO tab -> Importer   select the two .ome.tiff files, not the folders.
                           Links rather than copies -- see the warning above.
 ```
 
-Importing a `.zarr` through the BIOMERO Importer does not work: it registers an
-image and pixels record with the right dimensions but ingests no data, leaving
-an image with no fileset, no pixels path and no preview. The image is named
-after the directory with the suffix dropped, so it is indistinguishable by name
-from the real one; its `biomero.import` annotation records the `.zarr` in
-`Filepath`.
+A `.zarr` imports differently from a TIFF: the importer registers it by
+external reference (`com.glencoesoftware.ngff:multiscales`) rather than copying
+or linking pixels, so the image has no fileset and no pixels path by design and
+OMERO reads it in place through `omero-zarr-pixel-buffer`. That is a valid
+import, not a broken one -- provided the pyramid is complete.
+
+The image is named after the directory with the suffix dropped, so a Zarr and a
+TIFF of the same dataset are indistinguishable by name in the workflow picker.
+The `biomero.import` annotation's `Filepath` is the reliable tell. Workflows
+here take TIFF, so import the `.ome.tiff` for running them.
 
 ## Restoring
 

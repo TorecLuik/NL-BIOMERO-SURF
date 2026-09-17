@@ -16,22 +16,38 @@ BASE="https://dmss3gw.riken.jp/globias/zarr/v0.4"
 # zarr and tifffile live in the worker venv, not the container default python
 PYBIN="/opt/omero/server/venv-3.11/bin/python"
 
-# name : chunk grid (channels, y-chunks, x-chunks) at level 0
+# Fetch every resolution level the .zattrs declares. Levels 1 and 2 are not
+# optional: OMERO's NGFF pixel buffer reads the multiscales list and opens each
+# path in it, so a pyramid missing a level fails with
+# "'.zarray' expected but is not readable or missing in store" and the image
+# registers with no readable pixels and no thumbnail.
+#
+# name : chunk grid (channels, y-chunks, x-chunks) at level 0. Levels 1 and 2 are
+# a single chunk each for both datasets.
 fetch_zarr() {
   local name="$1" nc="$2" ny="$3" nx="$4"
   local url="$BASE/${name}.zarr/0"
   local out="$DEST/$name/${name}.zarr"
   echo "==> $name"
-  mkdir -p "$out/0"
+  mkdir -p "$out"
   curl -fsS -m 30 "$url/.zattrs"   -o "$out/.zattrs"
   curl -fsS -m 30 "$url/.zgroup"   -o "$out/.zgroup"
-  curl -fsS -m 30 "$url/0/.zarray" -o "$out/0/.zarray"
-  # chunk layout follows the t/c/z/y/x axis order declared in .zattrs
-  for ((c=0; c<nc; c++)); do
-    for ((y=0; y<ny; y++)); do
-      mkdir -p "$out/0/0/$c/0/$y"
-      for ((x=0; x<nx; x++)); do
-        curl -fsS -m 60 "$url/0/0/$c/0/$y/$x" -o "$out/0/0/$c/0/$y/$x"
+
+  local lvl gy gx
+  for lvl in $(python3 -c "
+import json,sys
+d=json.load(open('$out/.zattrs'))
+print(' '.join(x['path'] for x in d['multiscales'][0]['datasets']))"); do
+    mkdir -p "$out/$lvl"
+    curl -fsS -m 30 "$url/$lvl/.zarray" -o "$out/$lvl/.zarray"
+    if [ "$lvl" = "0" ]; then gy=$ny; gx=$nx; else gy=1; gx=1; fi
+    # chunk layout follows the t/c/z/y/x axis order declared in .zattrs
+    for ((c=0; c<nc; c++)); do
+      for ((y=0; y<gy; y++)); do
+        mkdir -p "$out/$lvl/0/$c/0/$y"
+        for ((x=0; x<gx; x++)); do
+          curl -fsS -m 60 "$url/$lvl/0/$c/0/$y/$x" -o "$out/$lvl/0/$c/0/$y/$x"
+        done
       done
     done
   done
@@ -45,7 +61,7 @@ make_tiff() {
   sudo docker exec nl-biomero-biomeroworker-1 "$PYBIN" -c "
 import zarr, numpy as np, tifffile
 d = '/data/reference-data/$name/$name'
-a = zarr.open(d + '.zarr/0', mode='r')
+a = zarr.open(d + '.zarr/0', mode='r')   # level 0
 vol = np.asarray(a[0, :, 0])
 # The path must end .ome.tiff: tifffile decides whether to emit OME metadata
 # from the filename, and without it the file carries no SizeC. Bio-Formats then
