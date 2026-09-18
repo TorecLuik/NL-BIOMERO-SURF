@@ -31,6 +31,46 @@ is covered by the automated smoke tests:
 OMERO.insight connectivity on 4063/4064
 ```
 
+## Blocking: the Metabase dashboards do not exist on a new VM
+
+**Import > Monitor and Analyze > Status both read "Not found." on a VM built
+from nothing.** SLURM shows Online and the rest of the stack is healthy; only
+the two embedded dashboards are missing.
+
+`.env` names them by number:
+
+```text
+METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID=2   # BIOMERO Analytics
+METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID=6     # OMERO Automated Data Importer
+```
+
+Those ids only exist where somebody built them by hand. A fresh Metabase comes
+up with its own sample content and nothing else -- confirmed on the rebuilt VM:
+
+```text
+report_dashboard    1 row    "E-commerce insights"   (Metabase's own sample)
+report_card        26 rows   sample content
+metabase_database   1 row    "Sample Database", engine h2
+```
+
+Not even the BIOMERO Postgres datasource is connected, so the dashboards could
+not render even if they were imported by id.
+
+Nothing in the deployment creates them. The only documented route is copying
+Metabase's state from a host that already has them
+(`.agents/skills/omero-biomero-expert/references/metabase-dashboards.md`), which
+is not available to a genuinely new deployment -- and that procedure is also
+written for the old H2 file layout, while Metabase now keeps its application
+database in Postgres on `database-biomero`.
+
+Compare Grafana in this same repository: `grafana/dashboards/biomero-logs.json`
+is committed and provisioned on start, so it rebuilds from nothing. Metabase
+needs the same treatment -- the two dashboards and their cards exported to
+version-controlled definitions, restored on first start, with the datasource
+pointed at `.env` rather than at whatever it was on the machine they came from.
+Until then the ids in `.env` are a promise the deployment cannot keep, and
+`make doctor` correctly reports both as not found.
+
 The end-to-end workflow run is no longer among them; see below. The procedures
 and public test data are in [pipeline-tests.md](pipeline-tests.md) and
 [reference-data.md](reference-data.md), which tracks which of its checks have
