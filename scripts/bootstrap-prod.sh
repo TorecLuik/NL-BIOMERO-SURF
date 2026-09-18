@@ -383,6 +383,16 @@ else
 
   if curl -fsS -o /dev/null --max-time 25 http://localhost:5601/logs/api/status 2>/dev/null; then
     smoke_ok "OpenSearch Dashboards responds under /logs"
+    # Answering is not the same as being usable: without an index pattern,
+    # /logs opens on a setup screen with every log indexed and none shown.
+    if curl -fsS --max-time 25 -H 'osd-xsrf: true' \
+         'http://localhost:5601/logs/api/saved_objects/_find?type=index-pattern&per_page=20' \
+         2>/dev/null | grep -q 'biomero-logs'; then
+      smoke_ok "/logs has the biomero-logs index pattern"
+    else
+      warn "no biomero-logs index pattern; /logs opens on its setup screen"
+      warn "  dashboards-init creates it: docker logs dashboards-init"
+    fi
   else
     warn "OpenSearch Dashboards not responding on :5601 (it can take a minute to start)"
   fi

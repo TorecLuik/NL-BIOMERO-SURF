@@ -70,6 +70,22 @@ services:
       file: logging-defaults.yml
       service: default-logging
 
+  # Creates the Dashboards index pattern, so /logs opens on the logs rather than
+  # on a "create an index pattern" screen. Kept apart from opensearch-init
+  # because fluent-bit waits for that one, and this waits for Dashboards.
+  dashboards-init:
+    image: curlimages/curl:latest
+    container_name: dashboards-init
+    depends_on:
+      opensearch-dashboards:
+        condition: service_started
+    volumes:
+      - ./opensearch/init-dashboards.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    extends:
+      file: logging-defaults.yml
+      service: default-logging
+
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3
     container_name: opensearch-dashboards
