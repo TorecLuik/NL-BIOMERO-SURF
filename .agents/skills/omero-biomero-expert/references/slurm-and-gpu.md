@@ -82,6 +82,30 @@ There is no global partition or gres default: each GPU workflow names its own
 in `slurm-config.ini`. A runtime `use_gpu` argument overrides the config value;
 an explicit `device=cpu` or `use_gpu=false` receives no GPU params.
 
+`BIOMERO_GPU_PARTITION` and `BIOMERO_GPU_GRES` were removed on 2026-09-17. They
+only ever filled flags a workflow had not set, and both GPU workflows set both,
+so they could never apply -- verified by comparing `make gpu` with the values
+set, emptied and deleted. They were also a trap: a workflow setting only
+`_job_gpus` inherited the global `--gres` and emitted both flags, which Spider
+rejects. Without a global gres, either flag is fine; just never both on one
+workflow.
+
+Which GPU a workflow can use is a property of the workflow, not a policy to
+centralise:
+
+```text
+deconvolve_plate    MIG-capable, but asks for 16 CPUs against a MIG node's 14
+                    -> pinned to full A100
+cellpose (classic)  reports torch.cuda.device_count() == 0 under MIG
+                    -> pinned to full A100
+stardist/stardist5d GPU-intended but not GPU-runnable as built; treat as CPU
+CPU-only workflows  no partition at all, so Spider routes them to the default
+```
+
+`make gpu` prints the effective sbatch parameters per workflow without
+submitting anything, and is the check that catches a `--gres`/`--gpus` conflict
+before Spider does.
+
 Set `_job_gres` or `_job_gpus` for a workflow, never both: upstream treats them
 as mutually exclusive and Spider rejects `--gres` and `--gpus` together.
 

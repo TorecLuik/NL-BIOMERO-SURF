@@ -2,27 +2,62 @@
 
 BIOMERO Import and Analyze status pages embed Metabase dashboards. Most blank, spinner, or iframe failures are Metabase configuration or datasource problems, not OMERO.web React problems.
 
-## Expected Dashboard IDs
+## They Are Built From the Repository
 
-Known working BIOMERO dashboard IDs:
+`metabase/dashboards.json` holds both dashboards and their questions;
+`make deploy` restores them, and `make metabase-dashboards` does it on its own.
+**Do not fix a missing dashboard by copying Metabase state from another host.**
 
-```text
-METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID=2  # BIOMERO Analytics, Analyze > Status
-METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID=6    # OMERO Automated Data Importer, Import > Monitor
-```
-
-Good dashboard state:
+Everything per-install travels by name, because ids are exactly what makes a
+copied Metabase useless elsewhere:
 
 ```text
-ID 2 | BIOMERO Analytics             | ENABLE_EMBEDDING TRUE  | ARCHIVED FALSE
-ID 6 | OMERO Automated Data Importer | ENABLE_EMBEDDING TRUE  | ARCHIVED FALSE
+database id            -> database name ("BIOMERO", "OMERO")
+table / field id       -> schema.table.column
+filter source card id  -> the card's name
+credentials            -> rebuilt from the target's .env, never exported
 ```
 
-Bad state observed on prod:
+The restore connects both databases with this VM's own credentials, scans them,
+recreates the dashboards, enables embedding, and writes the ids it used back
+into `.env`. So the ids are *outputs*, not constants -- on a rebuilt VM they
+will not be 2 and 6.
 
-```text
-ID 1 | E-commerce insights | ENABLE_EMBEDDING FALSE
+Re-running is safe on a volume that already holds data: a dashboard is left
+alone when it is complete, meaning its tiles are present **and** embedding is
+on. `--force` replaces by name.
+
+To change a dashboard, edit it in the UI and re-export:
+
+```bash
+make export-metabase-dashboards          # ids 2 and 6 by default
+make export-metabase-dashboards IDS=5    # or an explicit set
 ```
+
+Then commit `metabase/dashboards.json`.
+
+Metabase's own serialization (`java -jar metabase.jar export`) would be the
+obvious tool and is **Enterprise-only**; this build answers `The 'v2-dump!'
+command is only available in Metabase Enterprise Edition`. That is why the
+content is read from its application database instead.
+
+## Where Metabase Keeps Its Data
+
+The application database is **Postgres, on `database-biomero`, database
+`metabase`** -- not the H2 file older notes describe. Inspect it directly:
+
+```bash
+sudo docker compose exec -T database-biomero psql -U biomero -d metabase \
+  -c "SELECT d.id, d.name, d.enable_embedding, count(dc.id) AS tiles
+      FROM report_dashboard d
+      LEFT JOIN report_dashboardcard dc ON dc.dashboard_id = d.id
+      WHERE NOT d.archived GROUP BY 1,2,3 ORDER BY 1;"
+```
+
+Good state is both BIOMERO dashboards unarchived, embedding true, tiles > 0, and
+`.env` naming those ids. A fresh Metabase instead shows one dashboard
+("E-commerce insights"), ~26 sample cards and an H2 "Sample Database" -- that is
+the untouched install, and it is what makes both status pages read "Not found."
 
 ## Environment Alignment
 
@@ -46,161 +81,87 @@ MB_SITE_URL=https://<host>/metabase
 
 If an iframe says `Message seems corrupt or manipulated`, the Metabase embedding key and `METABASE_SECRET_KEY` do not match. Update `.env`, then restart `omeroweb`.
 
-## Inspect H2 Without Stopping Metabase
-
-Copy the locked live H2 file and query the copy:
-
-```bash
-cd /opt/omero/NL-BIOMERO
-sudo docker compose exec -T metabase sh -lc '
-  rm -rf /tmp/mbinspect &&
-  mkdir /tmp/mbinspect &&
-  cp /metabase-data/metabase.db/metabase.db.mv.db /tmp/mbinspect/metabase.db.mv.db &&
-  /opt/java/openjdk/bin/java -cp /app/metabase.jar org.h2.tools.Shell \
-    -url "jdbc:h2:/tmp/mbinspect/metabase.db;ACCESS_MODE_DATA=r" \
-    -sql "select id, name, enable_embedding, archived from report_dashboard order by id;"
-'
-```
-
-Datasource inspection:
-
-```bash
-sudo docker compose exec -T metabase sh -lc '
-  rm -rf /tmp/mbinspect &&
-  mkdir /tmp/mbinspect &&
-  cp /metabase-data/metabase.db/metabase.db.mv.db /tmp/mbinspect/metabase.db.mv.db &&
-  /opt/java/openjdk/bin/java -cp /app/metabase.jar org.h2.tools.Shell \
-    -url "jdbc:h2:/tmp/mbinspect/metabase.db;ACCESS_MODE_DATA=r" \
-    -list \
-    -sql "select id, name, engine, details from metabase_database order by id;"
-' | sed -E 's/(password[^,}]*[,:][^,}]*)/password:***MASKED***/Ig'
-```
-
-Known datasource IDs:
-
-```text
-2 = BIOMERO, postgres, host database-biomero, db biomero, user biomero
-4 = OMERO, postgres, host database, db omero, user omero
-```
-
 ## Error: Embedding Is Not Enabled
 
-The iframe is reaching Metabase, but the signed resource is not embeddable or the configured dashboard ID points to the wrong object.
-
-Fix pattern:
-
-```bash
-cd /opt/omero/NL-BIOMERO
-TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p backups
-sudo docker compose stop omeroweb metabase
-sudo tar -czf "backups/metabase.pre-dashboard-fix.$TS.tar.gz" metabase
-cp .env "backups/env.pre-dashboard-fix.$TS"
-# Replace metabase/ with known-good BIOMERO dashboards, preserving numeric ownership.
-sudo sed -i 's/^METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID=.*/METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID=6/' .env
-sudo sed -i 's/^METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID=.*/METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID=2/' .env
-sudo docker compose up -d metabase omeroweb
-```
-
-When copying from dev:
+The iframe reaches Metabase, but the resource is not embeddable or the id in
+`.env` points at the wrong object. Rebuild rather than patch:
 
 ```bash
-tar --numeric-owner -czf - metabase | ssh -F .ssh/config biomero-prod '
-  cd /opt/omero/NL-BIOMERO &&
-  sudo rm -rf metabase &&
-  sudo tar --numeric-owner -xzf -
-'
+make metabase-dashboards           # creates what is missing, leaves the rest
+make metabase-dashboards FORCE=1   # replace by name
+sudo docker compose up -d omeroweb # pick up any ids that changed
 ```
 
-After cross-host copy, always repair datasource credentials for the target `.env`.
+The restore sets embedding, so a dashboard that is present but unembeddable is
+almost always one whose creation was interrupted -- embedding is set last.
 
 ## Dashboard Spinner / Query Failure
 
-A card that spins forever often means the embedded card query failed. Check logs:
+A card that spins forever usually means its query failed. Check the logs:
 
 ```bash
-cd /opt/omero/NL-BIOMERO
-sudo docker compose logs --since=15m metabase | grep -Ei 'error|exception|failed|timeout|permission|database|query|card|dashboard|FATAL' | tail -200
+sudo docker compose logs --since=15m metabase \
+  | grep -Ei 'error|exception|failed|timeout|permission|query|card|dashboard|FATAL' | tail -50
 ```
 
-Observed failure:
+Observed:
 
 ```text
 Error processing query: FATAL: password authentication failed for user "biomero"
 :context :embedded-dashboard
 :card-name "Biomero Workflow Progress"
-:dashboard-id 2
-:database 2
 ```
 
-This means dashboards are present but Metabase datasource credentials came from another environment.
+That is a datasource whose credentials came from another environment -- the
+signature of Metabase state copied between hosts. `make metabase-dashboards`
+rewrites both datasources from this VM's `.env`, which is the fix; there is no
+need to edit the application database by hand.
 
-Stop Metabase before editing H2:
+A card that renders but is empty is different: the schema scan has not seen the
+table yet. The restore requests one and waits, but a table created later (a new
+BIOMERO view, say) needs another:
 
 ```bash
-cd /opt/omero/NL-BIOMERO
-sudo docker compose stop metabase
-TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p backups
-sudo tar -czf "backups/metabase.pre-datasource-fix.$TS.tar.gz" metabase
-set -a
-. ./.env
-set +a
-sudo docker run --rm -v /opt/omero/NL-BIOMERO/metabase:/metabase-data \
-  metabase/metabase@sha256:f7b5dc52c21aaa2dca910a450e7e6119a975090ce9fc80726aa0742882ca176c \
-  sh -lc "/opt/java/openjdk/bin/java -cp /app/metabase.jar org.h2.tools.Shell \
-    -url jdbc:h2:/metabase-data/metabase.db/metabase.db \
-    -sql \"update metabase_database set details='{\\\"ssl\\\":false,\\\"password\\\":\\\"$BIOMERO_POSTGRES_PASSWORD\\\",\\\"advanced-options\\\":false,\\\"schema-filters-type\\\":\\\"all\\\",\\\"use-auth-provider\\\":false,\\\"dbname\\\":\\\"$BIOMERO_POSTGRES_DB\\\",\\\"host\\\":\\\"database-biomero\\\",\\\"tunnel-enabled\\\":false,\\\"user\\\":\\\"$BIOMERO_POSTGRES_USER\\\"}' where id=2;
-           update metabase_database set details='{\\\"ssl\\\":false,\\\"password\\\":\\\"$POSTGRES_PASSWORD\\\",\\\"advanced-options\\\":false,\\\"schema-filters-type\\\":\\\"all\\\",\\\"use-auth-provider\\\":false,\\\"dbname\\\":\\\"$POSTGRES_DB\\\",\\\"host\\\":\\\"database\\\",\\\"tunnel-enabled\\\":false,\\\"user\\\":\\\"$POSTGRES_USER\\\"}' where id=4;\""
-sudo docker compose up -d metabase
-```
-
-Validate:
-
-```bash
-sudo docker compose logs --since=30s metabase | grep -Ei 'password authentication failed|Error processing query|FATAL' || true
-```
-
-Dashboard 2 card mapping observed for Analyze > Status:
-
-```text
-dashcard 61 / card 45 = Biomero Workflow Progress
+# id from: SELECT id,name FROM metabase_database;
+curl -s -X POST -H "X-Metabase-Session: $TOKEN" \
+  http://localhost:3000/api/database/<id>/sync_schema
 ```
 
 ## Signed Embed Smoke Test
 
-Generate a short-lived Metabase JWT and query a dashboard card without a browser:
+Query an embedded card without a browser. Take the ids from `.env` and the
+database rather than hardcoding them -- they differ per install:
 
 ```bash
-cd /opt/omero/NL-BIOMERO
-SECRET=$(grep ^METABASE_SECRET_KEY= .env | cut -d= -f2-) python3 - <<'PY' > /tmp/mbtoken
+set -a; . ./.env; set +a
+DASH=$METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID
+read -r DASHCARD CARD < <(sudo docker compose exec -T database-biomero \
+  psql -U "$BIOMERO_POSTGRES_USER" -d metabase -tA -F' ' \
+  -c "SELECT dc.id, dc.card_id FROM report_dashboardcard dc
+      WHERE dc.dashboard_id=$DASH AND dc.card_id IS NOT NULL
+      ORDER BY dc.id LIMIT 1;")
+
+TOKEN=$(SECRET="$METABASE_SECRET_KEY" DASH="$DASH" python3 - <<'PY'
 import base64, hashlib, hmac, json, os, time
 secret = os.environ["SECRET"].encode()
-def b64(data):
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-header = b64(json.dumps({"alg":"HS256","typ":"JWT"}, separators=(",", ":")).encode())
-payload = b64(json.dumps({"resource":{"dashboard":2},"params":{"user":[0]},"exp":int(time.time())+600}, separators=(",", ":")).encode())
-msg = header + "." + payload
-sig = b64(hmac.new(secret, msg.encode(), hashlib.sha256).digest())
-print(msg + "." + sig)
+b64 = lambda d: base64.urlsafe_b64encode(d).rstrip(b"=").decode()
+hdr = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+pay = b64(json.dumps({"resource": {"dashboard": int(os.environ["DASH"])},
+                      "params": {}, "exp": int(time.time()) + 600},
+                     separators=(",", ":")).encode())
+msg = hdr + "." + pay
+print(msg + "." + b64(hmac.new(secret, msg.encode(), hashlib.sha256).digest()))
 PY
-TOKEN=$(cat /tmp/mbtoken)
-curl -k -sS -o /tmp/card.out -w '%{http_code} %{content_type} %{size_download}\n' \
-  "https://surfbiomero.biomero-data-ch.src.surf-hosted.nl/metabase/api/embed/dashboard/$TOKEN/dashcard/61/card/45"
+)
+
+curl -sS -o /tmp/card.out -w '%{http_code} %{size_download}\n' \
+  "http://localhost:3000/api/embed/dashboard/$TOKEN/dashcard/$DASHCARD/card/$CARD"
 head -c 300 /tmp/card.out
 ```
 
-Good analyzer card result: HTTP `202 application/json` with data rows.
-
-For Import > Monitor, generate the token with dashboard `6` and inspect its dashcards:
-
-```sql
-select dc.id as dashcard_id, dc.card_id, c.name
-from report_dashboardcard dc
-join report_card c on c.id=dc.card_id
-where dc.dashboard_id=6
-order by dc.id;
-```
+A good result is HTTP `202` with JSON data rows. `401` means
+`METABASE_SECRET_KEY` in `.env` and Metabase's embedding key disagree; restart
+`metabase` and `omeroweb` after correcting it.
 
 ## Proxied Dashboard Links
 

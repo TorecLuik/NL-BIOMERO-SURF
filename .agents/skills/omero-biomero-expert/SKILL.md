@@ -28,6 +28,9 @@ dev workspace: /home/sloev/local-share/opt/omero/NL-BIOMERO
 prod stack:    /opt/omero/NL-BIOMERO
 ```
 
+The checkout directory name matters: compose derives container and image names
+from it, so do not assume the `nl-biomero-` prefix (see below).
+
 There is currently no production VM. The `biomero-prod` host in `.ssh/config` points at a deleted machine and refuses connections; ignore it until a replacement is provisioned and the entry is repointed.
 
 Docker requires `sudo` here. If `docker ps` fails on `/var/run/docker.sock`, retry with `sudo docker ...`; every `make` target already does.
@@ -35,15 +38,27 @@ Docker requires `sudo` here. If `docker ps` fails on `/var/run/docker.sock`, ret
 Core service names:
 
 ```text
-metabase
-nl-biomero-omeroweb-1
-nl-biomero-omeroserver-1
-nl-biomero-biomeroworker-1
-nl-biomero-omeroworker-1-1
-nl-biomero-biomero-importer-1
-nl-biomero-database-1
-nl-biomero-database-biomero-1
+omeroweb  omeroserver  biomeroworker  omeroworker-1
+biomero-importer  database  database-biomero  metabase
 ```
+
+**Address services through compose, not by container name.** Compose derives
+container names from the *project directory*, so the same stack is
+`nl-biomero-omeroweb-1` in one checkout and
+`biomero-snellius-surf-omeroweb-1` in another. Hardcoding the `nl-biomero-`
+form is a bug this repository has already shipped three times: `make doctor`
+reported "importer image not built yet" and "cannot read the metabase
+database", and `make reference-data` reported "biomeroworker is not running",
+all while everything was running fine. A lookup that cannot find its target
+must say so as a lookup failure, never as a fact about the deployment.
+
+```bash
+sudo docker compose exec -T biomeroworker <cmd>     # not docker exec <name>
+sudo docker compose ps --status running --format '{{.Service}}'
+sudo docker compose config --images                 # image names, also derived
+```
+
+`metabase` is the exception: it sets `container_name: metabase` explicitly.
 
 Quick status:
 
@@ -63,6 +78,7 @@ Read only the relevant reference before acting:
 - [references/slurm-and-gpu.md](references/slurm-and-gpu.md): Spider/Slurm behavior, GPU and MIG policy, per-workflow GPU assignment, generated job scripts, image pulls and Apptainer, the output-verification patch.
 - [references/workflow-runs.md](references/workflow-runs.md): tracing a workflow run by UUID, failures that name the wrong step, results that never reach OMERO, workflow input requirements (suffixes, channel counts, registered vs listed, ZARR), and images that look importable but are not.
 - [references/importer-analyzer-storage.md](references/importer-analyzer-storage.md): BIOMERO.importer, analyzer-to-importer result flow, `/data` path invariants, `.analyzed`/`.processed`, shared storage, import order polling, importer logs.
+- [references/fresh-vm.md](references/fresh-vm.md): deploying onto a machine that has never deployed this stack -- what only an empty volume reaches, failures that leave the stack looking healthy, and the UI gotchas when driving the panels by script.
 
 Deployment configuration lives outside this skill, in `deployment_docs/deployment.md`: versions, GPU policy, the runtime patch, observability, and how to rebuild. `deployment_docs/new-vm.md` is the end-to-end checklist for standing up a fresh VM: `make provision` prepares the host, then the secrets are restored and ports 4063/4064 opened in SURF Research Cloud, then `make deploy`. Those three manual items cannot be done from inside the VM, and `scripts/provision-vm.sh` checks rather than assumes them. `deployment_docs/open-items.md` tracks what is still open on the current branch.
 `deployment_docs/pipeline-tests.md` is the browser-driven end-to-end test suite
