@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init render-config metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -29,6 +29,7 @@ help:
 	@echo "  make show-key           print the public half of the cluster key"
 	@echo "  make logs-auth          create the basic-auth file nginx needs for /logs"
 	@echo "  make metabase-dashboards rebuild the embedded Metabase dashboards"
+	@echo "  make logs-retention     apply the OpenSearch log retention policy"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
@@ -97,6 +98,12 @@ render-config:
 # content, so without these the ids in .env name nothing and both BIOMERO status
 # pages read "Not found." make deploy runs the restore; these are for doing it
 # on its own, and for re-exporting after editing a dashboard in the UI.
+# OpenSearch keeps every document forever without an ISM policy. This also
+# clears the security audit indices, which the disabled security plugin writes
+# anyway at about 1.5GB a day.
+logs-retention:
+	@./scripts/apply-opensearch-retention.sh
+
 metabase-dashboards:
 	@./scripts/restore-metabase-dashboards.sh $(if $(FORCE),--force,)
 

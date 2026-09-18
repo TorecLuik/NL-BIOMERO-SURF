@@ -5,6 +5,14 @@ services:
     environment:
       - discovery.type=single-node
       - plugins.security.disabled=true
+      # The security plugin is off, but its audit log keeps writing regardless:
+      # roughly 8.5M documents and 1.5GB a day of transport-layer records for a
+      # plugin nothing here uses, which reached 12x the size of the actual logs
+      # before anyone looked. It audits nothing meaningful with security
+      # disabled, so turn it off too.
+      - plugins.security.audit.type=noop
+      - plugins.security.audit.config.enable_rest=false
+      - plugins.security.audit.config.enable_transport=false
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - bootstrap.memory_lock=true
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=!Omero12345

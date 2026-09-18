@@ -349,6 +349,10 @@ fi
 
 if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.yml" ]]; then
   sudo docker compose -f opensearch-compose.yml up -d
+  # OpenSearch keeps everything forever unless told otherwise, so without this
+  # biomero-logs grows for the life of the deployment and the first symptom is
+  # a full volume.
+  "${PROJECT_ROOT_DIR}/scripts/apply-opensearch-retention.sh" || true
 fi
 sudo docker compose ps
 if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.yml" ]]; then
