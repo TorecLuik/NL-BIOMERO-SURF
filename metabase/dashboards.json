@@ -1,0 +1,1975 @@
+[
+  {
+    "cards": [
+      {
+        "card": null,
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 0,
+        "size_x": 14,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": false,
+          "text": "Latest BIOMERO jobs",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "heading",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": null,
+        "col": 14,
+        "parameter_mappings": [
+          {
+            "parameter_id": "ea808f4a",
+            "target": [
+              "text-tag",
+              "Workflow"
+            ]
+          },
+          {
+            "parameter_id": "6e225296",
+            "target": [
+              "text-tag",
+              "User"
+            ]
+          },
+          {
+            "parameter_id": "96748cdd",
+            "target": [
+              "text-tag",
+              "Group"
+            ]
+          }
+        ],
+        "row": 0,
+        "size_x": 10,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": true,
+          "text": "Filtered for selected User/Group: [[user: {{User}}]] [[group: {{Group}}]]",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "text",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "order-by": [
+                [
+                  "desc",
+                  [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_workflow_progress_view"
+                    },
+                    {
+                      "base-type": "type/DateTime"
+                    }
+                  ]
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_workflow_progress_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "table",
+          "name": "Biomero Workflow Progress",
+          "visualization_settings": {
+            "table.cell_column": "start_time",
+            "table.column_formatting": [
+              {
+                "color": "#EF8C8C",
+                "columns": [
+                  "status"
+                ],
+                "highlight_row": true,
+                "id": 3,
+                "operator": "contains",
+                "type": "single",
+                "value": "FAILED"
+              },
+              {
+                "color": "#509EE3",
+                "columns": [
+                  "status"
+                ],
+                "highlight_row": true,
+                "id": 2,
+                "operator": "contains",
+                "type": "single",
+                "value": "RUNNING"
+              },
+              {
+                "color": "#F9D45C",
+                "columns": [
+                  "status"
+                ],
+                "highlight_row": true,
+                "id": 1,
+                "operator": "=",
+                "type": "single",
+                "value": "JOB_PENDING"
+              },
+              {
+                "color": "#A7D07C",
+                "columns": [
+                  "status"
+                ],
+                "highlight_row": true,
+                "id": 0,
+                "operator": "=",
+                "type": "single",
+                "value": "DONE"
+              }
+            ],
+            "table.columns": [
+              {
+                "enabled": true,
+                "name": "user"
+              },
+              {
+                "enabled": true,
+                "name": "group"
+              },
+              {
+                "enabled": true,
+                "name": "main_task_name"
+              },
+              {
+                "enabled": true,
+                "name": "status"
+              },
+              {
+                "enabled": true,
+                "name": "progress"
+              },
+              {
+                "enabled": true,
+                "name": "start_time"
+              },
+              {
+                "enabled": true,
+                "name": "workflow_id"
+              },
+              {
+                "enabled": true,
+                "name": "task"
+              },
+              {
+                "enabled": true,
+                "name": "name"
+              }
+            ],
+            "table.pivot_column": "user"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 45,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "field",
+                2589,
+                {
+                  "base-type": "type/Text"
+                }
+              ]
+            ]
+          },
+          {
+            "card_id": 45,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "field",
+                2587,
+                {
+                  "base-type": "type/Text"
+                }
+              ]
+            ]
+          },
+          {
+            "card_id": 45,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "field",
+                2590,
+                {
+                  "base-type": "type/DateTime"
+                }
+              ]
+            ]
+          },
+          {
+            "card_id": 45,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "field",
+                4473,
+                {
+                  "base-type": "type/Text"
+                }
+              ]
+            ]
+          }
+        ],
+        "row": 1,
+        "size_x": 24,
+        "size_y": 8,
+        "visualization_settings": {
+          "column_settings": {
+            "[\"ref\",[\"field\",2586,null]]": {
+              "click_behavior": {
+                "linkTemplate": "http://localhost:4080/webclient/search/?search_query=\"{{workflow_id}}\"",
+                "linkType": "url",
+                "type": "link"
+              }
+            },
+            "[\"ref\",[\"field\",2587,null]]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "96748cdd": {
+                    "id": "96748cdd",
+                    "source": {
+                      "id": "group",
+                      "name": "Group",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "96748cdd",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"ref\",[\"field\",2590,null]]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "6b4ee65e": {
+                    "id": "6b4ee65e",
+                    "source": {
+                      "id": "start_time",
+                      "name": "Start Time",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "6b4ee65e",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"ref\",[\"field\",2591,null]]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "ea808f4a": {
+                    "id": "ea808f4a",
+                    "source": {
+                      "id": "task",
+                      "name": "Task",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "ea808f4a",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"ref\",[\"field\",4473,null]]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "ea808f4a": {
+                    "id": "ea808f4a",
+                    "source": {
+                      "id": "main_task_name",
+                      "name": "Main Task Name",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "ea808f4a",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            }
+          }
+        }
+      },
+      {
+        "card": null,
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 9,
+        "size_x": 15,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": false,
+          "text": "Workflows stats",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "heading",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": null,
+        "col": 15,
+        "parameter_mappings": [
+          {
+            "parameter_id": "ea808f4a",
+            "target": [
+              "text-tag",
+              "Workflow"
+            ]
+          }
+        ],
+        "row": 9,
+        "size_x": 9,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": true,
+          "text": "Filtered for selected workflow(s): [[{{Workflow}}]]",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "text",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT\n  task_name,\n  task_version,\n  COUNT(*) AS execution_count\nFROM\n  biomero_task_execution\nWHERE 1=1\n[[and {{task_name}}]] \n[[and {{user}}]]\n[[and {{group}}]]\n[[and {{date}}]]\nAND task_name NOT IN (\n    'SLURM_Get_Result.py',\n    'SLURM_Remote_Conversion.py',\n    'CONVERT_ZARR_TO_TIFF',\n    '_SLURM_Image_Transfer.py',\n    'SLURM_Get_Results.py',\n    'SLURM_Run_Workflow.py'\n  )\nGROUP BY\n  task_name,\n  task_version\nORDER BY\n  execution_count DESC\n;",
+              "template-tags": {
+                "date": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Date",
+                  "id": "4e570cdf-498e-42ee-bcef-d680c9e23be3",
+                  "name": "date",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "group": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Group",
+                  "id": "4892f2f1-0fb7-4bfc-99b9-c62cc0fb2f4b",
+                  "name": "group",
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "task_name": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "task_name",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Task Name",
+                  "id": "a3cbc8a3-ffdb-4e02-8a43-826184ce2f97",
+                  "name": "task_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "user": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "User",
+                  "id": "32c7ffb9-a9e9-4f34-bfc8-d07edbf6ab5e",
+                  "name": "user",
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "bar",
+          "name": "Workflow execution count - V2",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "task_name",
+              "task_version"
+            ],
+            "graph.label_value_formatting": "auto",
+            "graph.metrics": [
+              "execution_count"
+            ],
+            "graph.show_values": true,
+            "graph.x_axis.axis_enabled": "compact",
+            "graph.x_axis.title_text": "Workflows",
+            "graph.y_axis.scale": "linear",
+            "graph.y_axis.title_text": "Execution count",
+            "stackable.stack_type": "stacked"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 68,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "task_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 68,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user"
+              ]
+            ]
+          },
+          {
+            "card_id": 68,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group"
+              ]
+            ]
+          },
+          {
+            "card_id": 68,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "date"
+              ]
+            ]
+          }
+        ],
+        "row": 10,
+        "size_x": 12,
+        "size_y": 6,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT task_name, task_version, \r\n       AVG(EXTRACT(EPOCH FROM (end_time - start_time))) AS avg_duration_seconds\r\nFROM biomero_task_execution\r\nWHERE end_time IS NOT NULL [[and {{task_name}}]] [[and {{user}}]] [[and {{group}}]] [[and {{date}}]] AND task_name NOT IN (\r\n    'SLURM_Get_Result.py',\r\n    'SLURM_Remote_Conversion.py',\r\n    'CONVERT_ZARR_TO_TIFF',\r\n    '_SLURM_Image_Transfer.py',\r\n    'SLURM_Get_Results.py',\r\n    'SLURM_Run_Workflow.py'\r\n  )\r\nGROUP BY task_name, task_version\r\nORDER BY avg_duration_seconds DESC;\r\n",
+              "template-tags": {
+                "date": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Date",
+                  "id": "04af4116-9dd0-4447-9024-02a1a637717c",
+                  "name": "date",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "group": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Group",
+                  "id": "de9e0bc8-8121-471c-84ae-a383153c1b48",
+                  "name": "group",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "task_name": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "task_name",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Task Name",
+                  "id": "dc3a69d9-873d-4caa-9dcf-c82108a5ac95",
+                  "name": "task_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "user": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "User",
+                  "id": "2d0d9934-a1ab-4cd3-93ab-a87ed59bf661",
+                  "name": "user",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "bar",
+          "name": "Average workflow duration - V2",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "task_name",
+              "task_version"
+            ],
+            "graph.label_value_formatting": "compact",
+            "graph.label_value_frequency": "all",
+            "graph.metrics": [
+              "avg_duration_seconds"
+            ],
+            "graph.show_goal": false,
+            "graph.show_values": true,
+            "graph.x_axis.title_text": "Workflow",
+            "graph.y_axis.auto_split": true,
+            "graph.y_axis.scale": "linear",
+            "graph.y_axis.title_text": "Duration (s)",
+            "stackable.stack_type": null
+          }
+        },
+        "col": 12,
+        "parameter_mappings": [
+          {
+            "card_id": 69,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "task_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 69,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user"
+              ]
+            ]
+          },
+          {
+            "card_id": 69,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group"
+              ]
+            ]
+          },
+          {
+            "card_id": 69,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "date"
+              ]
+            ]
+          }
+        ],
+        "row": 10,
+        "size_x": 12,
+        "size_y": 6,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT\n  task_name,\n  task_version,\n  COUNT(*) AS execution_count\nFROM\n  biomero_task_execution\nWHERE 1=1\n[[and {{task_name}}]] \n[[and {{user}}]]\n[[and {{group}}]]\n[[and {{date}}]]\nGROUP BY\n  task_name,\n  task_version\nORDER BY\n  execution_count DESC\n;",
+              "template-tags": {
+                "date": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Date",
+                  "id": "4e570cdf-498e-42ee-bcef-d680c9e23be3",
+                  "name": "date",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "group": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Group",
+                  "id": "4892f2f1-0fb7-4bfc-99b9-c62cc0fb2f4b",
+                  "name": "group",
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "task_name": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "task_name",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Task Name",
+                  "id": "a3cbc8a3-ffdb-4e02-8a43-826184ce2f97",
+                  "name": "task_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "user": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "User",
+                  "id": "32c7ffb9-a9e9-4f34-bfc8-d07edbf6ab5e",
+                  "name": "user",
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "bar",
+          "name": "Workflow execution count",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "task_name",
+              "task_version"
+            ],
+            "graph.label_value_formatting": "auto",
+            "graph.metrics": [
+              "execution_count"
+            ],
+            "graph.show_values": true,
+            "graph.x_axis.axis_enabled": "compact",
+            "graph.x_axis.title_text": "Workflows",
+            "graph.y_axis.scale": "linear",
+            "graph.y_axis.title_text": "Execution count",
+            "stackable.stack_type": "stacked"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 29,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "task_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 29,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group"
+              ]
+            ]
+          },
+          {
+            "card_id": 29,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user"
+              ]
+            ]
+          },
+          {
+            "card_id": 29,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "date"
+              ]
+            ]
+          }
+        ],
+        "row": 16,
+        "size_x": 14,
+        "size_y": 6,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT task_name, task_version, \r\n       AVG(EXTRACT(EPOCH FROM (end_time - start_time))) AS avg_duration_seconds\r\nFROM biomero_task_execution\r\nWHERE end_time IS NOT NULL [[and {{task_name}}]] [[and {{user}}]] [[and {{group}}]] [[and {{date}}]]\r\nGROUP BY task_name, task_version\r\nORDER BY avg_duration_seconds DESC;\r\n",
+              "template-tags": {
+                "date": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Date",
+                  "id": "04af4116-9dd0-4447-9024-02a1a637717c",
+                  "name": "date",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "group": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Group",
+                  "id": "de9e0bc8-8121-471c-84ae-a383153c1b48",
+                  "name": "group",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "task_name": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "task_name",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Task Name",
+                  "id": "dc3a69d9-873d-4caa-9dcf-c82108a5ac95",
+                  "name": "task_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "user": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "User",
+                  "id": "2d0d9934-a1ab-4cd3-93ab-a87ed59bf661",
+                  "name": "user",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "bar",
+          "name": "Average workflow duration",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "task_name",
+              "task_version"
+            ],
+            "graph.label_value_formatting": "compact",
+            "graph.label_value_frequency": "all",
+            "graph.metrics": [
+              "avg_duration_seconds"
+            ],
+            "graph.show_goal": false,
+            "graph.show_values": true,
+            "graph.x_axis.title_text": "Workflow",
+            "graph.y_axis.auto_split": true,
+            "graph.y_axis.scale": "linear",
+            "graph.y_axis.title_text": "Duration (s)",
+            "stackable.stack_type": null
+          }
+        },
+        "col": 14,
+        "parameter_mappings": [
+          {
+            "card_id": 30,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "task_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 30,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user"
+              ]
+            ]
+          },
+          {
+            "card_id": 30,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group"
+              ]
+            ]
+          },
+          {
+            "card_id": 30,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "date"
+              ]
+            ]
+          }
+        ],
+        "row": 16,
+        "size_x": 10,
+        "size_y": 6,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT\n  DATE (start_time) AS date,\n  COUNT(*) AS execution_count\nFROM\n  biomero_task_execution\nWHERE 1=1\n[[and {{workflow}}]]\n[[and {{user}}]]\n[[and {{group}}]]\n[[and {{date}}]]\nGROUP BY DATE (start_time)\nORDER BY\n  date ASC;",
+              "template-tags": {
+                "date": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "start_time",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Date",
+                  "id": "eb6377db-aa04-4941-97aa-7dc545ef3ae8",
+                  "name": "date",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "group": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Group",
+                  "id": "8b9d13aa-5a6a-4101-aa27-73db64bd9671",
+                  "name": "group",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "user": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_id",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "User",
+                  "id": "aa0ebbf5-cb5a-4237-ab4f-e1f59f6445bf",
+                  "name": "user",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "workflow": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "task_name",
+                      "schema": "public",
+                      "table": "biomero_task_execution"
+                    },
+                    null
+                  ],
+                  "display-name": "Workflow",
+                  "id": "8377f629-63a6-4e6b-8b3d-64fd9b6f2f74",
+                  "name": "workflow",
+                  "options": null,
+                  "required": false,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "line",
+          "name": "Workflow usage over time",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "date"
+            ],
+            "graph.metrics": [
+              "execution_count"
+            ],
+            "graph.show_trendline": false,
+            "graph.x_axis.axis_enabled": "compact",
+            "graph.x_axis.title_text": "Date",
+            "graph.y_axis.title_text": "Execution count"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 32,
+            "parameter_id": "ea808f4a",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "workflow"
+              ]
+            ]
+          },
+          {
+            "card_id": 32,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user"
+              ]
+            ]
+          },
+          {
+            "card_id": 32,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group"
+              ]
+            ]
+          },
+          {
+            "card_id": 32,
+            "parameter_id": "6b4ee65e",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "date"
+              ]
+            ]
+          }
+        ],
+        "row": 22,
+        "size_x": 24,
+        "size_y": 5,
+        "visualization_settings": {}
+      },
+      {
+        "card": null,
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 27,
+        "size_x": 24,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": false,
+          "text": "Slurm job stats",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "heading",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "aggregation": [
+                [
+                  "count"
+                ]
+              ],
+              "breakout": [
+                [
+                  "field/name",
+                  {
+                    "database": "BIOMERO",
+                    "field": "status",
+                    "schema": "public",
+                    "table": "biomero_job_progress_view"
+                  },
+                  {
+                    "base-type": "type/Text"
+                  }
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_job_progress_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "pie",
+          "name": "Slurm Jobs Status",
+          "visualization_settings": {}
+        },
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 28,
+        "size_x": 24,
+        "size_y": 5,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "filter": [
+                "=",
+                [
+                  "field/name",
+                  {
+                    "database": "BIOMERO",
+                    "field": "status",
+                    "schema": "public",
+                    "table": "biomero_job_progress_view"
+                  },
+                  {
+                    "base-type": "type/Text"
+                  }
+                ],
+                "COMPLETED"
+              ],
+              "order-by": [
+                [
+                  "desc",
+                  [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "slurm_job_id",
+                      "schema": "public",
+                      "table": "biomero_job_progress_view"
+                    },
+                    {
+                      "base-type": "type/Integer"
+                    }
+                  ]
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_job_progress_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "table",
+          "name": "Slurm jobs - COMPLETED",
+          "visualization_settings": {
+            "table.cell_column": "status",
+            "table.pivot_column": "progress"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 33,
+        "size_x": 12,
+        "size_y": 9,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "filter": [
+                "!=",
+                [
+                  "field/name",
+                  {
+                    "database": "BIOMERO",
+                    "field": "status",
+                    "schema": "public",
+                    "table": "biomero_job_progress_view"
+                  },
+                  {
+                    "base-type": "type/Text"
+                  }
+                ],
+                "COMPLETED"
+              ],
+              "order-by": [
+                [
+                  "desc",
+                  [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "slurm_job_id",
+                      "schema": "public",
+                      "table": "biomero_job_progress_view"
+                    },
+                    {
+                      "base-type": "type/Integer"
+                    }
+                  ]
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_job_progress_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "table",
+          "name": "Slurm jobs - NOT COMPLETED",
+          "visualization_settings": {
+            "table.cell_column": "status",
+            "table.pivot_column": "progress"
+          }
+        },
+        "col": 12,
+        "parameter_mappings": [],
+        "row": 33,
+        "size_x": 12,
+        "size_y": 9,
+        "visualization_settings": {
+          "table.cell_column": "status",
+          "table.column_formatting": [
+            {
+              "color": "#509EE3",
+              "columns": [
+                "progress"
+              ],
+              "highlight_row": false,
+              "id": 0,
+              "operator": "not-null",
+              "type": "single",
+              "value": ""
+            }
+          ],
+          "table.pivot_column": "progress"
+        }
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "SELECT task_name, task_version, error_type, COUNT(*) AS failure_count\r\nFROM biomero_task_execution\r\nWHERE error_type IS NOT NULL\r\nGROUP BY task_name, task_version, error_type\r\nORDER BY failure_count DESC;\r\n",
+              "template-tags": {}
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "table",
+          "name": "errors",
+          "visualization_settings": {
+            "graph.dimensions": [
+              "task_name",
+              "task_version"
+            ],
+            "graph.metrics": [
+              "failure_count"
+            ],
+            "graph.series_order": null,
+            "graph.series_order_dimension": null,
+            "pie.dimension": "task_name",
+            "pie.metric": "failure_count",
+            "table.cell_column": "failure_count",
+            "table.pivot_column": "task_name"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 42,
+        "size_x": 24,
+        "size_y": 4,
+        "visualization_settings": {}
+      },
+      {
+        "card": null,
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 46,
+        "size_x": 24,
+        "size_y": 1,
+        "visualization_settings": {
+          "dashcard.background": false,
+          "text": "BIOMERO stats",
+          "virtual_card": {
+            "archived": false,
+            "dataset_query": {},
+            "display": "heading",
+            "name": null,
+            "visualization_settings": {}
+          }
+        }
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "aggregation": [
+                [
+                  "count"
+                ]
+              ],
+              "breakout": [
+                [
+                  "field/name",
+                  {
+                    "database": "BIOMERO",
+                    "field": "user",
+                    "schema": "public",
+                    "table": "biomero_job_view"
+                  },
+                  {
+                    "base-type": "type/Integer"
+                  }
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_job_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "pie",
+          "name": "Biomero Job View, Aantal, Grouped by User",
+          "visualization_settings": {}
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 33,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "field",
+                521,
+                {
+                  "base-type": "type/Integer"
+                }
+              ]
+            ]
+          },
+          {
+            "card_id": 33,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "field",
+                520,
+                {
+                  "base-type": "type/Integer"
+                }
+              ]
+            ]
+          }
+        ],
+        "row": 47,
+        "size_x": 12,
+        "size_y": 5,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "aggregation": [
+                [
+                  "count"
+                ]
+              ],
+              "breakout": [
+                [
+                  "field/name",
+                  {
+                    "database": "BIOMERO",
+                    "field": "group",
+                    "schema": "public",
+                    "table": "biomero_job_view"
+                  },
+                  {
+                    "base-type": "type/Integer",
+                    "binning": {
+                      "strategy": "default"
+                    }
+                  }
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "biomero_job_view"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "pie",
+          "name": "Biomero Job View, Aantal, Grouped by Group",
+          "visualization_settings": {}
+        },
+        "col": 12,
+        "parameter_mappings": [
+          {
+            "card_id": 44,
+            "parameter_id": "96748cdd",
+            "target": [
+              "dimension",
+              [
+                "field",
+                520,
+                {
+                  "base-type": "type/Integer"
+                }
+              ]
+            ]
+          },
+          {
+            "card_id": 44,
+            "parameter_id": "6e225296",
+            "target": [
+              "dimension",
+              [
+                "field",
+                521,
+                {
+                  "base-type": "type/Integer"
+                }
+              ]
+            ]
+          }
+        ],
+        "row": 47,
+        "size_x": 12,
+        "size_y": 5,
+        "visualization_settings": {}
+      },
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "query": {
+              "aggregation": [
+                [
+                  "count"
+                ]
+              ],
+              "source-table/name": {
+                "database": "BIOMERO",
+                "schema": "public",
+                "table": "workflowtracker_events"
+              }
+            },
+            "type": "query"
+          },
+          "description": null,
+          "display": "scalar",
+          "name": "Workflowtracker Events, Aantal",
+          "visualization_settings": {
+            "scalar.field": "topic"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [],
+        "row": 52,
+        "size_x": 12,
+        "size_y": 4,
+        "visualization_settings": {
+          "card.title": "Total # workflowtracker events",
+          "column_settings": {
+            "[\"name\",\"count\"]": {
+              "number_style": "decimal"
+            }
+          },
+          "scalar.field": "topic"
+        }
+      }
+    ],
+    "description": "Track your active BIOMERO workflows or view some historical BIOMERO data!",
+    "embedding_params": {
+      "date_filter": "enabled",
+      "group": "enabled",
+      "user": "locked",
+      "workflow": "enabled"
+    },
+    "enable_embedding": true,
+    "name": "BIOMERO Analytics",
+    "parameters": [
+      {
+        "id": "ea808f4a",
+        "isMultiSelect": true,
+        "name": "Workflow",
+        "sectionId": "string",
+        "slug": "workflow",
+        "type": "string/=",
+        "values_query_type": "list",
+        "values_source_config": {
+          "card_name": "Average workflow duration",
+          "value_field": [
+            "field",
+            "task_name",
+            {
+              "base-type": "type/Text"
+            }
+          ]
+        },
+        "values_source_type": "card"
+      },
+      {
+        "id": "6e225296",
+        "name": "User",
+        "sectionId": "string",
+        "slug": "user",
+        "type": "string/=",
+        "values_query_type": "list",
+        "values_source_config": {
+          "card_name": "Biomero Workflow Progress",
+          "value_field": [
+            "field/name",
+            {
+              "database": "BIOMERO",
+              "field": "user",
+              "schema": "public",
+              "table": "biomero_workflow_progress_view"
+            },
+            null
+          ]
+        },
+        "values_source_type": "card"
+      },
+      {
+        "id": "96748cdd",
+        "name": "Group",
+        "sectionId": "string",
+        "slug": "group",
+        "type": "string/=",
+        "values_query_type": "list",
+        "values_source_config": {
+          "card_name": "Biomero Workflow Progress",
+          "value_field": [
+            "field/name",
+            {
+              "database": "BIOMERO",
+              "field": "group",
+              "schema": "public",
+              "table": "biomero_workflow_progress_view"
+            },
+            null
+          ]
+        },
+        "values_source_type": "card"
+      },
+      {
+        "id": "6b4ee65e",
+        "name": "Date Filter",
+        "sectionId": "date",
+        "slug": "date_filter",
+        "type": "date/all-options"
+      }
+    ]
+  },
+  {
+    "cards": [
+      {
+        "card": {
+          "database_name": "BIOMERO",
+          "dataset_query": {
+            "native": {
+              "query": "WITH ElapsedTimes AS (\n    SELECT \n        uuid,\n        MAX(timestamp) AS last_timestamp,\n        MIN(timestamp) AS first_timestamp,\n        (MAX(timestamp) - MIN(timestamp)) AS elapsed_time\n    FROM imports\n    GROUP BY uuid\n),\nFormattedTimes AS (\n    SELECT \n        uuid,\n        last_timestamp,\n        first_timestamp,\n        elapsed_time,\n        EXTRACT(YEAR FROM elapsed_time) AS years,\n        EXTRACT(MONTH FROM elapsed_time) AS months,\n        EXTRACT(DAY FROM elapsed_time) AS days,\n        EXTRACT(HOUR FROM elapsed_time) AS hours,\n        EXTRACT(MINUTE FROM elapsed_time) AS minutes,\n        FLOOR(EXTRACT(SECOND FROM elapsed_time)) AS seconds\n    FROM ElapsedTimes\n),\nLatestStage AS (\n    SELECT \n        uuid,\n        stage,\n        ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY timestamp DESC) AS rn\n    FROM imports\n)\nSELECT DISTINCT\n    imports.file_names,\n    ls.stage,\n    imports.description,\n    imports.destination_id as \"Dataset/Screen\",\n    ft.last_timestamp AS timestamp,\n    TRIM(BOTH ',' FROM \n        CONCAT_WS(', ', \n            CASE WHEN ft.years > 0 THEN CONCAT(ft.years, ' year', CASE WHEN ft.years > 1 THEN 's' END) END,\n            CASE WHEN ft.months > 0 THEN CONCAT(ft.months, ' month', CASE WHEN ft.months > 1 THEN 's' END) END,\n            CASE WHEN ft.days > 0 THEN CONCAT(ft.days, ' day', CASE WHEN ft.days > 1 THEN 's' END) END,\n            CASE WHEN ft.hours > 0 THEN CONCAT(ft.hours, ' hour', CASE WHEN ft.hours > 1 THEN 's' END) END,\n            CASE WHEN ft.minutes > 0 THEN CONCAT(ft.minutes, ' minute', CASE WHEN ft.minutes > 1 THEN 's' END) END,\n            CASE WHEN ft.seconds > 0 THEN CONCAT(ft.seconds, ' second', CASE WHEN ft.seconds > 1 THEN 's' END) END\n        )\n    ) AS elapsed_time, \n    imports.user_name,\n    imports.group_name,\n    ft.uuid\nFROM FormattedTimes ft\nJOIN LatestStage ls ON ft.uuid = ls.uuid\nJOIN imports ON imports.uuid = ft.uuid\nWHERE ls.rn = 1 and imports.stage = ls.stage\n   [[and {{user_name}}]]\n   [[and {{group_name}}]]\n   [[and {{timestamp}}]]\nORDER BY ft.last_timestamp DESC;",
+              "template-tags": {
+                "group_name": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "group_name",
+                      "schema": "public",
+                      "table": "imports"
+                    },
+                    null
+                  ],
+                  "display-name": "Group Name",
+                  "id": "cd00dd40-04e0-4383-a71d-4e4db4b2647a",
+                  "name": "group_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                },
+                "timestamp": {
+                  "default": null,
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "timestamp",
+                      "schema": "public",
+                      "table": "imports"
+                    },
+                    null
+                  ],
+                  "display-name": "Timestamp",
+                  "id": "cb0db283-f745-40dc-9a1b-119f04976f61",
+                  "name": "timestamp",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "date/all-options"
+                },
+                "user_name": {
+                  "dimension": [
+                    "field/name",
+                    {
+                      "database": "BIOMERO",
+                      "field": "user_name",
+                      "schema": "public",
+                      "table": "imports"
+                    },
+                    null
+                  ],
+                  "display-name": "User Name",
+                  "id": "4dd9cac1-4ffa-4f84-8a93-11dbe103f4ed",
+                  "name": "user_name",
+                  "options": null,
+                  "type": "dimension",
+                  "widget-type": "string/="
+                }
+              }
+            },
+            "type": "native"
+          },
+          "description": null,
+          "display": "table",
+          "name": "Upload Status",
+          "visualization_settings": {
+            "table.cell_column": "timestamp",
+            "table.column_formatting": [
+              {
+                "color": "#EF8C8C",
+                "columns": [
+                  "stage"
+                ],
+                "highlight_row": true,
+                "id": 1,
+                "operator": "contains",
+                "type": "single",
+                "value": "Failed"
+              },
+              {
+                "color": "#88BF4D",
+                "columns": [
+                  "stage"
+                ],
+                "highlight_row": true,
+                "id": 0,
+                "operator": "contains",
+                "type": "single",
+                "value": "Completed"
+              }
+            ],
+            "table.columns": [
+              {
+                "enabled": true,
+                "name": "file_names"
+              },
+              {
+                "enabled": true,
+                "name": "stage"
+              },
+              {
+                "enabled": true,
+                "name": "Dataset/Screen"
+              },
+              {
+                "enabled": true,
+                "name": "uuid"
+              },
+              {
+                "enabled": true,
+                "name": "timestamp"
+              },
+              {
+                "enabled": true,
+                "name": "elapsed_time"
+              },
+              {
+                "enabled": true,
+                "name": "group_name"
+              },
+              {
+                "enabled": true,
+                "name": "user_name"
+              },
+              {
+                "enabled": true,
+                "name": "description"
+              }
+            ],
+            "table.pivot_column": "stage"
+          }
+        },
+        "col": 0,
+        "parameter_mappings": [
+          {
+            "card_id": 65,
+            "parameter_id": "5cbfaab0",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "user_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 65,
+            "parameter_id": "fe5ce60d",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "group_name"
+              ]
+            ]
+          },
+          {
+            "card_id": 65,
+            "parameter_id": "-1465234998",
+            "target": [
+              "dimension",
+              [
+                "template-tag",
+                "timestamp"
+              ]
+            ]
+          }
+        ],
+        "row": 0,
+        "size_x": 24,
+        "size_y": 15,
+        "visualization_settings": {
+          "column_settings": {
+            "[\"name\",\"Dataset/Screen\"]": {
+              "click_behavior": {
+                "linkTemplate": "http://localhost:4080/webclient/?show=dataset-{{Dataset/Screen}}",
+                "linkType": "url",
+                "type": "link"
+              }
+            },
+            "[\"name\",\"file_names\"]": {
+              "click_behavior": {
+                "linkTemplate": "../webclient/search/?search_query={{uuid}}",
+                "linkType": "url",
+                "type": "link"
+              }
+            },
+            "[\"name\",\"group_name\"]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "fe5ce60d": {
+                    "id": "fe5ce60d",
+                    "source": {
+                      "id": "group_name",
+                      "name": "group_name",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "fe5ce60d",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"name\",\"timestamp\"]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "-1465234998": {
+                    "id": "-1465234998",
+                    "source": {
+                      "id": "timestamp",
+                      "name": "timestamp",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "-1465234998",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"name\",\"uuid\"]": {
+              "click_behavior": {
+                "linkTemplate": "http://localhost:4080/webclient/search/?search_query=\"{{uuid}}\"",
+                "linkTextTemplate": "",
+                "linkType": "url",
+                "type": "link"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "description": "An overview of active and historical imports!",
+    "embedding_params": {
+      "date_filter": "enabled",
+      "group_name": "enabled",
+      "user_name": "locked"
+    },
+    "enable_embedding": true,
+    "name": "OMERO Automated Data Importer",
+    "parameters": [
+      {
+        "id": "-1465234998",
+        "name": "Date Filter",
+        "slug": "date_filter",
+        "type": "date/all-options"
+      },
+      {
+        "id": "5cbfaab0",
+        "isMultiSelect": false,
+        "name": "User Name",
+        "sectionId": "string",
+        "slug": "user_name",
+        "type": "string/=",
+        "values_query_type": "list"
+      },
+      {
+        "id": "fe5ce60d",
+        "name": "Group Name",
+        "sectionId": "string",
+        "slug": "group_name",
+        "type": "string/="
+      }
+    ]
+  }
+]

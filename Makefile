@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init render-config deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init render-config metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -28,6 +28,7 @@ help:
 	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
 	@echo "  make show-key           print the public half of the cluster key"
 	@echo "  make logs-auth          create the basic-auth file nginx needs for /logs"
+	@echo "  make metabase-dashboards rebuild the embedded Metabase dashboards"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
 	@echo ""
@@ -91,6 +92,16 @@ init:
 # them -- so a change worth keeping belongs in web/slurm-config-template.ini.
 render-config:
 	@./scripts/render-slurm-config.sh
+
+# The Metabase dashboards OMERO.web embeds. Metabase ships only its own sample
+# content, so without these the ids in .env name nothing and both BIOMERO status
+# pages read "Not found." make deploy runs the restore; these are for doing it
+# on its own, and for re-exporting after editing a dashboard in the UI.
+metabase-dashboards:
+	@./scripts/restore-metabase-dashboards.sh $(if $(FORCE),--force,)
+
+export-metabase-dashboards:
+	@./scripts/export-metabase-dashboards.sh $(IDS)
 
 deploy:
 	@./scripts/bootstrap-prod.sh

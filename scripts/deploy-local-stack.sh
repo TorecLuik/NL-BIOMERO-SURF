@@ -333,6 +333,20 @@ else
     -c "CREATE DATABASE ${MB_DB_NAME} OWNER ${MB_PG_USER};"
   sudo docker compose restart metabase
 fi
+
+# Metabase starts with its own sample content and nothing else, so the dashboard
+# ids in .env would name nothing and both BIOMERO status pages would read
+# "Not found." Rebuild them from the committed definitions. Re-running is a
+# no-op once they exist, so this is safe on a volume that already has them.
+if [[ -f "${PROJECT_ROOT_DIR}/metabase/dashboards.json" ]]; then
+  echo "Restoring Metabase dashboards..."
+  "${PROJECT_ROOT_DIR}/scripts/restore-metabase-dashboards.sh" || {
+    echo "  [warn] dashboard restore failed; the stack is up but the BIOMERO"
+    echo "  [warn] status pages will read Not found. Re-run by hand:"
+    echo "  [warn]   scripts/restore-metabase-dashboards.sh"
+  }
+fi
+
 if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.yml" ]]; then
   sudo docker compose -f opensearch-compose.yml up -d
 fi
