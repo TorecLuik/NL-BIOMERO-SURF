@@ -438,9 +438,13 @@ fi
 
 echo "All smoke tests passed."
 echo
-echo "Still to verify by hand, because they need real data or a browser:"
-echo "  - run a CPU workflow, a MIG GPU workflow, and deconvolve_plate on full A100"
-echo "  - confirm workflow results import back into OMERO"
-echo "  - confirm the BIOMERO importer picks up files under /data"
-echo "  - open OMERO.web and check the Metabase dashboards embed"
-echo "  - open /logs and confirm the log viewer renders behind basic auth"
+echo "Smoke tests check that the stack is up, not that it is usable. The"
+echo "end-to-end checks live in deployment_docs/pipeline-tests.md -- import,"
+echo "segmentation, cell expansion and quantification, driven from the browser:"
+echo "  make reference-data     fetch the public test images"
+echo "                          then work through pipeline-tests.md"
+echo
+echo "Still needing something outside this VM:"
+echo "  - OMERO.insight on 4063/4064, opened in the Research Cloud portal"
+echo "  - a MIG GPU workflow and deconvolve_plate on full A100, which no"
+echo "    reference image here exercises"
