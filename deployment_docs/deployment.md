@@ -81,10 +81,6 @@ requests with HTTP 429. That is backpressure, not a fault, and it stops once the
 backlog drains. A stalled pipeline looks different: the `biomero-logs` document
 count stops rising. `scripts/bootstrap-prod.sh` checks exactly that.
 
-`logs-compose.yml` is an unused alternative stack (Loki, Promtail, Grafana). No
-script starts it. Use it only if replacing OpenSearch, and do not run both, since
-both tail `./logs`.
-
 No container sets a restart policy, so nothing comes back after a host reboot.
 The same is true of the core services; bring the host back up with `make up` or
 `scripts/bootstrap-prod.sh`.

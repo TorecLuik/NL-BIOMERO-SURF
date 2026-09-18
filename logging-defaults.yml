@@ -3,7 +3,7 @@
 # (Docker's json-file driver has no size limit unless one is set here).
 #
 # Every service in docker-compose.yml, docker-compose-dev.yml,
-# opensearch-compose.yml, and logs-compose.yml pulls this in via:
+# opensearch-compose.yml pulls this in via:
 #
 #   extends:
 #     file: logging-defaults.yml

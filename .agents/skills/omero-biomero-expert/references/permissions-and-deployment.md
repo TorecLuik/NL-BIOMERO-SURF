@@ -379,7 +379,7 @@ Stale `~/.vscode-server` installs from failed/interrupted remote connections can
 Docker's `json-file` log driver has no size cap unless a service sets one.
 
 Since `345af643` every service in `docker-compose.yml`, `docker-compose-dev.yml`,
-`opensearch-compose.yml` and `logs-compose.yml` inherits a 10m x 5 cap from
+`opensearch-compose.yml` inherits a 10m x 5 cap from
 `logging-defaults.yml`. Before that, five OMERO services already set the same
 values inline; the commit unified those and covered the three that had none --
 `database`, `database-biomero`, `metabase` -- plus the whole log stack, where
@@ -411,7 +411,7 @@ sudo truncate -s 0 /var/lib/docker/containers/<id>/<id>-json.log
 
 OpenSearch specifically has a self-reinforcing failure mode worth recognizing: once disk usage crosses its flood-stage watermark, it marks indices read-only, including its own audit-log index. Every subsequent request then fails to audit-log, which OpenSearch reports as an `ERROR` with a full stack trace — for every request — which fills the disk further and keeps the watermark tripped. Truncating the log does not fix this; the block has to be lifted via the OpenSearch API once space exists, or the log regrows immediately.
 
-Every service in `docker-compose.yml`, `docker-compose-dev.yml`, `opensearch-compose.yml`, and `logs-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
+Every service in `docker-compose.yml`, `docker-compose-dev.yml` and `opensearch-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
 
 ```yaml
 extends:

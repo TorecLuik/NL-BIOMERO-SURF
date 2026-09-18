@@ -31,76 +31,30 @@ is covered by the automated smoke tests:
 OMERO.insight connectivity on 4063/4064
 ```
 
-## Blocking: the Metabase dashboards do not exist on a new VM
+## The Metabase dashboards
 
-**Import > Monitor and Analyze > Status both read "Not found." on a VM built
-from nothing.** SLURM shows Online and the rest of the stack is healthy; only
-the two embedded dashboards are missing.
+Import > Monitor and Analyze > Status embed two Metabase dashboards. They used
+to be missing on any VM built from an empty volume -- Metabase starts with its
+own sample content, the ids in `.env` named nothing, and both pages read
+"Not found."
 
-`.env` names them by number:
+Closed on 2026-09-18: `metabase/dashboards.json` holds both dashboards and
+their questions, and `make deploy` restores them through
+`scripts/restore-metabase-dashboards.sh`. Everything per-install travels by
+name -- databases, tables, fields, and the card a filter draws its values from
+-- so the definitions carry no ids and no passwords, and the restore resolves
+them against the target's own schema scan. It writes the ids it ends up using
+back into `.env`.
 
-```text
-METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID=2   # BIOMERO Analytics
-METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID=6     # OMERO Automated Data Importer
+To change a dashboard, edit it in Metabase and re-export:
+
+```bash
+make export-metabase-dashboards          # dashboards 2 and 6 by default
+make export-metabase-dashboards IDS=5    # or an explicit set
 ```
 
-Those ids only exist where somebody built them by hand. A fresh Metabase comes
-up with its own sample content and nothing else -- confirmed on the rebuilt VM:
-
-```text
-report_dashboard    1 row    "E-commerce insights"   (Metabase's own sample)
-report_card        26 rows   sample content
-metabase_database   1 row    "Sample Database", engine h2
-```
-
-Not even the BIOMERO Postgres datasource is connected, so the dashboards could
-not render even if they were imported by id.
-
-Nothing in the deployment creates them. The only documented route is copying
-Metabase's state from a host that already has them
-(`.agents/skills/omero-biomero-expert/references/metabase-dashboards.md`), which
-is not available to a genuinely new deployment -- and that procedure is also
-written for the old H2 file layout, while Metabase now keeps its application
-database in Postgres on `database-biomero`.
-
-Compare Grafana in this same repository: `grafana/dashboards/biomero-logs.json`
-is committed and provisioned on start, so it rebuilds from nothing. Metabase
-needs the same treatment -- the two dashboards and their cards exported to
-version-controlled definitions, restored on first start, with the datasource
-pointed at `.env` rather than at whatever it was on the machine they came from.
-Until then the ids in `.env` are a promise the deployment cannot keep, and
-`make doctor` correctly reports both as not found.
-
-The end-to-end workflow run is no longer among them; see below. The procedures
-and public test data are in [pipeline-tests.md](pipeline-tests.md) and
-[reference-data.md](reference-data.md), which tracks which of its checks have
-been run.
-
-Two items closed on 2026-09-17 by rebuilding `biomeroqa` from an empty volume:
-
-*The bare-VM sequence.* `make provision` through `make deploy` was run twice
-from nothing -- no repo, no images, no containers, an empty storage volume --
-following SETUP.md as written. It failed the first time in eight distinct
-places, every one of them invisible on a machine that had deployed before; the
-fixes are on this branch. The second run, against the fixed tree, is what the
-Status block in pipeline-tests.md reports.
-
-*The importer.* All nine checks in pipeline-tests.md now pass there, including
-I2 and I3, which had never been run. Note what the importer actually does:
-it polls its database for queued orders rather than watching a directory, so
-a file copied into `/data` is not picked up on its own.
-
-Three registered workflows (`stardist5d`, `spotcounting`,
-`aggregates_measurements`) cannot be tested at all with the current two
-reference images: one needs a Z-stack or time series, the other two need an
-aggregate mask that nothing here produces. Gaps are listed in
-[reference-data.md](reference-data.md).
-
-*`/logs`.* Answers 401 without credentials and 302 into the dashboards app with
-the ones `make logs-auth` wrote, on the rebuilt VM.
-
-The one remaining item needs something outside the VM: 4063/4064 are opened in
-the Research Cloud portal, so nothing inside can test them.
+Then commit `metabase/dashboards.json`. Editing it by hand is possible but the
+round trip is what keeps it honest.
 
 ## Planned
 

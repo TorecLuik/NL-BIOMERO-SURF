@@ -236,10 +236,9 @@ This changes the shape of the problem. Moving this data is a `cp` of a few
 hundred megabytes, not a bulk transfer — a minute or two, not an outage to
 schedule around. Everything below gets easier as a result.
 
-(The four observability volumes — `grafana-data`, `loki-data`,
-`opensearch-data`, `opensearch-dashboards-data`, plus `fluent-bit-db` — are
-separate and were not measured. Decide whether they move too, or are treated as
-rebuildable.)
+(The observability volumes — `opensearch-data`,
+`opensearch-dashboards-data` and `fluent-bit-db` — are separate and were not
+measured. Decide whether they move too, or are treated as rebuildable.)
 
 ### The boot disk is the actual problem
 
