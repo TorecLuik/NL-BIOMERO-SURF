@@ -59,9 +59,7 @@ round trip is what keeps it honest.
 ## Planned
 
 Turning the deployment into a Research Cloud catalog item, so that creating a
-workspace replaces most of `new-vm.md`. Scoped in
-[catalog-item-migration.md](catalog-item-migration.md), not started. Five open
-questions there need answering before any component is written.
+workspace replaces most of `new-vm.md`. Not started or scoped yet.
 
 ## Then
 

@@ -115,7 +115,7 @@ workflow end to end.
 
 ```text
 OMERO.insight on 4063/4064        needs the ports opened in the portal
-the Research Cloud catalog item   see catalog-item-migration.md
+the Research Cloud catalog item   not scoped yet
 ```
 
 Three registered workflows (`stardist5d`, `spotcounting`,

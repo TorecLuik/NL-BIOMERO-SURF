@@ -19,8 +19,7 @@ make deploy                 # build, start, smoke test
 Budget about an hour, most of it image builds.
 
 Most of this could become a Research Cloud catalog item, so that creating a
-workspace does it instead. See [catalog-item-migration.md](catalog-item-migration.md)
-for what that would replace and what it would not.
+workspace does it instead.
 
 ## What cannot be automated
 
