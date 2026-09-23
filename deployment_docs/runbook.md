@@ -33,7 +33,7 @@ Admins are the members of the CO group `rsc_co_202570`. They are also in the
 | `/data/surf-biomero-storage/database*` | the two Postgres 16 clusters | uid 999, `0700` |
 | `…/omero` | OMERO binary repository | uid 1000 |
 | `…/L-Drive` | user data; in-place imports link here | `0777`, set by `make deploy` |
-| `…/config/volume-identity` | the database passwords this volume needs | `0640` |
+| `…/config/volume-identity` | the database passwords this volume needs | `0600`, read through sudo |
 | `…/backups/nightly` | nightly dumps, 14 days | root only |
 | `…/backups/pre-upgrade-20260824` | snapshot of the previous deployment | root only |
 | `…/backups/runtime-pre-rebuild-20260923` | the previous deployment's live data, as it was left on 2026-09-01 | root only |
@@ -94,14 +94,34 @@ deleted project, **not the loss of the volume**. See Open Items.
 
 ### Restoring a Database
 
+Only the databases may be running: OMERO, the workers and Metabase hold
+connections that a `--clean` restore would collide with.
+
 ```bash
 make down
-make up                                  # or start only database / database-biomero
+sudo docker compose up -d database database-biomero
 B=/data/surf-biomero-storage/backups/nightly/<timestamp>
-sudo docker compose exec -T database pg_restore -U omero -d omero --clean --if-exists < $B/omero.pg_dump
-sudo docker compose exec -T database-biomero pg_restore -U biomero -d biomero --clean --if-exists < $B/biomero.pg_dump
+sudo cat $B/omero.pg_dump   | sudo docker compose exec -T database         pg_restore -U omero   -d omero   --clean --if-exists
+sudo cat $B/biomero.pg_dump | sudo docker compose exec -T database-biomero pg_restore -U biomero -d biomero --clean --if-exists
 make up
 ```
+
+`sudo cat`, because the backup directory is root-only. Restore into a scratch
+database first (`createdb`, then `pg_restore -d <scratch>`) when unsure which
+timestamp to use.
+
+## Rotating a Database Password
+
+```bash
+./scripts/volume-identity.sh rotate BIOMERO_POSTGRES_PASSWORD   # or POSTGRES_PASSWORD
+make up
+./scripts/restore-metabase-dashboards.sh   # Metabase keeps its own copy
+```
+
+It changes the password in the database, `.env` and `volume-identity` together,
+and confirms over the network that the new one authenticates and the old one no
+longer does. A `psql` from inside the database container proves nothing: its
+local rules are `trust`.
 
 ## Rebuilding the VM
 
@@ -123,8 +143,8 @@ refuses to start if `.env` disagrees with the volume.
 **git over HTTPS fails with "could not read Username".** Ubuntu 22.04's libcurl
 mishandles GitHub's HTTP/2 `103 Early Hints` responses and reports the
 following `401` as an auth failure, even for public repositories.
-`make provision` sets `git config --system http.version HTTP/1.1`. It has not
-hit the main clone so far, only the submodule, but it can.
+`make provision` sets `git config --system http.version HTTP/1.1`; on a new VM,
+set it by hand before the first clone.
 
 **L-Drive is world-writable.** Several container users write to it, so
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
@@ -150,23 +170,8 @@ over (`sudo chown -R <user> .ssh`) or generates their own with
   repository and L-Drive were copied from `runtime/` into the current layout;
   users, groups, images and job history carried over. Metabase and the log
   indices were rebuilt rather than migrated. The BIOMERO database password was
-  rotated and the cluster key replaced.
-
-## Validated on 2026-09-23
-
-After the rebuild, against the migrated data:
-
-- `make deploy` smoke tests: all pass except Spider (key not yet registered)
-- `make doctor`: clean
-- root logs in with the carried-over password, over the public URL; the web
-  API and the server both count 69 images, 19 users, 7 groups
-- every one of the 69 images renders a thumbnail, so the in-place symlinks
-  into L-Drive resolve inside the containers
-- BIOMERO history intact: 113 import records, 52 task runs, 458 workflow events;
-  the importer's schema migration ran and it reports ready
-- nightly backup: checksums verify, and `omero.pg_dump` restored into a scratch
-  database gives back all 69 images
-- a VM reboot brings the whole stack back through `nl-biomero.service`
+  rotated and the cluster key replaced. Validated end to end afterwards: data,
+  thumbnails, job history, dashboards, backup restore, reboot.
 
 ## Open Items
 
@@ -175,9 +180,6 @@ After the rebuild, against the migrated data:
 - **Cluster account.** `SPIDER_USER` is a personal account. Move to a project
   or service account before the original owner leaves, then `make new-key
   FORCE=1` and register the new key.
-- **Register the cluster key.** The key generated on 2026-09-23 is not yet
-  authorised on Spider, so workflows cannot run. `make show-key` prints it;
-  `make check` confirms once registered.
 - **Ports 4063/4064** must be open in the portal for OMERO.insight.
 - **`W_Measurements-CellProfiler`** ran at v1.1.1 on the first deployment; the
   rendered `slurm-config.ini` pins v1.1.0. Bump the template if 1.1.1 is wanted.
