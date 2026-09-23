@@ -122,6 +122,16 @@ host with `git config --system http.version HTTP/1.1`.
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
 members have accounts.
 
+**`web/biomero-config.json` is edited in the working tree.** It holds this
+VM's group → folder mapping (Amsterdam, Leiden, Maastricht, Groningen), so
+`git status` shows it modified. `git pull` keeps it unless upstream changes the
+same file; then stash, pull, and reapply the `group_mappings` block.
+
+**`.ssh/` belongs to whoever ran `make new-key`.** OpenSSH refuses a key that
+anyone else can read, so it cannot be group-shared. A new owner either takes it
+over (`sudo chown -R <user> .ssh`) or generates their own with
+`make new-key FORCE=1`, which revokes the old registration.
+
 ## History
 
 - **2026-07-02 → 2026-09-01** the first deployment ran on this volume, laid out
@@ -134,6 +144,22 @@ members have accounts.
   indices were rebuilt rather than migrated. The BIOMERO database password was
   rotated and the cluster key replaced.
 
+## Validated on 2026-09-23
+
+After the rebuild, against the migrated data:
+
+- `make deploy` smoke tests: all pass except Spider (key not yet registered)
+- `make doctor`: clean
+- root logs in with the carried-over password, over the public URL; the web
+  API and the server both count 69 images, 19 users, 7 groups
+- every one of the 69 images renders a thumbnail, so the in-place symlinks
+  into L-Drive resolve inside the containers
+- BIOMERO history intact: 113 import records, 52 task runs, 458 workflow events;
+  the importer's schema migration ran and it reports ready
+- nightly backup: checksums verify, and `omero.pg_dump` restored into a scratch
+  database gives back all 69 images
+- a VM reboot brings the whole stack back through `nl-biomero.service`
+
 ## Open Items
 
 - **Off-VM backups.** Nothing leaves the volume yet. Pick a destination (SURF
@@ -141,4 +167,9 @@ members have accounts.
 - **Cluster account.** `SPIDER_USER` is a personal account. Move to a project
   or service account before the original owner leaves, then `make new-key
   FORCE=1` and register the new key.
+- **Register the cluster key.** The key generated on 2026-09-23 is not yet
+  authorised on Spider, so workflows cannot run. `make show-key` prints it;
+  `make check` confirms once registered.
 - **Ports 4063/4064** must be open in the portal for OMERO.insight.
+- **`W_Measurements-CellProfiler`** ran at v1.1.1 on the first deployment; the
+  rendered `slurm-config.ini` pins v1.1.0. Bump the template if 1.1.1 is wanted.
