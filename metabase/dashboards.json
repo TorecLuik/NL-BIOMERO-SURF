@@ -191,10 +191,15 @@
             "target": [
               "dimension",
               [
-                "field",
-                2589,
+                "field/name",
                 {
-                  "base-type": "type/Text"
+                  "database": "BIOMERO",
+                  "field": "user",
+                  "schema": "public",
+                  "table": "biomero_workflow_progress_view"
+                },
+                {
+                  "base-type": "type/Integer"
                 }
               ]
             ]
@@ -205,10 +210,15 @@
             "target": [
               "dimension",
               [
-                "field",
-                2587,
+                "field/name",
                 {
-                  "base-type": "type/Text"
+                  "database": "BIOMERO",
+                  "field": "group",
+                  "schema": "public",
+                  "table": "biomero_workflow_progress_view"
+                },
+                {
+                  "base-type": "type/Integer"
                 }
               ]
             ]
@@ -219,8 +229,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                2590,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "start_time",
+                  "schema": "public",
+                  "table": "biomero_workflow_progress_view"
+                },
                 {
                   "base-type": "type/DateTime"
                 }
@@ -233,8 +248,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                4473,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "main_task_name",
+                  "schema": "public",
+                  "table": "biomero_workflow_progress_view"
+                },
                 {
                   "base-type": "type/Text"
                 }
@@ -1468,8 +1488,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                521,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "user",
+                  "schema": "public",
+                  "table": "biomero_job_view"
+                },
                 {
                   "base-type": "type/Integer"
                 }
@@ -1482,8 +1507,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                520,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "group",
+                  "schema": "public",
+                  "table": "biomero_job_view"
+                },
                 {
                   "base-type": "type/Integer"
                 }
@@ -1544,8 +1574,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                520,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "group",
+                  "schema": "public",
+                  "table": "biomero_job_view"
+                },
                 {
                   "base-type": "type/Integer"
                 }
@@ -1558,8 +1593,13 @@
             "target": [
               "dimension",
               [
-                "field",
-                521,
+                "field/name",
+                {
+                  "database": "BIOMERO",
+                  "field": "user",
+                  "schema": "public",
+                  "table": "biomero_job_view"
+                },
                 {
                   "base-type": "type/Integer"
                 }

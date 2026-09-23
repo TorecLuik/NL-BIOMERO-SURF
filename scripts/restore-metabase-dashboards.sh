@@ -271,11 +271,15 @@ for spec in definitions:
             name_to_new_card[card["name"]] = card_id
         # A mapping's card_id names the tile's own card, so it is whatever we
         # just created rather than the id the source install happened to use.
+        # Its target names a field on query-builder cards, exported by name for
+        # the same reason the query is.
         mappings = []
         for m in (tile.get("parameter_mappings") or []):
             m = dict(m)
             if "card_id" in m:
                 m["card_id"] = card_id
+            if "target" in m:
+                m["target"] = untranslate(m["target"])
             mappings.append(m)
         dashcards.append({
             "id": -(i + 1),

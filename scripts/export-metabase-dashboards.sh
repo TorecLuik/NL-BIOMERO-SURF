@@ -187,6 +187,12 @@ for d in dashboards:
         s = json.dumps(card["dataset_query"])
         if re.search(r'"source-table":\s*\d', s) or re.search(r'\["field",\s*\d', s):
             unresolved.append((d["name"], card["name"]))
+        # A filter wired to a query-builder card targets a field by id too.
+        for m in tile.get("parameter_mappings") or []:
+            if "target" in m:
+                m["target"] = translate(m["target"])
+                if re.search(r'\["field",\s*\d', json.dumps(m["target"])):
+                    unresolved.append((d["name"], "%s filter mapping" % card["name"]))
 
 # Dashboard filters can populate their dropdown from a question, referenced by
 # card id and field id -- both per-install. Carry the card's name instead.
