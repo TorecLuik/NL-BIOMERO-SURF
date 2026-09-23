@@ -34,8 +34,8 @@ make provision
 # 3. settings for this VM. Generates every secret and reads the mountpoint
 #    from step 1, asking only for the Spider account
 make init-env
-#    On a volume that already holds data, adjust it first: see
-#    "Attaching a Volume That Already Holds Data" below.
+#    On a volume that already holds data, the values its data fixes are left
+#    unset here and filled from the volume by make deploy.
 
 # 4. the cluster key, then register the public half it prints
 make new-key
@@ -71,38 +71,36 @@ documents every key and is never read at runtime.
 
 | | Lives in | Set by |
 | --- | --- | --- |
-| Database passwords, `METABASE_SECRET_KEY` | the volume, `config/volume-identity` | the first deploy onto an empty volume |
+| Database credentials, `METABASE_SECRET_KEY`, OMERO root password, forms master name, Metabase admin | the volume, `config/volume-identity` | the first deploy onto an empty volume |
 | Hostnames | `.env` | `make set-host` |
 | Cluster identity, generated secrets | `.env` | `make init-env` |
 | `slurm-config.ini` | `web/`, rendered | `make init` / every deploy, from `web/slurm-config-template.ini` |
 
-The first row is fixed by the volume's data: Postgres ignores
-`POSTGRES_PASSWORD` once the cluster exists, and `METABASE_SECRET_KEY` decrypts
-what Metabase has already stored. `make deploy` fills those into a fresh `.env`
+The first row is fixed by the volume's data: each value is read once, when what
+it protects is first created. Postgres ignores `POSTGRES_PASSWORD` once the
+cluster exists, OMERO applies its root password only at database init, and
+`METABASE_SECRET_KEY` decrypts what Metabase has already stored. `make deploy` fills those into a fresh `.env`
 from the volume, and stops if `.env` carries a different value.
 
 ## Attaching a Volume That Already Holds Data
 
-Follow the setup steps. After `make init-env` at step 3:
-
-- delete `POSTGRES_PASSWORD`, `BIOMERO_POSTGRES_PASSWORD` and
-  `METABASE_SECRET_KEY` from `.env`; `make deploy` takes them from the
-  volume's `config/volume-identity`
-- set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD` and
-  `FORMS_MASTER_PASSWORD` to the volume's existing values. Those accounts live in
-  the OMERO database and `volume-identity` does not record them, so generated
-  values would lock the importer and forms out
+Follow the setup steps unchanged. `make init-env` sees the volume's
+`config/volume-identity` and leaves the values the data fixes unset, and
+`make deploy` fills them from it: the database credentials,
+`METABASE_SECRET_KEY`, the OMERO root password, the forms master's name and
+Metabase's admin login.
 
 A volume written before `volume-identity` existed carries no credentials. Put
-the working passwords in `.env`, start the databases, and record them:
+the working values in `.env`, start the stack, and record them:
 
 ```bash
 make up
 make adopt-volume
 ```
 
-This verifies the password against the running database before writing, so it
-cannot record a wrong one.
+This checks each value against the service that holds it before writing, so it
+cannot record a wrong one. On a volume whose record predates a key, it adds
+just the missing ones.
 
 ## Cluster Access
 

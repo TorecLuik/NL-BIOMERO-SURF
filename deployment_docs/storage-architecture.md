@@ -143,8 +143,8 @@ mount | grep /data/
 git clone <repo> && cd NL-BIOMERO
 make provision
 
-# 3. this VM's settings; OMERO_DATA_PATH is read from the mount. On a volume
-#    with data, then remove the values the volume supplies -- see below
+# 3. this VM's settings; OMERO_DATA_PATH is read from the mount, and on a
+#    volume with data the values it fixes are left for deploy to fill
 make init-env
 
 # 4. the cluster key, then register the public half it prints
@@ -156,19 +156,20 @@ make set-host HOST=$(hostname -f)
 make deploy
 ```
 
-On a volume that already holds data, delete `POSTGRES_PASSWORD`,
-`BIOMERO_POSTGRES_PASSWORD` and `METABASE_SECRET_KEY` from the generated `.env`:
-`make deploy` fills them from `config/volume-identity` and stops if `.env`
-carries different ones. Set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD`
-and `FORMS_MASTER_PASSWORD` to the volume's existing values too; those accounts
-live in the OMERO database, and `volume-identity` does not record them.
+On a volume that already holds data, `make init-env` leaves those values unset
+and `make deploy` fills them from `config/volume-identity`: the database
+credentials, `METABASE_SECRET_KEY`, the OMERO root password (and the importer's,
+which follows it), the forms master's name and Metabase's admin login. Each is
+read once, when what it protects is first created, so a generated value would
+lock the stack out. Deploy stops if `.env` carries a different one.
 
 `make deploy` reports which values it filled in, and stops rather than starting
 a stack that cannot read its own databases.
 
 A volume written before `volume-identity` existed carries no credentials: put
-the working passwords in `.env`, `make up`, then `make adopt-volume`, which
-verifies them against the running database before recording them.
+the working values in `.env`, `make up`, then `make adopt-volume`, which checks
+each against the service that holds it before recording it. On a volume whose
+record predates a key, `make adopt-volume` adds just the missing ones.
 
 What still cannot be automated from inside the VM: creating and attaching the
 volume, and opening ports 4063 and 4064 for OMERO.insight. Both are portal work.

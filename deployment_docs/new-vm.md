@@ -88,12 +88,12 @@ make init                   # renders slurm-config.ini, sets the hostname
 and this VM's `.env`. Nothing on the volume is involved: admin-UI edits to that
 file are not preserved, so a change worth keeping goes in the template.
 
-Some values go the other way, because they are fixed by the data. On a volume that already holds data, delete `POSTGRES_PASSWORD`,
-`BIOMERO_POSTGRES_PASSWORD` and `METABASE_SECRET_KEY` from the generated `.env`:
-`make deploy` fills them from `config/volume-identity` and stops if `.env`
-carries different ones. Set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD`
-and `FORMS_MASTER_PASSWORD` to the volume's existing values too; those accounts
-live in the OMERO database, and `volume-identity` does not record them. See
+Some values go the other way, because they are fixed by the data. On a volume that already holds data, `make init-env` leaves those values unset
+and `make deploy` fills them from `config/volume-identity`: the database
+credentials, `METABASE_SECRET_KEY`, the OMERO root password (and the importer's,
+which follows it), the forms master's name and Metabase's admin login. Each is
+read once, when what it protects is first created, so a generated value would
+lock the stack out. Deploy stops if `.env` carries a different one. See
 [storage-architecture.md](storage-architecture.md).
 
 Once the key is registered and the stack deployed, `make check` confirms Spider
