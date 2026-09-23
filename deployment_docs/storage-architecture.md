@@ -9,8 +9,7 @@ is on the volume, and how to populate a volume that does not have it yet.
 
 The reason for the split is that a SURF Research Cloud workspace expires.
 Storage does not: `end_time` is always null for a Storage resource. So a
-workspace can be rebuilt, or replaced by one launched from a catalog item,
-without a restore-from-backup cycle.
+workspace can be rebuilt or replaced without a restore-from-backup cycle.
 
 ## The Split
 
@@ -41,9 +40,9 @@ Three things sit deliberately on the VM despite looking like state:
 - **`logs/`** is written by the containers and shipped to OpenSearch. It grows
   without bound. Losing it loses history, not data.
 
-- **OpenSearch indices** are larger than everything on the volume combined, and
-  derived by reindexing `logs/`. Putting them on the volume would mean most of
-  the storage budget was spent preserving logs.
+- **OpenSearch indices** are derived by reindexing `logs/`, and grow faster
+  than anything else. On the volume they would spend its capacity preserving
+  logs.
 
 ## What Is on the Volume
 
@@ -182,28 +181,35 @@ what you have.
 
 ### From an existing deployment
 
-The direct route. The stack must be down — copying a running Postgres data
-directory gives you a corrupt one.
+Copy each source directory into its place in the layout. The source stack must
+be down -- copying a running Postgres data directory gives you a corrupt one --
+and `cp -a` preserves the ownership and modes Postgres and OMERO require:
 
 ```bash
-make down
-
 V=/data/<volume-name>
-sudo mkdir -p $V/{database,database-biomero,omero,L-Drive,config,backups}
-
-# Docker named volumes live under /var/lib/docker/volumes/<name>/_data.
-# -a preserves the ownership and modes that Postgres and OMERO require.
-for v in database database-biomero omero; do
-  sudo cp -a /var/lib/docker/volumes/nl-biomero_$v/_data/. $V/$v/
-done
-sudo cp -a web/L-Drive/. $V/L-Drive/
-
-# volume-identity is written by the next deploy
-make up && make adopt-volume
+sudo cp -a <omero-postgres-data>   $V/database
+sudo cp -a <biomero-postgres-data> $V/database-biomero
+sudo cp -a <omero-repository>      $V/omero
+sudo cp -a <user-data>             $V/L-Drive
 ```
 
-Verify ownership landed correctly before starting — this is the step that most
-often goes wrong:
+Where the sources are depends on the old deployment. Docker named volumes live
+under `/var/lib/docker/volumes/<project>_<name>/_data`; the first surfbiomero
+deployment kept them in `runtime/postgres/{omero,biomero}`, `runtime/omero` and
+`runtime/inplace` on its volume. In-place imports are symlinks to their path
+*inside* the container, so the user data must land where it was mounted before,
+which here is `/data`.
+
+Then write `.env` with the old deployment's database passwords (see
+[Setting Up a Fresh VM](#setting-up-a-fresh-vm)), start only the databases, and
+record them:
+
+```bash
+sudo docker compose up -d database database-biomero
+make adopt-volume
+```
+
+Check the ownership before starting the rest:
 
 ```bash
 sudo stat -c '%n %u:%g %a' $V/database $V/database-biomero $V/omero
@@ -212,20 +218,16 @@ sudo stat -c '%n %u:%g %a' $V/database $V/database-biomero $V/omero
 
 ### From a backup
 
-`backup_and_restore/` writes one timestamped set across both databases, the
-server data and Metabase. Both sides understand folder targets as well as
-Docker volumes, which is what a bind-mounted layout needs — `backup_server.sh`
-takes `--omero-folder <path>` to read straight from the host directory, and
-`restore_server.sh` takes `--targetPath <path>` to extract into one. The
-restore workflow is the same shape as above: stack down, restore into the
-directories, bring it up.
+`scripts/backup-nightly.sh` writes custom-format dumps of the three databases,
+the OMERO repository as `omero-files.tar.gz`, and the secrets. Deploy onto the
+empty volume first so the databases exist, then restore the dumps as in
+[runbook.md](runbook.md#restoring-a-database) and extract `omero-files.tar.gz`
+into `$V` with the stack down. L-Drive is not in the nightly backup; it comes
+from wherever the user data is kept.
 
-Note that `restore_server.sh` refuses to extract into a directory that already
-exists, so restoring over a populated `omero/` means moving it aside first.
-
-Read the scripts before depending on them for a production cutover — their
-README describes them as "examples for inspiration, not prescriptive
-recommendations".
+The upstream scripts in `backup_and_restore/` also understand folder targets,
+but their README calls them "examples for inspiration, not prescriptive
+recommendations"; read them before depending on them.
 
 ### From nothing — a genuinely fresh deployment
 
@@ -280,20 +282,17 @@ sudo test -f /data/<volume-name>/config/volume-identity && echo present
 
 ## Sizing
 
-The volume is nowhere near full, and `L-Drive` dominates what it does hold:
-user data is larger than the OMERO repository and both databases together.
-Measure rather than assume, since this moves with every import:
+`L-Drive` usually dominates: user data outgrows the OMERO repository and both
+databases together. Measure rather than assume, since it moves with every
+import:
 
 ```bash
 sudo du -sh /data/<volume-name>/*
+df -h / /data/<volume-name>
 ```
 
-Size up only if you intend to move the OpenSearch indices onto the volume, or
-expect a large influx of real imaging data.
-
-Note that the volume is not what constrains this deployment today. The boot
-disk is, and Docker images plus build cache are the reason — `docker system
-prune` typically reclaims more than this entire volume holds.
+The boot disk fills first, with Docker images and build cache; `docker system
+prune` is the remedy there, not a larger volume.
 
 ## Constraints Worth Knowing
 

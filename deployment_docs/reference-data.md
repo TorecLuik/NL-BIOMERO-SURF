@@ -80,20 +80,17 @@ Import **as copies, not by reference**, and note that the BIOMERO Importer
 cannot do this: v1.4.2 hardcodes `--transfer=ln_s`, so it always leaves symlinks
 into `/data` in the managed repository. Delete or move the source and the image
 becomes permanently unreadable; the volume backup archives the dangling link
-rather than the pixels. This deployment has lost images that way.
+rather than the pixels.
 
 Use OMERO.insight, or `omero import` without `--transfer`, to get the pixels
 copied into the `/OMERO` volume. See the expert skill, "The Importer Always
 Links, Never Copies".
 
-The `.ome.tiff` files are the ones to import. BIOMERO hands BIAFLOWS workflows
-TIFF, so the Zarr copies are kept as the verifiable upstream original, not as
-workflow input.
-
 ### Import the `.ome.tiff` only, never the `.zarr`
 
-Each dataset directory holds both an `.ome.tiff` and a `.zarr`. Only the TIFF is
-workflow input; the Zarr is kept as the verifiable upstream original.
+Each dataset directory holds both an `.ome.tiff` and a `.zarr`. BIOMERO hands
+BIAFLOWS workflows TIFF, so only the TIFF is workflow input; the Zarr is kept
+as the verifiable upstream original.
 
 Selecting the whole directory in the Importer imports **both**. The Zarr lands
 as an OMERO image with no fileset and no pixels, shows `No preview` in the
@@ -134,8 +131,7 @@ channel count and other metadata are captured in the database at import time.
 
 The image is named after the directory with the suffix dropped, so a Zarr and a
 TIFF of the same dataset are indistinguishable by name in the workflow picker.
-The `biomero.import` annotation's `Filepath` is the reliable tell. Workflows
-here take TIFF, so import the `.ome.tiff` for running them.
+The `biomero.import` annotation's `Filepath` is the reliable tell.
 
 ## Restoring
 
@@ -151,7 +147,6 @@ v0.4  https://dmss3gw.riken.jp/globias/zarr/v0.4/<name>.zarr/0
 v0.5  https://dmss3gw.riken.jp/globias/zarr/v0.5/<name>.zarr/0
 ```
 
-Both were reachable on 2026-09-16 and the v0.4 copies verified byte-for-byte.
 If upstream disappears, the same images are downloadable from the SSBD dataset
 pages above in their original formats.
 

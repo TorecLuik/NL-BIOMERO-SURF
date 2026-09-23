@@ -89,50 +89,17 @@ volume is mounted; elsewhere, `make up` after a reboot.
 
 ## Versions
 
-Pinned in `.env.example`, which `.env` overrides locally:
-
-```text
-BIOMERO_VERSION           2.8.2
-OMERO_BIOMERO_VERSION     1.6.1
-BIOMERO_IMPORTER_VERSION  1.4.2
-OMERO_FORMS_VERSION       2.3.1
-OMERO_ZARR_PIXEL_BUFFER_VERSION 0.6.1
-```
-
-Base images: `openmicroscopy/omero-server:5.6.18` for the server and workers,
-`openmicroscopy/omero-web-standalone:5.33.1` for web.
+The component versions are pinned in `.env.example`, which `.env` overrides
+locally; the OMERO base images are pinned in `server/Dockerfile` and
+`web/Dockerfile`. `make doctor` compares what is installed against the pins.
 
 `BIOMERO_VERSION` has no `v` prefix; it is passed straight to pip.
 
 ## Everyday Commands
 
-A `Makefile` wraps the commands that get typed most. `make` on its own lists
+A `Makefile` wraps the commands that get typed most; `make` on its own lists
 them. Everything is a thin wrapper, so the underlying `docker compose` call
 always works too.
-
-```text
-make provision             prepare a fresh VM: packages, submodule, nginx
-make init                  fetch submodules, then run doctor
-make deploy                set up, start and smoke test the stack
-make doctor                diagnose drift, changes nothing
-make set-host HOST=fqdn    set the per-VM public hostname
-make docs-dates            refresh the date stamps in deployment_docs/
-make reference-data        re-download and verify the test datasets
-make up / down / ps        whole stack, log stack included
-make build                 rebuild images and restart
-make rebuild:SVC           rebuild one service
-make restart:SVC           restart one service
-make logs / logs:SVC       tail everything, or follow one service
-make shell:SVC             shell in a container
-make check / smoke         preflight, or full deploy and smoke test
-make gpu                   effective Slurm params per workflow
-make config                BIOMERO settings as the worker resolves them
-make spider / snellius     ssh to a cluster from inside the worker
-make psql / psql-biomero   psql into either database
-```
-
-`make` on its own lists them, and that listing is the one to trust: this table
-goes stale, the help target cannot.
 
 Service-scoped targets use a colon, not a slash: `logs/omeroweb` would collide
 with the real `logs/` directory and make would treat it as already built.
@@ -237,9 +204,12 @@ its normal default partition.
 ### Spider GPU resources
 
 ```text
-gpu_a100_mig  gpu:a100_3g.20gb:4  wn-ga-[01-03]  4 MIG slices, 14 CPUs/node
-gpu_a100_22c  gpu:a100:2          wn-gb-[01-05]  full A100
+gpu_a100_mig  gres gpu:a100_3g.20gb   MIG slices; 14 CPUs per node
+gpu_a100_22c  gres gpu:a100           full A100
 ```
+
+Node counts and slice counts are Spider's to change; check them with
+`sinfo -p gpu_a100_mig,gpu_a100_22c -o '%P %G %c %D'`.
 
 MIG VRAM comes from the GRES profile: `gpu:a100_3g.20gb:1` is one CUDA device
 with about 20 GB. Requesting two slices gives two separate devices, not one
@@ -258,8 +228,8 @@ stardist5d        CPU only    CUDA 10 / cuDNN 7 libraries are missing
 all others        CPU only
 ```
 
-These follow from the pinned container versions, each of which is already the
-latest upstream release. Re-test with a probe job before changing any of them:
+These follow from the pinned container versions. Re-test with a probe job
+before changing any of them, and after bumping a workflow's version:
 
 ```bash
 sbatch --partition=gpu_a100_mig --gres=gpu:a100_3g.20gb:1 --cpus-per-task=3 \
@@ -278,8 +248,9 @@ behaviour itself and delete the patch rather than re-anchoring it.
 parameter and passes it straight to `getObjects("Image", ids=...)`; nothing
 supplies it unless ROIs are requested, so an ordinary segmentation run sends
 OMERO `where obj.id in ()` and every workflow fails at 90% with its results
-already on disk. New in 2.8.2; the parameter does not exist in 2.7.0. See
-[upstream-suggestions.md](upstream-suggestions.md) item 9.
+already on disk. Delete the patch on moving to BIOMERO 2.9, which guards the
+empty list itself. See [upstream-suggestions.md](upstream-suggestions.md)
+item 9.
 
 The second is applied in both the worker and web images, because OMERO.biomero
 submits analyzer jobs from the web process:

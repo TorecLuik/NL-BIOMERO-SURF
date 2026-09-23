@@ -19,9 +19,6 @@ make install-services       # production: start at boot, nightly backup
 
 Budget about an hour, most of it image builds.
 
-Most of this could become a Research Cloud catalog item, so that creating a
-workspace does it instead.
-
 ## What cannot be automated
 
 Three things have to be done by hand. `provision-vm.sh` checks the last two and
@@ -74,9 +71,6 @@ missing (an existing Docker CE is left alone); fetches the
 `biomero-importer` submodule; sets the three per-VM hostname values from
 `hostname -f`; installs the nginx location block and reloads nginx. Then it
 reports on the three manual items and exits non-zero while any is outstanding.
-
-Flags: `--skip-packages` if the host already has them, `--no-nginx` to leave
-host nginx alone.
 
 ## 3. Create this VM's secrets
 
