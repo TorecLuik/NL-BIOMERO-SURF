@@ -158,7 +158,7 @@ is first created:
 
 ```text
 Postgres passwords                 when the database cluster is initialised
-OMERO root password (ROOTPASS)     at omego db init
+OMERO root password (ROOTPASS)     at omero db init
 METABASE_SECRET_KEY, admin login   at Metabase's first setup
 forms master's name                when OMERO.web creates that account
 ```
