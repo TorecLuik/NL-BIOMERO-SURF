@@ -104,11 +104,31 @@ if [[ -n "${MOUNTED_VOL}" ]]; then
   VALUES[OMERO_DATA_PATH]="${MOUNTED_VOL}"
 fi
 
+# A volume that already carries its credentials decides the values its data
+# fixes. Generating them here would only produce a .env that disagrees with the
+# volume, so leave them unset: `make deploy` fills them from the volume. The
+# importer's password follows root's, so it is left unset with it.
+FROM_VOLUME=()
+if [[ -n "${MOUNTED_VOL}" ]] && sudo test -f "${MOUNTED_VOL}/config/volume-identity"; then
+  while IFS= read -r key; do
+    # An explicit placeholder rather than skipping the key: .env.example gives
+    # some of these real defaults, which would then read as a disagreement.
+    if grep -qE "^${key}=" "${EXAMPLE_PATH}"; then
+      VALUES[${key}]="CHANGE ME"
+      FROM_VOLUME+=("${key}")
+    fi
+  done < <(./scripts/volume-identity.sh keys)
+  if [[ " ${FROM_VOLUME[*]} " == *" OMERO_ROOT_PASSWORD "* ]]; then
+    VALUES[OMERO_IMPORTER_PASSWORD]="CHANGE ME"
+    FROM_VOLUME+=(OMERO_IMPORTER_PASSWORD)
+  fi
+fi
+
 # Hand the values over as NUL-delimited KEY=VALUE pairs on stdin, so no value
 # has to survive a second round of shell quoting on its way into python.
 for key in "${!VALUES[@]}"; do
   printf '%s=%s\0' "${key}" "${VALUES[${key}]}"
-done | python3 -c '
+done | FROM_VOLUME="${FROM_VOLUME[*]}" python3 -c '
 import re, sys
 
 example_path, env_path = sys.argv[1], sys.argv[2]
@@ -135,13 +155,20 @@ missing = sorted(k for k in values if k not in seen)
 if missing:
     sys.exit("init-env: not present in .env.example: " + ", ".join(missing))
 
+import os
+from_volume = set(os.environ.get("FROM_VOLUME", "").split())
 leftover = [l.split("=")[0] for l in out
-            if not l.startswith("#") and l.endswith("CHANGE ME")]
+            if not l.startswith("#") and l.endswith("CHANGE ME")
+            and l.split("=")[0] not in from_volume]
 if leftover:
     sys.exit("init-env: still unset after generating: " + ", ".join(leftover))
 ' "${EXAMPLE_PATH}" "${ENV_PATH}"
 
 chmod 600 "${ENV_PATH}"
+if [[ "${#FROM_VOLUME[@]}" -gt 0 ]]; then
+  echo "This volume already carries its credentials; left unset for make deploy"
+  echo "to fill from it: ${FROM_VOLUME[*]}"
+fi
 echo "Wrote ${ENV_PATH} (mode 0600), with ${#VALUES[@]} values filled in."
 echo
 echo "It is the only copy of these secrets, and the database passwords are what"

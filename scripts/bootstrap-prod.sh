@@ -127,6 +127,15 @@ else
   ok "hostname values match ${PUBLIC_HOST:-unknown}"
 fi
 
+# Credentials against the volume that holds the data. This runs before the
+# completeness check below because it is what fills them in: on a reattached
+# volume, the values the data fixes are left unset in .env and taken from the
+# volume here. A .env that disagrees would otherwise fail only at
+# authentication time, since Postgres and OMERO ignore them once initialised.
+if ! "${PROJECT_ROOT_DIR}/scripts/volume-identity.sh" check; then
+  fail "credentials do not match the storage volume"
+fi
+
 # Every key .env.example documents has to be present, non-empty, and actually
 # filled in. Compose substitutes a missing value with the empty string, so
 # without this a half-filled .env reaches the containers and fails there --
@@ -156,13 +165,6 @@ if [[ -f .env.example && -f .env ]]; then
   if [[ "${#MISSING_KEYS[@]}" -eq 0 && "${#PLACEHOLDER_KEYS[@]}" -eq 0 ]]; then
     ok "every key in .env.example is set in .env"
   fi
-fi
-
-# Database credentials against the volume that holds the data. Postgres ignores
-# POSTGRES_PASSWORD after the cluster exists, so a .env that disagrees fails at
-# authentication time rather than at startup.
-if ! "${PROJECT_ROOT_DIR}/scripts/volume-identity.sh" check; then
-  fail "database credentials do not match the storage volume"
 fi
 
 # Version pins the build depends on.

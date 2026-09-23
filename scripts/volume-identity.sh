@@ -18,7 +18,10 @@
 # Usage:
 #   volume-identity.sh check    fill .env from the volume, or report a conflict
 #   volume-identity.sh write    record the current .env (empty volume only)
-#   volume-identity.sh adopt    record a populated volume, verifying first
+#   volume-identity.sh adopt    record a populated volume, verifying first; on
+#                               a volume already recorded, add any key its
+#                               record lacks
+#   volume-identity.sh keys     list the keys the volume fixes
 #   volume-identity.sh rotate KEY   change POSTGRES_PASSWORD or
 #                                   BIOMERO_POSTGRES_PASSWORD in the database,
 #                                   .env and the volume together
@@ -27,12 +30,23 @@ set -euo pipefail
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_ROOT_DIR}"
 
-# Fixed by the volume's data: the databases cannot be opened without them.
-# METABASE_SECRET_KEY belongs here too -- it decrypts secrets Metabase has
-# already written into its application database.
+# Fixed by the volume's data: each is read once, when the thing it protects is
+# first created, and ignored afterwards.
+#
+#   POSTGRES_* / BIOMERO_POSTGRES_*   the databases cannot be opened without them
+#   METABASE_SECRET_KEY               decrypts what Metabase has already stored
+#   OMERO_ROOT_PASSWORD               ROOTPASS only applies at `omego db init`
+#   FORMS_MASTER_USER                 owns the existing forms; its password is
+#                                     not listed, OMERO.web resets it from root
+#   METABASE_USER / _PASSWORD         Metabase's first-setup admin, stored in its
+#                                     application database
+#
+# A key an older record lacks is simply not checked; `adopt` adds it.
 VOLUME_KEYS=(POSTGRES_USER POSTGRES_DB POSTGRES_PASSWORD
              BIOMERO_POSTGRES_USER BIOMERO_POSTGRES_DB BIOMERO_POSTGRES_PASSWORD
-             METABASE_SECRET_KEY)
+             METABASE_SECRET_KEY
+             OMERO_ROOT_PASSWORD FORMS_MASTER_USER
+             METABASE_USER METABASE_PASSWORD)
 
 env_value() { grep -hE "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 
@@ -131,6 +145,50 @@ verify_live_password() {
     "$(env_value POSTGRES_DB)" "$(env_value POSTGRES_PASSWORD)"
 }
 
+# The recorded values that are not Postgres passwords are checked against the
+# running services that hold them, so adopt cannot record a wrong one.
+omero_login_ok() {
+  sudo docker compose exec -T -e U="$1" -e P="$2" omeroserver sh -c \
+    '/opt/omero/server/venv3/bin/omero login -s localhost -u "$U" -w "$P" -q >/dev/null 2>&1 \
+     && /opt/omero/server/venv3/bin/omero logout -q >/dev/null 2>&1'
+}
+
+omero_user_exists() {
+  local n
+  n="$(sudo docker compose exec -T database psql -U "$(env_value POSTGRES_USER)" \
+        -d "$(env_value POSTGRES_DB)" -tAc \
+        "SELECT count(*) FROM experimenter WHERE omename = '$1'" 2>/dev/null | tr -d '[:space:]')"
+  [[ "${n}" == "1" ]]
+}
+
+metabase_login_ok() {
+  python3 - "$1" "$2" <<'PY'
+import json, sys, urllib.request
+req = urllib.request.Request("http://localhost:3000/api/session",
+    data=json.dumps({"username": sys.argv[1], "password": sys.argv[2]}).encode(),
+    headers={"Content-Type": "application/json"})
+try:
+    sys.exit(0 if "id" in json.load(urllib.request.urlopen(req, timeout=20)) else 1)
+except Exception:
+    sys.exit(1)
+PY
+}
+
+verify_key() {
+  local key="$1" value
+  value="$(env_value "${key}")"
+  case "${key}" in
+    POSTGRES_PASSWORD) verify_live_password ;;
+    BIOMERO_POSTGRES_PASSWORD)
+      password_authenticates database-biomero "$(env_value BIOMERO_POSTGRES_USER)" \
+        "$(env_value BIOMERO_POSTGRES_DB)" "${value}" ;;
+    OMERO_ROOT_PASSWORD) omero_login_ok root "${value}" ;;
+    FORMS_MASTER_USER)   omero_user_exists "${value}" ;;
+    METABASE_PASSWORD)   metabase_login_ok "$(env_value METABASE_USER)" "${value}" ;;
+    *) return 0 ;;   # names, and METABASE_SECRET_KEY, which has no probe
+  esac
+}
+
 gen_password() {
   LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom) | cut -c1-32
 }
@@ -160,6 +218,14 @@ case "${1:-check}" in
         drift+=("${key}")
       fi
     done
+    # The importer logs in as OMERO_IMPORTER_USER; as root, that is root's
+    # password, so it follows the volume's root password rather than drifting.
+    if [[ "$(env_value OMERO_IMPORTER_USER)" == "root" ]] \
+       && needs_value "$(env_value OMERO_IMPORTER_PASSWORD)" \
+       && [[ -n "$(stamp_value OMERO_ROOT_PASSWORD)" ]]; then
+      fill_env OMERO_IMPORTER_PASSWORD "$(stamp_value OMERO_ROOT_PASSWORD)"
+      filled+=(OMERO_IMPORTER_PASSWORD)
+    fi
     if [[ "${#drift[@]}" -gt 0 ]]; then
       echo "  [FAIL] .env disagrees with the volume on: ${drift[*]}" >&2
       echo "         The volume's values are fixed by its data. Remove these from" >&2
@@ -186,16 +252,32 @@ case "${1:-check}" in
       exit 1
     fi
     if sudo test -f "$(stamp_path)"; then
-      echo "  [ ok ] already recorded; nothing to do"
-      exit 0
+      # Extend an older record. The keys it has must agree with .env, which
+      # check enforces; the ones it lacks are verified before being added.
+      "${PROJECT_ROOT_DIR}/scripts/volume-identity.sh" check || exit 1
+      to_add=()
+      for key in "${VOLUME_KEYS[@]}"; do
+        [[ -n "$(stamp_value "${key}")" ]] || to_add+=("${key}")
+      done
+      if [[ "${#to_add[@]}" -eq 0 ]]; then
+        echo "  [ ok ] already recorded; nothing to do"
+        exit 0
+      fi
+    else
+      to_add=("${VOLUME_KEYS[@]}")
     fi
-    echo "  verifying POSTGRES_PASSWORD against the running database..."
-    if ! verify_live_password; then
-      echo "  [FAIL] the password in .env is not the one this volume was built with." >&2
-      echo "         Nothing was written. Find the working password and retry." >&2
-      exit 1
-    fi
-    echo "  [ ok ] the password in .env authenticates"
+    for key in "${to_add[@]}"; do
+      if needs_value "$(env_value "${key}")"; then
+        echo "  [FAIL] ${key} is not set in .env; set it to this volume's value." >&2
+        exit 1
+      fi
+      if ! verify_key "${key}"; then
+        echo "  [FAIL] ${key} in .env does not match what this volume's services hold." >&2
+        echo "         Nothing was written. Find the working value and retry." >&2
+        exit 1
+      fi
+      echo "  [ ok ] ${key} verified"
+    done
     write_stamp
     ;;
   rotate)
@@ -229,8 +311,11 @@ case "${1:-check}" in
     echo "  next: make up   (containers read it from .env at start)"
     echo "        scripts/restore-metabase-dashboards.sh   (updates Metabase's copy)"
     ;;
+  keys)
+    printf '%s\n' "${VOLUME_KEYS[@]}"
+    ;;
   *)
-    echo "usage: volume-identity.sh [check|write|adopt|rotate KEY]" >&2
+    echo "usage: volume-identity.sh [check|write|adopt|rotate KEY|keys]" >&2
     exit 2
     ;;
 esac
