@@ -27,16 +27,33 @@ so. Each of those choices is also a trap in production, and a production
 operator has to find and undo them one by one.
 
 The proposal is to keep that default and add an explicit production path next
-to it, built on five principles:
+to it, built on six principles:
 
-1. **The demo stays one command; production is opt-in and explicit.**
-2. **State lives with the data**, and the stack refuses to start without it.
-3. **Secrets are generated, never committed.** Values fixed by the data are
-   recorded with the data.
-4. **What can be rendered or exported is code**: the Slurm configuration and
-   the Metabase dashboards.
-5. **Nothing is reachable that is not proxied**, and every deploy is checked
-   before and after.
+1. **The quick start does not change.** `docker compose up` on a fresh clone
+   keeps working with the bundled defaults. A production install is a
+   separate, deliberate setup step that replaces those defaults, rather than
+   new defaults imposed on everyone.
+2. **Irreplaceable state has one declared home, and the stack checks it is
+   the right one before starting.** The databases, the image repository, the
+   user data and the credentials that open them sit under a single configured
+   location -- a local directory, an attached volume or network storage -- so
+   they can be backed up, moved or restored as one unit. Before starting, the
+   stack confirms that location holds the data it expects, and stops if it
+   finds an empty or unfamiliar one instead of initialising a fresh one.
+3. **No secret is committed; every secret is generated at install time.** The
+   few values that are set once when the data is first created and cannot
+   change afterwards -- the database passwords, the OMERO root password, the
+   Metabase keys -- are stored with the data, so a new host picks them up
+   rather than generating new ones that would lock it out.
+4. **Anything configured by hand is kept in the repository and applied
+   automatically.** The Slurm configuration is rendered from a template and the
+   Metabase dashboards are rebuilt from exported definitions, so a fresh
+   install needs no manual steps in either.
+5. **Only the web server and OMERO.insight are reachable from outside.** Every
+   other service listens on the host alone.
+6. **Every deploy is checked**: before it starts, that the configuration is
+   complete and matches the data; afterwards, that each service actually
+   works.
 
 All of it runs in production today; nine pull requests would bring it upstream.
 
@@ -198,18 +215,28 @@ The branch renders `web/slurm-config-template.ini` on every deploy and treats UI
 edits as transient. The better long-term answer is layered: the committed
 template as base, and the UI writing an override file kept with the data.
 
-### P9. Safe automatic restart
+### P9. Check the data before starting, and restart safely
 
-With state on a bind mount, `restart: always` is unsafe: if Docker starts
-before the volume mounts, Postgres finds an empty directory and initialises a
-new cluster on the boot disk, and the stack looks healthy. That is why the
-branch keeps `RestartPolicy: "no"` and starts the stack from a systemd unit
-gated on the mount (`scripts/install-host-services.sh`).
+Postgres and OMERO initialise whatever empty location they are given, and the
+stack then looks healthy. That happens on any kind of deployment:
 
-A portable alternative for upstream: a one-shot init service that exits
-non-zero unless a sentinel file written with the volume identity exists, with
-every stateful service depending on it. That makes `restart: unless-stopped`
-safe without anything host-specific.
+- **Named volumes:** Compose names them after the checkout directory, so a
+  checkout that is renamed or re-cloned under another name gets new, empty
+  volumes, while the real data sits unused in the old ones.
+- **A mistyped or unset data path:** Docker creates the directory, empty.
+- **Attached storage that has not mounted yet**, typically at boot.
+
+The last is why automatic restart is unsafe today: with `restart: always`,
+Docker can start Postgres before the storage is there. The branch therefore
+keeps `RestartPolicy: "no"` and starts the stack from a systemd unit gated on
+the mount (`scripts/install-host-services.sh`) -- which covers only that one
+case, and only on this host.
+
+A portable answer for upstream covers all three: a one-shot init service that
+exits non-zero unless the data location holds a sentinel written when the data
+was first created (the volume identity of P5 can serve), with every stateful
+service depending on it. That also makes `restart: unless-stopped` safe,
+without anything host-specific.
 
 ## Suggested Sequence
 
@@ -225,7 +252,7 @@ Smallest and most independent first:
 | 6 | P5 volume identity | 5 |
 | 7 | P6 preflight, smoke tests, `doctor` | 5 |
 | 8 | P7 backup | 5 |
-| 9 | P9 sentinel and restart policy | 6 |
+| 9 | P9 data check before start, and restart policy | 6 |
 
 P8 is a design question for OMERO.biomero rather than a pull request here.
 
