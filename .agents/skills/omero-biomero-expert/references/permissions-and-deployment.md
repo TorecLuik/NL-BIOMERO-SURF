@@ -482,6 +482,19 @@ curl -s 'http://localhost:9200/_plugins/_ism/explain/biomero-logs' \
   | grep -oE '"total_managed_indices":[0-9]+'    # 0 means nothing is ageing off
 ```
 
+**Rollover needs `biomero-logs` to be a write alias, not an index.** ISM rolls an
+alias onto a fresh backing index; against a plain index of a fixed name the hot
+state has nothing to act on, so only the 90-day delete applies. `init-opensearch.sh`
+now creates `biomero-logs-000001` with `biomero-logs` as its write alias, but a
+name cannot be both -- a deployment that predates this keeps its concrete index
+and gets no rollover. Converting it means reindexing, so it is a maintenance
+window, not a start-up task; `apply-opensearch-retention.sh` warns when it finds
+that state.
+
+```bash
+curl -s 'http://localhost:9200/_cat/aliases/biomero-logs?h=alias,index,is_write_index'
+```
+
 Every service in `docker-compose.yml`, `docker-compose-dev.yml` and `opensearch-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
 
 ```yaml

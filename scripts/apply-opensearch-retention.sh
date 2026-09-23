@@ -102,4 +102,16 @@ elif (( managed > 0 )); then
   printf '  [ ok ] %d index(es) already managed by %s\n' "${managed}" "${POLICY_ID}"
 fi
 
+# Rollover rolls an alias onto a fresh backing index. A deployment predating the
+# alias has biomero-logs as a concrete index, so the hot state's rollover action
+# has nothing to act on and only the 90-day delete applies. Say so rather than
+# reporting a policy that is only half in effect.
+if curl -fsS --max-time 20 "${OS_URL}/biomero-logs" >/dev/null 2>&1 \
+   && ! curl -fsS --max-time 20 "${OS_URL}/_cat/aliases/biomero-logs?h=alias" 2>/dev/null \
+        | grep -q biomero-logs; then
+  echo "  [warn] biomero-logs is a concrete index, not a write alias:"
+  echo "  [warn]   age-off at 90 days applies, rollover does not fire."
+  echo "  [warn]   reindex behind the alias to enable it."
+fi
+
 rm -f /tmp/ism-out
