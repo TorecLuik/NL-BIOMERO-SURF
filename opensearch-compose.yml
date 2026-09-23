@@ -23,10 +23,13 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+    # Loopback only. OpenSearch runs without authentication, so these must never
+    # be reachable from outside the host; the stack reaches it over the compose
+    # network, and nothing on the host uses 9300 or 9600 at all.
     ports:
-      - "9200:9200"
-      - "9300:9300"
-      - "9600:9600"  # Performance Analyzer
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9300:9300"
+      - "127.0.0.1:9600:9600"  # Performance Analyzer
     volumes:
       - opensearch-data:/usr/share/opensearch/data
     healthcheck:
@@ -92,8 +95,10 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+    # Loopback only: nginx serves it under /logs behind basic auth, which a
+    # directly reachable 5601 would bypass.
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
     environment:
       - OPENSEARCH_HOSTS=["http://opensearch:9200"]
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true

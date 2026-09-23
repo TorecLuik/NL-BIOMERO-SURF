@@ -152,18 +152,8 @@ connect OMERO.insight on 4063/4064
 
 ## Ports
 
-```text
-443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
-4063   public      OMERO.insight
-4064   public      OMERO.insight SSL
-4080   localhost   OMERO.web, reached through nginx
-3000   localhost   Metabase, reached through nginx
-5601   localhost   OpenSearch Dashboards, reached through nginx
-9200   localhost   OpenSearch API
-```
-
-Only 443, 4063 and 4064 should be reachable from outside. The rest are published
-on the host for nginx and local debugging.
+Only 443, 4063 and 4064 are public; every other port is bound to loopback. The
+full list is in [deployment.md](deployment.md#ports).
 
 ## Spider
 

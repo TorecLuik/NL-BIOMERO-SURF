@@ -226,9 +226,11 @@ services:
     # Named network to communicate with other containers
     networks:
       - omero
-    # Map ports to ports on the host machine, to allow opening of webpage
+    # Loopback only: nginx on the host is the public entry point, and binding
+    # every interface would leave the Research Cloud security group as the only
+    # thing between the internet and an unproxied OMERO.web.
     ports:
-      - "4080:4080"
+      - "127.0.0.1:4080:4080"
     volumes:
       # See the biomeroworker mount: rendered per deploy, not volume state.
       - "./web/slurm-config.ini:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
@@ -263,7 +265,7 @@ services:
     networks:
       - omero
     ports:
-      - "3000:3000" # Expose Metabase on port 3000
+      - "127.0.0.1:3000:3000" # loopback only; reached through nginx /metabase
     depends_on:
       - database-biomero
     extends:

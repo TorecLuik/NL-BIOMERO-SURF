@@ -158,14 +158,19 @@ and ports 4063/4064 opened in SURF Research Cloud, then `make deploy`.
 443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
 4063   public      OMERO.insight
 4064   public      OMERO.insight SSL
-4080   localhost   OMERO.web, reached through nginx
-3000   localhost   Metabase, reached through nginx
-5601   localhost   OpenSearch Dashboards, reached through nginx
-9200   localhost   OpenSearch API
+4080   loopback    OMERO.web, reached through nginx
+3000   loopback    Metabase, reached through nginx
+5601   loopback    OpenSearch Dashboards, reached through nginx
+9200   loopback    OpenSearch API, unauthenticated
+9300   loopback    OpenSearch transport, unused on a single node
+9600   loopback    OpenSearch Performance Analyzer
 ```
 
-There is no host firewall on this VM; 4063 and 4064 are opened in the SURF
-Research Cloud interface. Everything else reaches users through nginx on 443.
+The compose files bind every backend port to `127.0.0.1`, so they are not
+reachable from outside the host whatever the network rules say. There is no host
+firewall; 4063 and 4064 are opened in the SURF Research Cloud interface, and
+everything else reaches users through nginx on 443. Reach a backend port from
+your own machine with an SSH tunnel, e.g. `ssh -L 5601:localhost:5601 <host>`.
 
 The importer image builds from the `biomero-importer/` submodule, not from
 `BIOMERO_IMPORTER_VERSION`, so a fresh clone must run `make init` first or the
