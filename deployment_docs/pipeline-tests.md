@@ -13,7 +13,7 @@ diagnosing a failure, never to run a test.
 
 ## Before starting
 
-Open `https://biomerodev.sda-development.src.surf-hosted.nl/` and log in. The
+Open `https://<host>/` and log in. The
 top bar carries a **BIOMERO** tab alongside Data, Figure and Forms; it lands on
 `/omero_biomero/biomero/`, which is a single page holding the Importer, Analyzer
 and Admin panels.
@@ -24,12 +24,11 @@ If it is red, no workflow test can pass and the problem is not in these steps.
 Give it a minute before believing it. The check queries Spider over SSH for
 every workflow's available versions, and until it returns, each workflow card
 reads **Offline** -- the same word it would show if the cluster really were
-unreachable. Settled, the panel says "SLURM cluster is available. 11 workflows
-ready." The underlying call is `/omero_biomero/api/analyzer/slurm/status/`,
+unreachable. Settled, the panel says "SLURM cluster is available", with the
+number of workflows ready. The underlying call is `/omero_biomero/api/analyzer/slurm/status/`,
 which is worth hitting directly when in doubt.
 
-Import both reference images, **as copies, not by reference** — see the warning
-in [reference-data.md](reference-data.md):
+Import both reference images through the Importer:
 
 ```text
 BIOMERO -> Importer -> browse to /data/reference-data
@@ -41,10 +40,11 @@ select both .ome.tiff files -> Import
 list* stays disabled however many files are ticked -- the file selection is not
 what enables it. Create the dataset in **Data** beforehand if none exists.
 
-The importer imports by reference: the files under `ManagedRepository` are
-symlinks back to `/data/reference-data`. That is fine while the reference data
-stays put, and is why P1 below is worth running -- deleting the source would
-leave every image unreadable.
+The Importer always imports by reference: the files under `ManagedRepository`
+are symlinks back to `/data/reference-data` (see
+[reference-data.md](reference-data.md)). That is fine for tests while the
+reference data stays put, and is why P1 below is worth running -- deleting the
+source would leave every image unreadable.
 
 Below, `$FIG7` is `fig7_RSAdetection_16w` (2 channels, DNA on **C0**) and `$RGB`
 is `6E3rd4hrSTFBGlc-1_Render_SeriesRGB` (3 channels, DNA on **C2**).
@@ -77,17 +77,18 @@ suffixes come from. It accepts `{original_file}`, `{original_ext}`, `{file}` and
 In the UI: **BIOMERO → Analyzer** lists runs with status and progress, and the
 new images or tables appear in the target dataset under **Data**.
 
-Only if something fails, from a terminal:
+Only if something fails, from a terminal in the checkout (compose addresses
+services by name, whatever the checkout directory is called):
 
 ```bash
 # recent tasks, with the error text
-docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
+sudo docker compose exec database-biomero psql -U biomero -d biomero -x \
   -c "SELECT task_name, status, error_type, start_time, end_time
       FROM biomero_task_execution ORDER BY start_time DESC LIMIT 10;"
 
 # one run by its UUID. biomero_task_execution has no workflow_id column,
 # so look the run up in the progress view.
-docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
+sudo docker compose exec database-biomero psql -U biomero -d biomero -x \
   -c "SELECT * FROM biomero_workflow_progress_view WHERE workflow_id='<uuid>';"
 ```
 
@@ -108,15 +109,15 @@ under A2.
 
 ## P1 — Imports are usable
 
-Guards against the failure that cost two images here. In **Data**, open each
-imported image. If it renders, its pixels are in the OMERO volume.
+A by-reference image is only as durable as its source file. In **Data**, open
+each imported image. If it renders, its pixels are in the OMERO volume.
 
 A by-reference import whose source has been deleted throws
 `ResourceError: Error instantiating pixel buffer` instead of displaying, and
 every workflow on it will fail later. To audit the whole repository at once:
 
 ```bash
-docker exec nl-biomero-omeroserver-1 bash -lc \
+sudo docker compose exec omeroserver bash -lc \
   'find /OMERO/ManagedRepository -type l ! -exec test -e {} \; -print'
 ```
 
@@ -129,7 +130,7 @@ check the server log for `'.zarray' expected but is not readable`.
 
 ```bash
 # plate wells legitimately have no fileset, so exclude well samples
-docker exec nl-biomero-database-1 psql -U omero -d omero \
+sudo docker compose exec database psql -U omero -d omero \
   -c "SELECT i.id, i.name FROM image i JOIN pixels p ON p.image=i.id
       WHERE i.fileset IS NULL AND p.path IS NULL
         AND NOT EXISTS (SELECT 1 FROM wellsample ws WHERE ws.image=i.id);"
@@ -186,13 +187,13 @@ ValidationException: "Input data": biomero_<uuid> not in [...]
   -> the zarr export failed and the error was swallowed, so no folder was ever
      created on Spider and conversion had nothing to pick from. The message
      names the missing folder, not the real fault. Real cause:
-     docker exec nl-biomero-biomeroworker-1 \
+     sudo docker compose exec biomeroworker \
        grep -i "Critical error\|ResourceError" \
        /opt/omero/server/OMERO.server/var/log/biomero.log | tail
      Usually a broken by-reference import -- run P1.
 
 Slurm job FAILED
-  -> docker exec nl-biomero-biomeroworker-1 \
+  -> sudo docker compose exec biomeroworker \
        ssh spider "sacct -j <id> --format=JobID,State,ExitCode,Partition,ReqTRES%45 -P"
      then read ~/omero-<id>.log on Spider for the traceback.
 
@@ -336,7 +337,7 @@ also written to `/data/root/.analyzed/<workflow-uuid>/<timestamp>/`.
 **Fail:** read the Slurm log before assuming the measurement is at fault:
 
 ```bash
-docker exec nl-biomero-biomeroworker-1 \
+sudo docker compose exec biomeroworker \
   ssh spider "tail -40 ~/omero-<jobid>.log"
 ```
 
@@ -368,23 +369,17 @@ meaningful. This is a property of the workflow, not a bug in the deployment.
 
 ### I2 — Importer watch path
 
-Independent of the workflow chain, and separately unverified. In **BIOMERO →
-Importer**, drop a copy of a reference `.ome.tiff` into a watched folder, or
-place it there on disk, and watch it appear in OMERO unattended.
-
-**Pass:** the image is imported without anyone pressing Import.
-
-Run on biomeroqa: the importer is polled from its database rather than watching
-a directory, so what it picks up is the queue, not a folder. Queueing both
-reference images from the Importer panel and walking away is the same test, and
-`imports` records the whole lifecycle unattended:
+Independent of the workflow chain. The importer polls its database queue rather
+than watching a directory, so a file merely copied into `/data` is *not* picked
+up. Queue both reference images from **BIOMERO → Importer** and walk away;
+`imports` records the lifecycle:
 
 ```text
 Import Pending -> Import Started -> Import Completed
 ```
 
-A file merely copied into `/data` is *not* picked up, which is worth knowing
-before waiting for one to appear.
+**Pass:** both images reach `Import Completed` and appear in OMERO with nobody
+touching anything after queueing.
 
 ### I3 — ZARR format passthrough
 
@@ -409,12 +404,8 @@ Use_ZARR_Format   ON
 Ome-zarr version  0.4
 ```
 
-**Pass:** either the run completes, which would mean the wrapper reads Zarr
-after all, or it fails in the workflow step with a read error. Both outcomes are
-worth recording; the point is to learn which.
-
-Run on biomeroqa: it fails in the workflow step, so the second outcome. The
-conversion is a correct no-op and cellpose is then handed the directory:
+**Pass:** the conversion is a no-op and the run fails in the *workflow* step,
+because the registered workflows cannot read Zarr:
 
 ```text
 IsADirectoryError: [Errno 21] Is a directory:
@@ -422,8 +413,7 @@ IsADirectoryError: [Errno 21] Is a directory:
 ERROR: Workflow completed without producing files in .../data/out
 ```
 
-So the toggle does what it says and the registered workflows genuinely cannot
-read Zarr. Leave it OFF for every workflow in `slurm-config.ini` today.
+So the toggle does what it says. Leave it OFF for every registered workflow.
 
 Worth knowing when driving this form by script rather than by hand:
 `Use_ZARR_Format` is an HTML checkbox, so posting `Use_ZARR_Format=false` turns
@@ -496,11 +486,8 @@ aggregates_measurements   same missing aggregate mask, plus a third _Aggregates_
 Closing these needs more reference data, not more procedure — see the Gaps
 section of [reference-data.md](reference-data.md).
 
-Note also that the BIOMERO developers suggested `Cellpose4 v0.10.1` and
-`stardist5d v1.2.2`; this deployment registers `cellpose v1.4.0` and
-`stardist5d v1.2.1`, and Cellpose4 is not installed at all. Workflows absent
-from `biomeroworker/slurm-config.ini` fail at submission, before any Slurm job
-exists.
+`Cellpose4` is not registered, only classic `cellpose`. Workflows absent from
+`web/slurm-config-template.ini` fail at submission, before any Slurm job exists.
 
 ## Status
 
@@ -517,12 +504,8 @@ B3  pass      56 nuclei measured; Nuclei/Cells/Cytoplasm/Experiment/metadata
               tables attached, 56 rows each
 I1  pass      stardist on $RGB, mask in "I1 stardist"
 I2  pass      both reference images imported unattended from the queue
-I3  pass      fails in the workflow, not in conversion -- see below
+I3  pass      fails in the workflow, not in conversion, as expected
 ```
-
-The 56 figure matches what the development VM recorded, on a stack built from
-an empty volume with independently generated credentials -- so the chain
-reproduces, not just the deployment.
 
 Upstream behaviour these tests surfaced is collected in
 [upstream-suggestions.md](upstream-suggestions.md).
@@ -537,7 +520,7 @@ error text. For a failure inside the workflow itself, the Slurm log on Spider
 has the traceback:
 
 ```bash
-docker exec nl-biomero-biomeroworker-1 ssh spider "tail -40 ~/omero-<jobid>.log"
+sudo docker compose exec biomeroworker ssh spider "tail -40 ~/omero-<jobid>.log"
 ```
 
 These tests need a browser and live Spider, so nothing runs them
