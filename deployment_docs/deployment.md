@@ -250,7 +250,7 @@ supplies it unless ROIs are requested, so an ordinary segmentation run sends
 OMERO `where obj.id in ()` and every workflow fails at 90% with its results
 already on disk. Delete the patch on moving to BIOMERO 2.9, which guards the
 empty list itself. See [upstream-suggestions.md](upstream-suggestions.md)
-item 9.
+item 7.
 
 The second is applied in both the worker and web images, because OMERO.biomero
 submits analyzer jobs from the web process:

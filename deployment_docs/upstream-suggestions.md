@@ -3,10 +3,10 @@
 *Created 2026-09-17 · last updated 2026-09-17*
 
 Findings from this deployment that belong upstream rather than in local
-configuration. Each one is reproducible here and cost real debugging time.
+configuration. Each one is reproducible here.
 
-Versions in use: `biomero 2.8.2`, `omero-biomero 1.6.1`,
-`BIOMERO.importer 1.4.2`, `SLURM_Import_Results.py 2.7.0`.
+Versions in use: `biomero 2.8.2` and its scripts, `omero-biomero 1.6.1`,
+`BIOMERO.importer 1.4.2`.
 
 ## 1. A table-only workflow fails unless an image option is cleared
 
@@ -113,49 +113,7 @@ In OMERO.web this shows as a missing thumbnail; in iviewer as a `getTileSize`
 **Suggested:** validate the levels the `multiscales` metadata declares at
 registration, and fail there with a message naming the missing level.
 
-## 6. The Analyzer offers workflows the deployment has not configured
-
-**Repo:** OMERO.biomero
-
-`slurm-config.ini` registers 7 workflows here. The Analyzer lists 12, the extra
-five coming from the descriptor catalog rather than from what this deployment
-can run:
-
-```text
-registered   cellpose, stardist, stardist5d, cellexpansion, spotcounting,
-             nuclei_measurements, aggregates_measurements
-also listed  CellExpansionAdvanced, Fractal-Cellpose-SAM-Segmentation,
-             SimpleZarrPlateProcessor, W_CIDeconvolve, BilayersTest
-```
-
-Nothing marks the difference, so picking one of the five fails at submission,
-before any Slurm job exists.
-
-**Suggested:** list only what `slurm-config.ini` registers, or mark the rest as
-unavailable.
-
-## 7. Duplicate `biomero-importer` entries in `.gitmodules`
-
-**Repo:** NL-BIOMERO
-
-Fetching the upstream repository warns on an ancestor commit:
-
-```text
-warning: <commit>:.gitmodules, multiple configurations found for
-'submodule.biomero-importer.path'. Skipping second one!
-warning: <commit>:.gitmodules, multiple configurations found for
-'submodule.biomero-importer.url'. Skipping second one!
-```
-
-`.gitmodules` declares `submodule.biomero-importer` twice. Git resolves this
-silently by taking the first and discarding the second, so the submodule can
-resolve to a different path or URL than the file appears to specify. Harmless
-until the two entries disagree, at which point the checkout is wrong with no
-error.
-
-**Suggested:** collapse the duplicate to a single entry.
-
-## 8. The worker's SSH handling cannot work as shipped
+## 6. The worker's SSH handling cannot work as shipped
 
 **Repo:** NL-BIOMERO (`biomeroworker/10-mount-ssh.sh`, `docker-compose.yml`)
 
@@ -217,7 +175,7 @@ cp -R src/. dst/` so restarts are idempotent; and let the worker run as a uid
 that can read a `0600` mount, which removes the permission conflict instead of
 trading it for a second copy of the secret.
 
-## 9. An empty ID list reaches OMERO as `in ()` and fails the import
+## 7. An empty ID list reaches OMERO as `in ()` and fails the import
 
 **Repo:** BIOMERO (`SLURM_Import_Results.py`)
 
@@ -273,9 +231,10 @@ sits about ten lines below it and never executes.
 `SLURM_Get_Results.py` reads the parameter the same unguarded way, so the same
 failure is reachable through it.
 
-**This is live in the current stable release.** `biomero 2.8.2` is the newest
-version on PyPI, as are `omero-biomero 1.6.1` and `biomero-importer 1.4.2`, so
-a deployment installing the latest of everything today gets this. The fix
+**This is live in the current stable release.** As of 2026-09-23, `biomero
+2.8.2` is the newest stable version on PyPI (2.9 is in beta), as are
+`omero-biomero 1.6.1` and `biomero-importer 1.4.2`, so a deployment installing
+the latest stable of everything gets this. The fix
 exists only on the unreleased 2.9 line, where the call has been replaced by a
 helper that returns early:
 
@@ -290,12 +249,9 @@ So the defect is bounded on both sides: `ROI_Target_Image_IDs` does not exist
 in v2.7.0, and 2.9 guards it. 2.8.x is the only line that both declares the
 parameter and reads it unchecked -- and it is the line users get by default.
 
-This is not a mispairing on our side. `omero-biomero 1.6.1` requires
-`biomero<3,>=2.8.2`, so 2.8.2 is what its own constraint selects; the `biomero`
-package pins no scripts version, so the scripts tag follows the library
-version. Upstream NL-BIOMERO's own releases skip 2.8.x -- `v2.7.0` through
-v1.8.0-beta.1, then `2.9.0b6` -- which is likely why the gap went unnoticed,
-but it does not make 2.8.2 a wrong choice for anyone installing from PyPI.
+`omero-biomero 1.6.1` requires `biomero<3,>=2.8.2`, so 2.8.2 is what its own
+constraint selects, and the scripts tag follows the library version. Upstream
+NL-BIOMERO's releases go from `v2.7.0` straight to `2.9.0b6`, skipping 2.8.x.
 
 The runs on this deployment split exactly on the version rather than on options
 or data:
@@ -320,7 +276,7 @@ release fails every workflow run without ROIs, and the error names neither the
 parameter nor the script line. Yanking 2.8.2 would work too, but leaves 2.7.0
 as the newest stable, which predates the parameter entirely.
 
-## 10. The importer image always installs itself as version 0.0.0
+## 8. The importer image always installs itself as version 0.0.0
 
 **Repo:** BIOMERO.importer (`Dockerfile`)
 
@@ -368,7 +324,7 @@ submodule, and a context with no git at all. Without it, no consumer can build
 an image that knows its own version, and any check comparing the installed
 version against a pin has to be disabled or special-cased.
 
-## 11. A half-initialised importer database can never migrate itself
+## 9. A half-initialised importer database can never migrate itself
 
 **Repo:** BIOMERO.importer (`biomero_importer/db_migrate.py`)
 
@@ -414,19 +370,17 @@ BIOMERO.importer    https://github.com/NL-BioImaging/BIOMERO.importer
 OMERO.biomero       https://github.com/NL-BioImaging/OMERO.biomero
 ```
 
-Items 1 and 3 are the ones that cost the most time here, and both have a
-one-line workaround worth including in any report: clear the dataset chip, and
-use OMERO.insight for anything that must outlive its source file.
+In order:
 
-Item 9 is the one to report first, and the only one that is live in a current
-stable release rather than a local choice: biomero 2.8.2 is the newest on PyPI,
-every workflow run without ROIs fails under it, and the fix is already written
-on the unreleased 2.9 line. A workflow that ran correctly on Slurm still
-reports FAILED with its results left on disk, so it reads as a compute failure
-and is not. The ask is a 2.8.3, not a diagnosis.
-
-Item 8 is the one to raise first for anyone deploying outside a developer
-laptop: it cannot be worked around without either exposing the cluster key to
-every account on the host or keeping two copies of it, and its failure modes are
-a container that exits with one line of output and a key rotation that silently
-does not take.
+1. **Item 7**, the empty ID list. It is the only one live in a current stable
+   release: every workflow run without ROIs fails under biomero 2.8.2, and the
+   fix is already written on the 2.9 line. It reads as a compute failure and is
+   not. The ask is a 2.8.3, not a diagnosis.
+2. **Item 6**, the worker's SSH handling, for anyone deploying beyond a laptop.
+   It cannot be worked around without exposing the cluster key to every account
+   on the host or keeping two copies of it, and a rotated key silently does not
+   take.
+3. **Items 1 and 3.** Both have a one-line workaround worth including in the
+   report: clear the dataset chip, and use OMERO.insight for anything that must
+   outlive its source file.
+4. The rest, in any order.
