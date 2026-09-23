@@ -8,7 +8,7 @@ SURF rebuilt its NL-BIOMERO deployment for production on a SURF Research Cloud
 VM with an attached storage volume. The work is on branch `prod-rebuild` of
 `github.com/slawa-loev/NL-BIOMERO`, branched from `master` at `a9f45807`. This
 document proposes bringing its generic parts upstream, as a series of small
-pull requests that leave the existing quick start exactly as it is.
+pull requests that leave the existing quick start as it is.
 
 It is about how the deployment repository is put together. Defects in the
 individual components (BIOMERO, BIOMERO.importer, OMERO.biomero) are listed
@@ -20,19 +20,19 @@ Everything below was checked against upstream `master` at `5f1f08c`
 
 ## Summary
 
-NL-BIOMERO is built to be cloned and run: a committed `.env` with working
-defaults, named volumes, a Metabase database file and test images in the
-repository. That is the right default for a demonstration, and the README says
-so. Each of those choices is also a trap in production, and a production
-operator has to find and undo them one by one.
+NL-BIOMERO's defaults are geared to trying it out: a committed `.env` with
+preset values, named volumes, a Metabase database file and test images in the
+repository. The README describes that setup as intended for demonstration and
+development. Each of those choices is also a trap in production, and a
+production operator has to find and undo them one by one.
 
-The proposal is to keep that default and add an explicit production path next
-to it, built on six principles:
+The proposal is to leave those defaults alone and add an explicit production
+path next to them, built on six principles:
 
-1. **The quick start does not change.** `docker compose up` on a fresh clone
-   keeps working with the bundled defaults. A production install is a
-   separate, deliberate setup step that replaces those defaults, rather than
-   new defaults imposed on everyone.
+1. **The current defaults stay as they are.** Production is added as a
+   separate, opt-in layer -- an override file and a setup step that replace the
+   defaults on the hosts that use it -- rather than by changing the defaults
+   that existing installs and evaluations rely on.
 2. **Irreplaceable state has one declared home, and the stack checks it is
    the right one before starting.** The databases, the image repository, the
    user data and the credentials that open them sit under a single configured
@@ -55,7 +55,7 @@ to it, built on six principles:
    complete and matches the data; afterwards, that each service actually
    works.
 
-All of it runs in production today; nine pull requests would bring it upstream.
+All of it runs in production today.
 
 ## What Production Runs Into Today
 
@@ -63,7 +63,7 @@ On current `master`:
 
 | | What `master` does | What it costs in production |
 | --- | --- | --- |
-| Secrets | `.env` and `.env.shared` are tracked, with working defaults marked "placeholder, change me" | Nothing forces the change. A stack on the defaults starts and runs normally |
+| Secrets | `.env` and `.env.shared` are tracked, with preset values marked "placeholder, change me" | Nothing forces the change, and nothing detects that it was skipped |
 | Ports | OMERO.web, Metabase, OpenSearch and OpenSearch Dashboards publish on all interfaces; OpenSearch runs with security disabled | On a host without a firewall they are reachable directly, bypassing the web server and the `/logs` authentication. A Research Cloud VM has no host firewall; only the portal's network rules stand in between |
 | Storage | Databases in named volumes; OMERO repository and user data configurable (`OMERO_DATA_PATH`, `INPLACE_STORAGE_HOST_PATH`), defaulting to a named volume and `./web/L-Drive` in the checkout | By default state is spread over Docker's storage and the working tree; an unset or unmounted path is not caught |
 | Metabase | H2 file, tracked in git, dashboard ids hardcoded in `.env` | A single file on a bind mount; dashboards exist only where someone clicked them together |
@@ -83,13 +83,10 @@ Concrete cases from this rebuild:
   are the same account when `OMERO_IMPORTER_USER=root` -- the importer retried
   for five minutes and exited. Every smoke test was green; imports were
   silently discarded.
-- Two images were lost for good. The importer links rather than copies
-  ([upstream-suggestions.md](upstream-suggestions.md), item 3), their source
-  directory went away, and the backup had kept the symlinks, not the pixels.
 
 ## Proposals
 
-Each keeps the demo default intact. File references are to the
+File references are to the
 `prod-rebuild` branch.
 
 ### P1. Bind backend ports to loopback
@@ -152,23 +149,39 @@ Three changes that together make production explicit:
   importer's password is derived from root's when it logs in as root.
 
 This could be a `docker-compose.prod.yml` override plus an `init-env` step, so
-`docker compose up` on a fresh clone keeps working exactly as today.
+the current defaults stay untouched for anyone not using the override.
 
-### P5. Record what the data fixes, with the data
+### P5. Keep the values the data depends on with the data
 
-Some values are read once, when what they protect is first created, and ignored
-afterwards: the Postgres passwords, the OMERO root password (`ROOTPASS` applies
-only at `omego db init`), `METABASE_SECRET_KEY`, the forms master's name and
-Metabase's first-setup admin login. Regenerate any of them on a new host and the
-stack starts, then cannot authenticate, with an error that does not name the
-cause.
+**The problem.** A few settings take effect only once, when what they protect
+is first created:
 
-`scripts/volume-identity.sh` stores them in `<data root>/config/volume-identity`
-on first deploy. On a new host, `init-env` leaves those values unset and
-`make deploy` fills them from the volume, and refuses to start if `.env`
-disagrees. It also adopts an older volume by checking each value against the
-service that holds it, and rotates a database password in the cluster, `.env`
-and the record together.
+```text
+Postgres passwords                 when the database cluster is initialised
+OMERO root password (ROOTPASS)     at omego db init
+METABASE_SECRET_KEY, admin login   at Metabase's first setup
+forms master's name                when OMERO.web creates that account
+```
+
+After that, the data keeps the original values, and changing them in `.env`
+has no effect on it. So when a host is replaced and `.env` is written afresh,
+the new values no longer match what the data expects: the stack starts, then
+services fail to log in, with errors that do not name the cause.
+
+**What the branch does**, with `scripts/volume-identity.sh`, at each point in
+the data's life:
+
+- **When the data is first created** -- the first deploy onto an empty data
+  location -- the values used are written to
+  `<data root>/config/volume-identity`, next to the data.
+- **When a new host takes over existing data** -- `init-env` leaves those values
+  out of the new `.env`, and `make deploy` copies them from the record. If `.env`
+  holds a different value, the deploy stops before anything starts.
+- **When the data predates the record** -- `make adopt-volume` writes one, after
+  checking each value against the service that holds it: a database login, an
+  OMERO login, a Metabase login.
+- **When a password has to change** -- `volume-identity.sh rotate` changes it in
+  the database, in `.env` and in the record together.
 
 Two lessons from building it: a `psql` from inside the Postgres container
 proves nothing about a password, because the image's local rules are `trust`;
