@@ -44,7 +44,7 @@ sudo install -d -m 700 -o root -g root "${DEST_ROOT}" "${DEST}"
 dump() {
   local svc="$1" user="$2" db="$3" out="$4"
   "${COMPOSE[@]}" exec -T "${svc}" pg_dump -U "${user}" -Fc "${db}" | sudo tee "${DEST}/${out}" >/dev/null
-  [[ -s "${DEST}/${out}" ]] || { echo "empty dump: ${out}" >&2; exit 1; }
+  sudo test -s "${DEST}/${out}" || { echo "empty dump: ${out}" >&2; exit 1; }
 }
 
 dump database         "$(env_value POSTGRES_USER)"         "$(env_value POSTGRES_DB)"         omero.pg_dump
