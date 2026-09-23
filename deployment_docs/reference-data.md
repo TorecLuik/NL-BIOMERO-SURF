@@ -193,5 +193,5 @@ no punctate channel         spotcounting and aggregates_measurements both
 
 Closing the first needs one public 3D or time-lapse dataset; SSBD serves both.
 Closing the second needs an image with a spot-like channel plus a way to segment
-it. Until then those three workflows stay untested — noted in
-[open-items.md](open-items.md).
+it. Until then those three workflows stay untested; see "Not covered" in
+[pipeline-tests.md](pipeline-tests.md).

@@ -2,8 +2,7 @@
 
 What breaks when the stack is deployed onto a machine that has never deployed
 it, and the shape those failures share. Learned by rebuilding `biomeroqa` twice
-from an empty volume on 2026-09-17/18; the narrative is in
-`deployment_docs/fresh-vm-rebuild.md`, the fixes are on `prod-rebuild-2026-09`.
+from an empty volume; the fixes are in the git history of `prod-rebuild`.
 
 ## The shape
 

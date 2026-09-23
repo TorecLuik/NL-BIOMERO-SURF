@@ -320,12 +320,37 @@ runs back into one.
 /project/<project>/Share/biomero/singularity_images/converters
 ```
 
+The worker and web read only that rendered file: `BIOMERO_SLURM_CONFIG_FILE`
+puts BIOMERO in authoritative-file mode, so its default search path -- which
+starts with upstream's local-dev `/etc/slurm-config.ini`, still baked into the
+worker image -- is never consulted.
+
 `scripts/render-slurm-config.sh` renders `web/slurm-config-template.ini` into
 `web/slurm-config.ini`, substituting `SPIDER_USER` and `SPIDER_PROJECT` and
 setting mode 0666 because OMERO.biomero writes that file from `omeroweb` as
 uid 999. `make deploy` runs it every time, so an edit made through the admin UI
 survives only until the next deploy -- a change worth keeping goes in the
 template.
+
+## Metabase Dashboards
+
+OMERO.web embeds two dashboards, named in `.env` by
+`METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID` and
+`METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID`. Their definitions are committed in
+`metabase/dashboards.json`, and `make deploy` rebuilds them through
+`scripts/restore-metabase-dashboards.sh`, writing the ids it used back into
+`.env`. Everything per-install -- databases, tables, fields, filter targets --
+travels by name, so the file carries no ids and no passwords.
+
+To change a dashboard, edit it in Metabase, then export and commit:
+
+```bash
+make export-metabase-dashboards          # the two dashboards .env embeds
+make export-metabase-dashboards IDS=5    # or an explicit set
+```
+
+The round trip is what keeps the file honest; editing it by hand is possible
+but unchecked.
 
 ## Verifying a Change
 

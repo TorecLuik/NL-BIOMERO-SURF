@@ -4,10 +4,9 @@
 
 Manual tests that exercise the full chain — import, export to Spider, remote
 conversion, Slurm workflow, results back in OMERO — using the datasets in
-[reference-data.md](reference-data.md). They cover the
-`end-to-end workflow run with results imported back into OMERO` and
-`BIOMERO importer picking up files under /data` items in
-[open-items.md](open-items.md), which the automated smoke tests cannot reach.
+[reference-data.md](reference-data.md). They cover what the automated smoke
+tests cannot reach: a workflow run with results imported back into OMERO, and
+the importer picking up files unattended.
 
 Everything here is done in the browser. Terminal commands appear only for
 diagnosing a failure, never to run a test.
@@ -531,9 +530,6 @@ Upstream behaviour these tests surfaced is collected in
 ## Recording results
 
 The Status block above is where per-check results live; keep it current.
-[open-items.md](open-items.md) tracks the deployment as a whole and names this
-file rather than repeating the detail, so it only needs editing when a whole
-capability opens or closes -- not after each check.
 
 When a check fails, note the workflow UUID from the Analyzer, look it up in
 `biomero_workflow_progress_view`, then read `biomero_task_execution` for the
