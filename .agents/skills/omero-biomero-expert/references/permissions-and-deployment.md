@@ -471,6 +471,17 @@ curl -s 'http://localhost:9200/_plugins/_ism/policies/biomero-logs-retention' | 
 needs its current `_seq_no`/`_primary_term`, read back from the policy -- a 409
 body is an error, not the policy.
 
+**A registered policy is not an applied one.** Its `ism_template` only adopts
+indices created *after* the policy exists, and fluent-bit creates `biomero-logs`
+on its first flush -- usually before the script runs, since the same compose up
+starts both. The policy then exists, matches the index by pattern, and manages
+nothing. `4ef7b75a` attaches it explicitly; check rather than assume:
+
+```bash
+curl -s 'http://localhost:9200/_plugins/_ism/explain/biomero-logs' \
+  | grep -oE '"total_managed_indices":[0-9]+'    # 0 means nothing is ageing off
+```
+
 Every service in `docker-compose.yml`, `docker-compose-dev.yml` and `opensearch-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
 
 ```yaml
