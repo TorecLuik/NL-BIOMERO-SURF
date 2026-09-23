@@ -56,6 +56,12 @@ Log search: `https://<host>/logs/`, user `biomero-logs`, password
 `NGINX_LOGS_PASSWORD` in `.env`. Workflow and import dashboards are embedded in
 OMERO.web; the Metabase admin is `METABASE_USER` in `.env`.
 
+The workflow dashboard is filtered to the logged-in user and selected group,
+so an admin who has run nothing (root, in `system`) sees empty workflow cards;
+only the Slurm job cards are unfiltered. That is not missing data. To rebuild
+the dashboards from `metabase/dashboards.json`:
+`scripts/restore-metabase-dashboards.sh --force`, then `make up`.
+
 ## Boot and Shutdown
 
 `nl-biomero.service` runs `make up` at boot once the volume is mounted, and
