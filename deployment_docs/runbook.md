@@ -178,13 +178,3 @@ over (`sudo chown -R <user> .ssh`) or generates their own with
 
 - **Off-VM backups.** Nothing leaves the volume yet. Pick a destination (SURF
   Research Drive, dCache, object storage) and copy `backups/nightly/` there.
-- **Cluster account.** `SPIDER_USER` is a personal account. Move to a project
-  or service account before the original owner leaves, then `make new-key
-  FORCE=1` and register the new key.
-- **Ports 4063/4064** must be open in the portal; OMERO.insight has not been
-  tested against this deployment.
-- **Dead `COPY` in the worker image.** `biomeroworker/Dockerfile` still copies
-  upstream's local-dev `slurm-config.ini` to `/etc/`. Authoritative-file mode
-  means it is never read; remove it on the next worker rebuild.
-- **`W_Measurements-CellProfiler`** ran at v1.1.1 on the first deployment; the
-  rendered `slurm-config.ini` pins v1.1.0. Bump the template if 1.1.1 is wanted.

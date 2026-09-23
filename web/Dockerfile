@@ -38,8 +38,9 @@ RUN /opt/omero/web/venv3/bin/pip install \
 # Update PATH manually based on known locations
 ENV PATH="/usr/pgsql-12/bin:/usr/pgsql-14/bin:${PATH}"
 
-## Setup slurm-config for biomero, for the BIOMERO django API in OMERO.biomero
-COPY biomeroworker/slurm-config.ini /etc/slurm-config.ini
+## slurm-config for the BIOMERO django API in OMERO.biomero: none is baked in.
+## It is bind-mounted, rendered from web/slurm-config-template.ini, and
+## BIOMERO_SLURM_CONFIG_FILE makes it the only file BIOMERO reads.
 
 ### Install OMERO.biomero first ###
 ### BIOMERO.importer and BIOMERO.analyzer will be installed as a dependency of OMERO.biomero ###

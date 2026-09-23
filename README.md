@@ -72,7 +72,7 @@ First, customize your environment file `.env`:
 
 ```bash
 # Edit .env with your secure passwords and configuration
-# Edit biomeroworker/slurm-config.ini if you need different BIOMERO settings
+# Edit web/slurm-config-template.ini if you need different BIOMERO settings
 # Toggle UI components (both default to TRUE):
 # IMPORTER_ENABLED=TRUE   # Enables the BIOMERO.importer UI module
 # ANALYZER_ENABLED=TRUE   # Enables the BIOMERO.analyzer UI module
@@ -250,7 +250,7 @@ See <a href="https://nl-bioimaging.github.io/biomero/" target="_blank" rel="noop
   - SSH port (usually `22`)
   - Username and SSH keys
   - Alias configuration in `~/.ssh/config`
-- **Slurm Configuration**: Edit `biomeroworker/slurm-config.ini`
+- **Slurm Configuration**: Edit `web/slurm-config-template.ini`
   - SSH alias (e.g., `localslurm`)
   - Storage paths: `slurm_data_path`, `slurm_images_path`, `slurm_script_path`
 

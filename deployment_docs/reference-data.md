@@ -176,7 +176,7 @@ tifffile.imwrite('<name>.ome.tiff', vol, photometric='minisblack',
 ## Gaps
 
 These two images cannot exercise everything registered in
-`biomeroworker/slurm-config.ini`:
+`web/slurm-config-template.ini`:
 
 ```text
 no Z-stack or time series   stardist5d is the only 5D-capable workflow here and

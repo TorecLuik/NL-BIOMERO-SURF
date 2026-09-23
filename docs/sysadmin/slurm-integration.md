@@ -7,7 +7,7 @@ This guide covers deploying **BIOMERO.analyzer** with SLURM cluster integration 
 - BIOMERO.analyzer can offload compute-intensive workflows to SLURM clusters via SSH
 - Requires one-way SSH access from `biomeroworker` container to your SLURM cluster
 - Uses existing SSH keys mounted into the container (see deployment examples)
-- Main config files: `web/slurm-config.ini` and `biomeroworker/slurm-config.ini`
+- Main config file: `web/slurm-config-template.ini`, rendered into `web/slurm-config.ini` by every deploy and read in authoritative-file mode (`BIOMERO_SLURM_CONFIG_FILE`)
 - SLURM environment is auto-configured via OMERO admin script `SLURM_Init_environment.py`
 - Links to [full BIOMERO.analyzer documentation](https://nl-bioimaging.github.io/biomero/) for workflow details
 ```

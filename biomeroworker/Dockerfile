@@ -70,8 +70,9 @@ RUN $VIRTUAL_ENV/bin/python /tmp/patch_biomero_runtime.py
 # Might need to merge important changes from time to time to keep this version compatible.
 COPY biomeroworker/processor.py /opt/omero/server/venv3/lib/python3.11/site-packages/omero/
 
-## Setup slurm-config for biomero
-COPY biomeroworker/slurm-config.ini /etc/slurm-config.ini
+## slurm-config for biomero: none is baked in. The deploy renders
+## web/slurm-config-template.ini and bind-mounts it, and BIOMERO_SLURM_CONFIG_FILE
+## makes that the only file BIOMERO reads.
 
 ## OMERO: Replace the default startup scripts
 RUN rm /startup/60-database.sh

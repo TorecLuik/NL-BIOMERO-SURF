@@ -100,11 +100,12 @@ channels; on a 2-channel image it fails with `cannot reshape array of size N`.
 loaded, so it does not help.
 
 **Registered vs listed.** The Analyzer lists every workflow in the descriptor
-catalog, not only those in `biomeroworker/slurm-config.ini`. A workflow that is
+catalog, not only those registered in `web/slurm-config.ini` (rendered from
+`web/slurm-config-template.ini`). A workflow that is
 listed but not registered fails at submission, before any Slurm job exists:
 
 ```bash
-grep -E "^[a-z0-9_]+_repo=" biomeroworker/slurm-config.ini
+grep -E "^[a-z0-9_-]+_repo *=" web/slurm-config.ini   # names may contain hyphens
 ```
 
 **ZARR.** `Use_ZARR_Format` is not about the input being a Zarr: OMERO always
