@@ -85,6 +85,12 @@ writes `backups/nightly/<timestamp>/`: dumps of the OMERO, BIOMERO and Metabase
 databases, the OMERO repository without caches, and `secrets.tar.gz` (`.env`,
 `.ssh/`, `volume-identity`, the web configs). L-Drive is not copied.
 
+L-Drive is more than uploaded source files. Workflow results are unpacked into
+`L-Drive/<user>/.analyzed/<workflow>/<timestamp>/`, and the result images in
+OMERO are symlinks into it, as are the images the importer brought in. **Never
+clean up `.analyzed/`**: it looks like scratch but is the only copy of those
+pixels, so today they exist only on the volume itself.
+
 ```bash
 systemctl list-timers nl-biomero-backup.timer
 journalctl -u nl-biomero-backup.service -n 20

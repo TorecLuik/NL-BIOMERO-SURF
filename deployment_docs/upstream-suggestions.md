@@ -72,7 +72,11 @@ call sites. No setting, environment variable or upload-order field changes it.
 The managed repository therefore holds symlinks into `/data`. Delete or move a
 source file and its OMERO image becomes permanently unreadable, and a backup
 that does not dereference archives the dangling link rather than the pixels.
-Workflow results link into `/data/root/.analyzed/`, which is scratch space.
+Workflow results are imported the same way: each result image in OMERO is a
+symlink into `/data/<user>/.analyzed/<workflow>/<timestamp>/`, where the results
+were unpacked. That hidden directory reads as disposable output, but it holds
+the only copy of the result pixels, so cleaning it up breaks every result image
+imported from it.
 
 **Suggested:** make the transfer mode configurable, defaulting to copy for data
 whose source is outside the deployment's control.

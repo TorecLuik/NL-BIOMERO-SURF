@@ -311,8 +311,9 @@ Two consequences:
   `tar -czf` with no `--dereference`, so it archives the dangling symlinks
   themselves. A restore brings back 0-byte links.
 
-Workflow results are linked out of `/data/root/.analyzed/`, which is scratch
-space, so imported masks are the most exposed of all.
+Workflow results are linked out of `/data/<user>/.analyzed/`. It looks like a
+scratch directory but holds the only copy of the result pixels, so imported
+masks are the most exposed of all: clearing it breaks every one of them.
 
 Check for images whose source has already gone:
 
