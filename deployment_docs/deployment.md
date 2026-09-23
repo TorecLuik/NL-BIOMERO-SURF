@@ -1,6 +1,6 @@
 # NL-BIOMERO Deployment
 
-*Created 2026-09-15 · last updated 2026-09-17*
+*Created 2026-09-15 · last updated 2026-09-23*
 
 Current state of this deployment: what it runs, how it is configured, and how to
 rebuild it. This describes how things are, not how they came to be.

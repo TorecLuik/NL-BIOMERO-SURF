@@ -1,6 +1,6 @@
 # Reference Data
 
-*Created 2026-09-17 · last updated 2026-09-17*
+*Created 2026-09-17 · last updated 2026-09-23*
 
 Public example images for exercising BIOMERO workflows end to end. Used by
 [pipeline-tests.md](pipeline-tests.md).

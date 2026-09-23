@@ -1,6 +1,6 @@
 # Deploying to a New VM
 
-*Created 2026-09-16 · last updated 2026-09-17*
+*Created 2026-09-16 · last updated 2026-09-23*
 
 Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
 one manual stop between them:

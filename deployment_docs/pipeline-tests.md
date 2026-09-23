@@ -1,6 +1,6 @@
 # End-to-End Pipeline Tests
 
-*Created 2026-09-17 · last updated 2026-09-17*
+*Created 2026-09-17 · last updated 2026-09-23*
 
 Manual tests that exercise the full chain — import, export to Spider, remote
 conversion, Slurm workflow, results back in OMERO — using the datasets in
