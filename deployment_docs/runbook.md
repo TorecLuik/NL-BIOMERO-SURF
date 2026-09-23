@@ -165,7 +165,9 @@ same file; then stash, pull, and reapply the `group_mappings` block.
 **`.ssh/` belongs to whoever ran `make new-key`.** OpenSSH refuses a key that
 anyone else can read, so it cannot be group-shared. A new owner either takes it
 over (`sudo chown -R <user> .ssh`) or generates their own with
-`make new-key FORCE=1`, which revokes the old registration.
+`make new-key FORCE=1`. That needs the new key registered on Spider before
+workflows run again, and leaves the old key authorised there until someone
+removes it.
 
 ## History
 

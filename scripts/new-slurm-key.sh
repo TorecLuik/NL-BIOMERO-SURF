@@ -61,14 +61,16 @@ if [[ "${SHOW}" -eq 1 ]]; then
   exit 0
 fi
 
-# Replacing the key revokes an authorisation that somebody granted by hand, and
-# the replacement has to be registered again before the cluster is reachable.
+# Replacing the key cuts this deployment off from the cluster until somebody
+# registers the replacement by hand. It does not revoke the old key: that stays
+# authorised on the cluster until it is removed there.
 # That is not something to do as a side effect of re-running a setup step.
 if [[ -e "${KEY}" && "${FORCE}" -eq 0 ]]; then
   echo "${KEY} already exists." >&2
   echo >&2
-  echo "Replacing it revokes the access its public half was granted, and the new" >&2
-  echo "key has to be registered on the cluster before it is reachable again." >&2
+  echo "Replacing it cuts this deployment off from the cluster until the new key" >&2
+  echo "is registered there. The old key stays authorised until it is removed" >&2
+  echo "on the cluster side." >&2
   echo >&2
   echo "  make new-key FORCE=1    replace it anyway" >&2
   echo "  make show-key           print the public half of the current key" >&2
