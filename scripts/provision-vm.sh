@@ -77,6 +77,14 @@ fi
 
 # ----------------------------------------------------------------- submodule --
 step "Importer submodule"
+# Ubuntu 22.04's libcurl mishandles the 103 Early Hints GitHub now sends over
+# HTTP/2, and reports the 401 that follows as "could not read Username", even
+# for public repositories. HTTP/1.1 avoids it. System-wide, so every admin's
+# git on this host gets it, not only this checkout's.
+if [[ "$(git config --system --get http.version 2>/dev/null)" != "HTTP/1.1" ]]; then
+  sudo git config --system http.version HTTP/1.1
+  ok "git set to HTTP/1.1 system-wide (GitHub early-hints workaround)"
+fi
 if [[ -f biomero-importer/Dockerfile ]]; then
   ok "already present at $(cd biomero-importer && git describe --tags 2>/dev/null || echo unknown)"
 else

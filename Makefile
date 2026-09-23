@@ -231,6 +231,11 @@ doctor:
 	else \
 	  echo "  [warn] Metabase is still on H2; migrate to Postgres, see the expert skill"; \
 	fi
+	@echo "== Host services =="
+	@for u in nl-biomero.service nl-biomero-backup.timer; do \
+	  if systemctl is-enabled --quiet $$u 2>/dev/null; then printf '  [ ok ] %s enabled\n' "$$u"; \
+	  else printf '  [warn] %s not installed; production needs: make install-services\n' "$$u"; fi; \
+	done
 	@echo "== Container log caps =="
 	@uncapped=$$(sudo docker ps --format '{{.Names}}' 2>/dev/null | while read n; do \
 	    o=$$(sudo docker inspect -f '{{.HostConfig.LogConfig.Config}}' "$$n" 2>/dev/null); \

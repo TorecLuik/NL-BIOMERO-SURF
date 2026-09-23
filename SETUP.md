@@ -45,6 +45,9 @@ make init
 
 # 6. build and start -- about an hour, most of it image builds
 make deploy
+
+# 7. production only: start at boot, nightly backup
+make install-services
 ```
 
 `make init` derives everything from `.env` and the host, and every step in it is

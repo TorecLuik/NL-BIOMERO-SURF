@@ -158,15 +158,37 @@ def tables_for(dbid):
     return {(t["schema"], t["name"]): t for t in meta.get("tables", [])}
 
 
+# Wait for the tables the dashboards actually read, not just any table: on a
+# fresh volume BIOMERO creates its tracking tables when the worker first
+# starts, and a card resolved before they exist is saved pointing at nothing.
+def referenced_tables(node, out):
+    if isinstance(node, dict):
+        if {"database", "schema", "table"} <= set(node):
+            out.add((node["database"], node["schema"], node["table"]))
+        for v in node.values():
+            referenced_tables(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            referenced_tables(v, out)
+    return out
+
+
+needed = referenced_tables(json.load(open(os.environ["DEFINITIONS"])), set())
+
 deadline = time.time() + 300
 tables = {}
+absent = needed
 while time.time() < deadline:
     tables = {n: tables_for(i) for n, i in db_ids.items()}
-    if all(v for v in tables.values()):
+    absent = {t for t in needed if (t[1], t[2]) not in tables.get(t[0], {})}
+    if all(v for v in tables.values()) and not absent:
         break
     time.sleep(10)
 for n, v in tables.items():
     print("  %-8s %d tables visible" % (n, len(v)))
+if absent:
+    print("  [warn] still missing after 5 minutes: "
+          + ", ".join("%s.%s.%s" % t for t in sorted(absent)))
 
 
 def resolve_table(ref):
