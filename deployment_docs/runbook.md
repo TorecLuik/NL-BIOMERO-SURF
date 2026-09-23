@@ -30,6 +30,7 @@ Admins are the members of the CO group `rsc_co_202570`. They are also in the
 | `…/.env` | every setting and secret; compose reads nothing else | `0640`, group `rsc_co_202570` |
 | `…/.ssh/slurm_access_key` | cluster key registered on Spider | `0600`, the person who generated it |
 | `…/web/biomero-config.json` | group → L-Drive folder mapping | tracked in git, edited for this VM |
+| `…/deployment_docs/private/` | notes for the maintainers not for publication, e.g. a security report awaiting disclosure | gitignored, group-readable; exists only on this VM |
 | `/data/surf-biomero-storage/database*` | the two Postgres 16 clusters | uid 999, `0700` |
 | `…/omero` | OMERO binary repository | uid 1000 |
 | `…/L-Drive` | user data; in-place imports link here | `0777`, set by `make deploy` |

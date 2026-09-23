@@ -31,3 +31,7 @@ docs/venv/
 
 __pycache__/
 *.pyc
+
+# Notes for the maintainers that must not be published, e.g. security reports
+# awaiting private disclosure. Kept on the VM, never committed.
+deployment_docs/private/

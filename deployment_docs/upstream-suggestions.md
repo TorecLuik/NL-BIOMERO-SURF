@@ -3,7 +3,9 @@
 *Created 2026-09-17 · last updated 2026-09-23*
 
 Findings from this deployment that belong upstream rather than in local
-configuration. Each one is reproducible here.
+configuration. Each one is reproducible here. These are defects in the
+components; proposals for how the deployment repository itself is structured
+are in [upstream-proposal.md](upstream-proposal.md).
 
 Versions in use: `biomero 2.8.2` and its scripts, `omero-biomero 1.6.1`,
 `BIOMERO.importer 1.4.2`.
