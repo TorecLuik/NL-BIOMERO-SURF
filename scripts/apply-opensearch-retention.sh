@@ -73,4 +73,33 @@ except Exception:
     echo ;;
 esac
 
+# An ism_template only adopts indices created *after* the policy exists, and
+# fluent-bit creates biomero-logs on its first flush -- which on a fresh deploy
+# usually beats this script, since both are started by the same compose up. So
+# the template alone leaves the index unmanaged, with nothing ageing off and a
+# full volume as the first symptom. Attach the policy to anything already there.
+managed=0
+unmanaged=""
+for idx in $(curl -fsS --max-time 20 "${OS_URL}/_cat/indices/biomero-logs*?h=index" 2>/dev/null); do
+  explain="$(curl -fsS --max-time 20 "${OS_URL}/_plugins/_ism/explain/${idx}" 2>/dev/null || true)"
+  case "${explain}" in
+    *"\"${POLICY_ID}\""*) managed=$((managed + 1)) ;;
+    *) unmanaged="${unmanaged} ${idx}" ;;
+  esac
+done
+
+if [[ -n "${unmanaged// /}" ]]; then
+  # ISM add takes a comma-separated list and is a no-op on already-managed ones.
+  add_list="$(echo ${unmanaged} | tr ' ' ',')"
+  if curl -fsS -X POST --max-time 30 "${OS_URL}/_plugins/_ism/add/${add_list}" \
+       -H 'Content-Type: application/json' \
+       -d "{\"policy_id\":\"${POLICY_ID}\"}" >/dev/null 2>&1; then
+    printf '  [ ok ] attached %s to:%s\n' "${POLICY_ID}" "${unmanaged}"
+  else
+    printf '  [warn] could not attach %s to:%s\n' "${POLICY_ID}" "${unmanaged}"
+  fi
+elif (( managed > 0 )); then
+  printf '  [ ok ] %d index(es) already managed by %s\n' "${managed}" "${POLICY_ID}"
+fi
+
 rm -f /tmp/ism-out
