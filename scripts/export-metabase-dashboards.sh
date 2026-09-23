@@ -19,7 +19,7 @@
 #                                    so an export never carries a password
 #
 # Usage:
-#   scripts/export-metabase-dashboards.sh              dashboards 2 and 6
+#   scripts/export-metabase-dashboards.sh              the two dashboards .env embeds
 #   scripts/export-metabase-dashboards.sh 2 6 9        an explicit set
 set -euo pipefail
 
@@ -30,7 +30,15 @@ OUT_FILE="metabase/dashboards.json"
 COMPOSE=(sudo docker compose)
 DASHBOARD_IDS=("$@")
 if [[ "${#DASHBOARD_IDS[@]}" -eq 0 ]]; then
-  DASHBOARD_IDS=(2 6)
+  # Ids are per-install, and a restore --force archives the old ones and makes
+  # new ones, so a fixed default would export whatever those numbers now name.
+  # The ids OMERO.web embeds are the ones that matter.
+  DASHBOARD_IDS=()
+  for key in METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID; do
+    id="$(grep -hE "^${key}=" .env 2>/dev/null | tail -1 | cut -d= -f2-)"
+    [[ -n "${id}" ]] && DASHBOARD_IDS+=("${id}")
+  done
+  [[ "${#DASHBOARD_IDS[@]}" -gt 0 ]] || { echo "no dashboard ids in .env; pass them explicitly" >&2; exit 1; }
 fi
 
 BIOMERO_USER="$(grep -hE '^BIOMERO_POSTGRES_USER=' .env 2>/dev/null | tail -1 | cut -d= -f2-)"
