@@ -19,6 +19,9 @@
 #   volume-identity.sh check    fill .env from the volume, or report a conflict
 #   volume-identity.sh write    record the current .env (empty volume only)
 #   volume-identity.sh adopt    record a populated volume, verifying first
+#   volume-identity.sh rotate KEY   change POSTGRES_PASSWORD or
+#                                   BIOMERO_POSTGRES_PASSWORD in the database,
+#                                   .env and the volume together
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -102,24 +105,34 @@ needs_value() {
 # and both "local" and 127.0.0.1 are trusted, so `compose exec psql` succeeds
 # whatever the password is. Only a connection from another address reaches the
 # scram-sha-256 rule and actually authenticates.
-verify_live_password() {
-  local user db pass cid net addr
-  user="$(env_value POSTGRES_USER)"
-  db="$(env_value POSTGRES_DB)"
-  pass="$(env_value POSTGRES_PASSWORD)"
-  cid="$(sudo docker compose ps -q database 2>/dev/null | head -1)"
+# pg_hba matches the first rule that fits, and both "local" and 127.0.0.1 are
+# trusted, so `compose exec psql` succeeds whatever the password is. Only a
+# connection from another address reaches the scram-sha-256 rule and actually
+# authenticates -- which is how the other containers connect.
+password_authenticates() {
+  local svc="$1" user="$2" db="$3" pass="$4" cid net addr
+  cid="$(sudo docker compose ps -q "${svc}" 2>/dev/null | head -1)"
   if [[ -z "${cid}" ]]; then
-    echo "  [FAIL] the database container is not running; start it with: make up" >&2
-    return 1
+    echo "  [FAIL] ${svc} is not running; start it with: make up" >&2
+    return 2
   fi
   addr="$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "${cid}" | awk '{print $1}')"
   net="$(sudo docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "${cid}" | awk '{print $1}')"
   if [[ -z "${addr}" || -z "${net}" ]]; then
-    echo "  [FAIL] could not resolve the database container address" >&2
-    return 1
+    echo "  [FAIL] could not resolve the ${svc} container address" >&2
+    return 2
   fi
   sudo docker run --rm --network "${net}" -e PGPASSWORD="${pass}" postgres:16 \
       psql -h "${addr}" -U "${user}" -d "${db}" -c 'SELECT 1' >/dev/null 2>&1
+}
+
+verify_live_password() {
+  password_authenticates database "$(env_value POSTGRES_USER)" \
+    "$(env_value POSTGRES_DB)" "$(env_value POSTGRES_PASSWORD)"
+}
+
+gen_password() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' < <(head -c 256 /dev/urandom) | cut -c1-32
 }
 
 case "${1:-check}" in
@@ -185,8 +198,39 @@ case "${1:-check}" in
     echo "  [ ok ] the password in .env authenticates"
     write_stamp
     ;;
+  rotate)
+    # The password lives in three places that must change together: the
+    # cluster, .env, and the volume's record. The other containers read it
+    # from .env at start, and Metabase keeps its own copy for its datasource.
+    key="${2:-}"
+    case "${key}" in
+      POSTGRES_PASSWORD)         svc=database;         ukey=POSTGRES_USER;         dkey=POSTGRES_DB ;;
+      BIOMERO_POSTGRES_PASSWORD) svc=database-biomero; ukey=BIOMERO_POSTGRES_USER; dkey=BIOMERO_POSTGRES_DB ;;
+      *) echo "usage: volume-identity.sh rotate POSTGRES_PASSWORD|BIOMERO_POSTGRES_PASSWORD" >&2; exit 2 ;;
+    esac
+    user="$(env_value "${ukey}")"; db="$(env_value "${dkey}")"; old="$(env_value "${key}")"
+    password_authenticates "${svc}" "${user}" "${db}" "${old}" || {
+      echo "  [FAIL] the current ${key} in .env does not authenticate; fix that first." >&2
+      exit 1
+    }
+    new="$(gen_password)"
+    # Over stdin, so the new password never appears in a process list.
+    printf "ALTER USER \"%s\" PASSWORD '%s';\n" "${user}" "${new}" \
+      | sudo docker compose exec -T "${svc}" psql -U "${user}" -d "${db}" -q -v ON_ERROR_STOP=1
+    fill_env "${key}" "${new}"
+    write_stamp
+    if password_authenticates "${svc}" "${user}" "${db}" "${new}" \
+       && ! password_authenticates "${svc}" "${user}" "${db}" "${old}"; then
+      echo "  [ ok ] ${key} rotated: the new one authenticates, the old one no longer does"
+    else
+      echo "  [FAIL] rotation did not take; check ${svc} by hand" >&2
+      exit 1
+    fi
+    echo "  next: make up   (containers read it from .env at start)"
+    echo "        scripts/restore-metabase-dashboards.sh   (updates Metabase's copy)"
+    ;;
   *)
-    echo "usage: volume-identity.sh [check|write|adopt]" >&2
+    echo "usage: volume-identity.sh [check|write|adopt|rotate KEY]" >&2
     exit 2
     ;;
 esac
