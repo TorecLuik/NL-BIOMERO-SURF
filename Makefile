@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -32,6 +32,8 @@ help:
 	@echo "  make logs-retention     apply the OpenSearch log retention policy"
 	@echo "  make docs-dates         refresh the date stamps in deployment_docs/"
 	@echo "  make reference-data     re-download and verify the test datasets"
+	@echo "  make install-services   start at boot, nightly backup (systemd)"
+	@echo "  make backup             run the nightly backup now"
 	@echo ""
 	@echo "Stack"
 	@echo "  make up                 start everything, including the log stack"
@@ -148,6 +150,14 @@ adopt-volume:
 # Its name comes from SLURM_ACCESS_KEY in .env. Refuses to replace an existing
 # key unless FORCE=1, because the replacement has to be registered again before
 # the cluster is reachable.
+# Production host units: boot-time start once the volume is mounted, and the
+# nightly backup timer. See scripts/install-host-services.sh.
+install-services:
+	@./scripts/install-host-services.sh
+
+backup:
+	@./scripts/backup-nightly.sh
+
 new-key:
 	@./scripts/new-slurm-key.sh $(if $(FORCE),--force,)
 
