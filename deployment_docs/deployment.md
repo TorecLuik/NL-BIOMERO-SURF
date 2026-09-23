@@ -33,7 +33,7 @@ $OMERO_DATA_PATH/
 ├── omero/               OMERO image repository
 ├── L-Drive/             user data, /data in the containers
 ├── config/              volume-identity
-└── backups/             backup_master.sh output
+└── backups/             nightly/: scripts/backup-nightly.sh
 ```
 
 `docker-compose.yml` declares no named volumes; every mount is a bind mount
@@ -55,6 +55,7 @@ opensearch             log store, single node
 opensearch-dashboards  log viewer, served under /logs
 fluent-bit             tails ./logs and indexes into biomero-logs
 opensearch-init        one-shot; installs the index template, then exits 0
+dashboards-init        one-shot; creates the /logs index pattern, then exits 0
 ```
 
 Both compose files share one project name, derived from the directory, so
@@ -81,9 +82,10 @@ requests with HTTP 429. That is backpressure, not a fault, and it stops once the
 backlog drains. A stalled pipeline looks different: the `biomero-logs` document
 count stops rising. `scripts/bootstrap-prod.sh` checks exactly that.
 
-No container sets a restart policy, so nothing comes back after a host reboot.
-The same is true of the core services; bring the host back up with `make up` or
-`scripts/bootstrap-prod.sh`.
+No container sets a restart policy: Docker starting Postgres before the volume
+mounts would initialise an empty cluster on the boot disk. On production,
+`nl-biomero.service` (`make install-services`) starts the stack at boot once the
+volume is mounted; elsewhere, `make up` after a reboot.
 
 ## Versions
 
@@ -142,15 +144,22 @@ before Spider rejects the job.
 ## Rebuilding
 
 ```bash
-make init      # fresh clone only: fetch the biomero-importer submodule
-make set-host HOST=$(hostname -f)   # new host only
+make init      # submodule, rendered config, hostname, /logs auth, doctor
 make deploy    # preflight, deploy, smoke test
 make doctor    # diagnose without changing anything
 ```
 
-For a brand-new VM, follow [new-vm.md](new-vm.md). It is two commands with one
-manual stop: `make provision` prepares the host, then the secrets are restored
-and ports 4063/4064 opened in SURF Research Cloud, then `make deploy`.
+For a brand-new VM, follow [new-vm.md](new-vm.md).
+
+The importer image builds from the `biomero-importer/` submodule, not from
+`BIOMERO_IMPORTER_VERSION`, so a fresh clone must run `make init` first or the
+build fails on an empty directory. Keep the submodule tag and the pin in step;
+`make doctor` warns when they diverge.
+
+`make deploy` runs `scripts/bootstrap-prod.sh`: it checks prerequisites, deploys
+through `scripts/deploy-local-stack.sh`, then smoke tests services, databases,
+the web login page, installed versions, the runtime patches, Spider
+reachability, the log stack and the public URL.
 
 ## Ports
 
@@ -177,21 +186,16 @@ The importer image builds from the `biomero-importer/` submodule, not from
 build fails on an empty directory. Keep the submodule tag and the pin in step;
 `make doctor` warns when they diverge.
 
-The script checks prerequisites, deploys through `scripts/deploy-local-stack.sh`,
-then smoke tests services, databases, the web login page, installed versions,
-the runtime patch, and Spider reachability.
-
 ### Files that cannot be regenerated
 
 ```text
-.env         deployment secrets; the only copy
+.env         deployment secrets
 .ssh/        Spider SSH key material
 ```
 
-Archive both somewhere safe. `deploy-local-stack.sh` seeds `.env` from
-`.env.example` when it is absent, which gives a stack that starts but has
-placeholder credentials, so restore the real file when rebuilding a live
-deployment. Everything else in the repo is reproducible from a clean checkout.
+`scripts/backup-nightly.sh` copies both into `secrets.tar.gz` on the volume;
+keep a copy off the VM as well. Everything else in the repo is reproducible
+from a clean checkout.
 
 ## Slurm Job Scripts
 

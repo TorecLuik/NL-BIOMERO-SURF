@@ -34,8 +34,8 @@ make provision
 # 3. settings for this VM. Generates every secret and reads the mountpoint
 #    from step 1, asking only for the Spider account
 make init-env
-#    On a volume that already holds data, keep the .env that came with it
-#    instead: its database passwords are what unlock that data.
+#    On a volume that already holds data, adjust it first: see
+#    "Attaching a Volume That Already Holds Data" below.
 
 # 4. the cluster key, then register the public half it prints
 make new-key
@@ -73,8 +73,8 @@ documents every key and is never read at runtime.
 | --- | --- | --- |
 | Database passwords, `METABASE_SECRET_KEY` | the volume, `config/volume-identity` | the first deploy onto an empty volume |
 | Hostnames | `.env` | `make set-host` |
-| Cluster identity, generated secrets | `.env` | you, from `.env.example` |
-| `slurm-config.ini` | the volume | the OMERO.biomero admin UI |
+| Cluster identity, generated secrets | `.env` | `make init-env` |
+| `slurm-config.ini` | `web/`, rendered | `make init` / every deploy, from `web/slurm-config-template.ini` |
 
 The first row is fixed by the volume's data: Postgres ignores
 `POSTGRES_PASSWORD` once the cluster exists, and `METABASE_SECRET_KEY` decrypts
@@ -83,8 +83,15 @@ from the volume, and stops if `.env` carries a different value.
 
 ## Attaching a Volume That Already Holds Data
 
-Follow the setup steps. At step 3, leave the database passwords and
-`METABASE_SECRET_KEY` as `CHANGE ME` — `make deploy` takes them from the volume.
+Follow the setup steps. After `make init-env` at step 3:
+
+- delete `POSTGRES_PASSWORD`, `BIOMERO_POSTGRES_PASSWORD` and
+  `METABASE_SECRET_KEY` from `.env`; `make deploy` takes them from the
+  volume's `config/volume-identity`
+- set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD` and
+  `FORMS_MASTER_PASSWORD` to the volume's existing values. Those accounts live in
+  the OMERO database and `volume-identity` does not record them, so generated
+  values would lock the importer and forms out
 
 A volume written before `volume-identity` existed carries no credentials. Put
 the working passwords in `.env`, start the databases, and record them:
@@ -159,8 +166,8 @@ sudo mkdir -p $V/{database,database-biomero,omero,L-Drive,config,backups}
 | `database/`, `database-biomero/` | Postgres, on first start |
 | `omero/` | OMERO, on first start |
 | `L-Drive/` | user data; `make deploy` creates it |
-| `config/` | `make deploy`: `volume-identity` and `slurm-config.ini` |
-| `backups/` | `backup_master.sh` |
+| `config/` | `make deploy`: `volume-identity` |
+| `backups/` | `scripts/backup-nightly.sh`, into `nightly/` |
 
 Do not pre-create anything inside the data directories or chown them: Postgres
 runs `initdb` as uid 999 mode 0700, and OMERO builds its repository tree as uid
@@ -179,7 +186,9 @@ make logs:SVC              follow one service
 ```
 
 Containers do not restart by themselves — every service is `RestartPolicy: "no"`,
-so `make up` is required after any reboot, resume or volume reattach.
+so none can start before the volume is mounted. With `make install-services`,
+`nl-biomero.service` starts the stack at boot; without it, `make up` after any
+reboot, resume or volume reattach.
 
 Full command reference: `make help`, and
 [deployment_docs/deployment.md](deployment_docs/deployment.md).

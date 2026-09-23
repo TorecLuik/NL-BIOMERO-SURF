@@ -8,12 +8,13 @@ one manual stop between them:
 ```bash
 # attach the storage volume in the portal first -- it carries the data and
 # the credentials that unlock it. See storage-architecture.md.
-make provision              # host packages, submodule, hostname, nginx
-cp .env.example .env        # fill in every CHANGE ME, then make new-key
-make init                   # submodules, rendered config, hostname, /logs auth
+make provision              # host packages, submodule, nginx
+make init-env               # writes .env, generating every secret
+make new-key                # then register the public half on Spider
+make init                   # submodule, rendered config, hostname, /logs auth
 # open ports 4063 and 4064
-make set-host HOST=$(hostname -f)
 make deploy                 # build, start, smoke test
+make install-services       # production: start at boot, nightly backup
 ```
 
 Budget about an hour, most of it image builds.
@@ -45,11 +46,17 @@ has to be authorised on Spider for `SPIDER_USER`.
 
 ## 1. Clone
 
+Owned by the admins' group rather than one person, so the deployment does not
+depend on any single account:
+
 ```bash
-sudo mkdir -p /opt/omero && sudo chown "$USER" /opt/omero
+sudo mkdir -p /opt/omero
+sudo chown root:<admin-group> /opt/omero && sudo chmod 2775 /opt/omero
+sudo git config --system http.version HTTP/1.1   # see runbook.md, Known Issues
 cd /opt/omero
 git clone <repo-url> NL-BIOMERO
 cd NL-BIOMERO
+git config core.sharedRepository group
 ```
 
 ## 2. Prepare the host
@@ -62,7 +69,8 @@ make provision
 `scripts/provision-vm.sh --skip-packages` when the host already has Docker and
 git, or `--no-nginx` to leave the host's nginx alone.
 
-It installs docker, compose, git, make and htpasswd; fetches the
+It installs git, make and curl, and Docker and the compose plugin where
+missing (an existing Docker CE is left alone); fetches the
 `biomero-importer` submodule; sets the three per-VM hostname values from
 `hostname -f`; installs the nginx location block and reloads nginx. Then it
 reports on the three manual items and exits non-zero while any is outstanding.
@@ -77,25 +85,25 @@ neither comes from the storage volume: `.env` carries this machine's hostname
 and pins, and the cluster key is an authorisation granted on Spider.
 
 ```bash
-cp .env.example .env        # then fill in every value marked CHANGE ME
+make init-env               # asks for SPIDER_USER and SPIDER_PROJECT, generates the rest
 make new-key                # the cluster key, if it is not being reused
-make render-config          # or make init, which also runs this
-make set-host HOST=$(hostname -f)
+make init                   # renders slurm-config.ini, sets the hostname
 ```
 
 `make render-config` writes `web/slurm-config.ini` from the committed template
 and this VM's `.env`. Nothing on the volume is involved: admin-UI edits to that
 file are not preserved, so a change worth keeping goes in the template.
 
-The database passwords and `METABASE_SECRET_KEY` are the exception, and they go
-the other way: they are fixed by the data, so `volume-identity.sh` reads them
-from the volume and fills them into `.env`. Leave them as placeholders when
-reattaching an existing volume, and `make deploy` supplies the real values. See
+Some values go the other way, because they are fixed by the data. On a volume that already holds data, delete `POSTGRES_PASSWORD`,
+`BIOMERO_POSTGRES_PASSWORD` and `METABASE_SECRET_KEY` from the generated `.env`:
+`make deploy` fills them from `config/volume-identity` and stops if `.env`
+carries different ones. Set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD`
+and `FORMS_MASTER_PASSWORD` to the volume's existing values too; those accounts
+live in the OMERO database, and `volume-identity` does not record them. See
 [storage-architecture.md](storage-architecture.md).
 
-```bash
-ssh -F .ssh/config spider 'sinfo -s | head'   # confirm the key works
-```
+Once the key is registered and the stack deployed, `make check` confirms Spider
+is reachable.
 
 If the volume is new and has no `config/` yet, see
 [storage-architecture.md](storage-architecture.md) for how to populate one.
@@ -120,22 +128,10 @@ If the host was not fully prepared, preflight says so and refuses to deploy.
 
 ## 6. Restore data, if this replaces an existing deployment
 
-Volumes and stack configs come from the backup, with restore commands in its
-`MANIFEST.md`:
-
-```text
-/data/storage_hpc/biomero-backup-2026-09-15/
-```
-
-Metabase is the exception. Its dashboards live in a `metabase` database on
-`database-biomero`, so they arrive with that volume; the `metabase-h2.tar.gz` in
-older backups predates the move and is only useful for a one-off
-`load-from-h2` migration. `make deploy` creates the database if it is missing,
-so a genuinely fresh deployment starts with an empty Metabase and the two
-`METABASE_*_DASHBOARD_ID` values in `.env` will not resolve until dashboards
-exist. See the expert skill, "Metabase Application Database".
-
-Restore with the stack stopped (`make down`), then `make up`.
+Attach the existing volume instead of an empty one; its data and credentials
+come with it. To fill an empty volume from another deployment or from a
+backup, see [storage-architecture.md](storage-architecture.md#populating-a-volume-that-is-empty)
+and the restore steps in [runbook.md](runbook.md#restoring-a-database).
 
 ## 7. Verify what the smoke tests cannot
 

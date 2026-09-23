@@ -23,13 +23,13 @@ the OMERO image repository             Docker images
 L-Drive user data                      build cache
 volume-identity                        containers
 backups                                logs/
-                                       OpenSearch and Loki indices
+                                       OpenSearch indices
 ```
 
 The dividing line is whether losing it would cost data or just time. Everything
 on the right is rebuilt by `make deploy` from the repository plus the volume,
-except `.env` and `.ssh/`: you write `.env` from `.env.example` and generate the
-cluster key with `make new-key`. Neither carries anything a volume needs back --
+except `.env` and `.ssh/`: `make init-env` writes `.env` and `make new-key`
+generates the cluster key. Neither carries anything a volume needs back --
 the credentials that open its databases come from the volume itself.
 
 Three things sit deliberately on the VM despite looking like state:
@@ -54,7 +54,7 @@ Three things sit deliberately on the VM despite looking like state:
 ├── omero/               OMERO image repository  owner 1000:0,  mode 0755
 ├── L-Drive/             user data, /data in the containers
 ├── config/              volume-identity, the databases' credentials
-└── backups/             backup_master.sh output
+└── backups/             nightly/: scripts/backup-nightly.sh
 ```
 
 The ownership is not cosmetic. Postgres refuses to start if its data directory
@@ -144,9 +144,9 @@ mount | grep /data/
 git clone <repo> && cd NL-BIOMERO
 make provision
 
-# 3. this VM's settings; set OMERO_DATA_PATH to the mountpoint and leave the
-#    database passwords as CHANGE ME -- they come from the volume
-cp .env.example .env
+# 3. this VM's settings; OMERO_DATA_PATH is read from the mount. On a volume
+#    with data, then remove the values the volume supplies -- see below
+make init-env
 
 # 4. the cluster key, then register the public half it prints
 make new-key
@@ -157,10 +157,15 @@ make set-host HOST=$(hostname -f)
 make deploy
 ```
 
-`make deploy` takes the database passwords and `METABASE_SECRET_KEY` from
-`config/volume-identity` and reports which values it filled in. It stops if
-`.env` carries a different value for any of them, rather than starting a stack
-that cannot read its own databases.
+On a volume that already holds data, delete `POSTGRES_PASSWORD`,
+`BIOMERO_POSTGRES_PASSWORD` and `METABASE_SECRET_KEY` from the generated `.env`:
+`make deploy` fills them from `config/volume-identity` and stops if `.env`
+carries different ones. Set `OMERO_ROOT_PASSWORD`, `OMERO_IMPORTER_PASSWORD`
+and `FORMS_MASTER_PASSWORD` to the volume's existing values too; those accounts
+live in the OMERO database, and `volume-identity` does not record them.
+
+`make deploy` reports which values it filled in, and stops rather than starting
+a stack that cannot read its own databases.
 
 A volume written before `volume-identity` existed carries no credentials: put
 the working passwords in `.env`, `make up`, then `make adopt-volume`, which
@@ -227,15 +232,15 @@ recommendations".
 An empty volume is a valid starting point and needs no preparation. The
 procedure is the one under [Setting Up a Fresh VM](#setting-up-a-fresh-vm)
 above, unchanged: attach the volume, point `OMERO_DATA_PATH` at the mountpoint,
-and deploy. The only difference is that `.env`'s `CHANGE ME` passwords are kept
-rather than replaced from the volume, because there is nothing there yet to
-take them from.
+and deploy. The only difference is that every secret `make init-env` generated
+is kept, because the volume has nothing to supply yet.
 
-Every directory creates itself. Docker creates `database/`, `database-biomero/`
-and `omero/` as root when it binds them, which is the ownership Postgres and
-OMERO require, and each initialises its own contents on first start.
-`deploy-local-stack.sh` creates `L-Drive/`, `volume-identity.sh` creates
-`config/`, and `backup_master.sh` creates `backups/` when it first runs.
+Every directory creates itself. The Postgres entrypoints chown their own data
+directories on first start. `omero/` is the exception: Docker would create it
+root-owned and OMERO, running as uid 1000, would die on `PermissionError:
+'/OMERO/certs'`, so `deploy-local-stack.sh` creates it as 1000:1000 when it is
+missing. The same script creates `L-Drive/`, `volume-identity.sh` creates
+`config/`, and `backup-nightly.sh` creates `backups/nightly/`.
 
 `make deploy` then writes `volume-identity` with the credentials it initialised
 the databases with, so the volume can be opened by a later VM.
@@ -299,5 +304,6 @@ prune` typically reclaims more than this entire volume holds.
   all on Oracle.
 - **The volume and the workspace must be on the same cloud provider.**
 - **Containers do not restart by themselves.** Every service has
-  `RestartPolicy: "no"`, so `make up` is required after any reboot, resume or
-  reattach.
+  `RestartPolicy: "no"`, so a stack cannot start before its volume is mounted.
+  `nl-biomero.service` starts it at boot once the volume is there; after a
+  resume or a reattach later than boot, `sudo systemctl restart nl-biomero`.

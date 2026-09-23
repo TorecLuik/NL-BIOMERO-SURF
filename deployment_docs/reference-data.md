@@ -7,7 +7,8 @@ Public example images for exercising BIOMERO workflows end to end. Used by
 
 ## What is stored
 
-Under `web/L-Drive/reference-data/`, which OMERO sees as `/data/reference-data`:
+Under `$OMERO_DATA_PATH/L-Drive/reference-data/`, which OMERO sees as
+`/data/reference-data`:
 
 ```text
 fig7_RSAdetection_16w/
