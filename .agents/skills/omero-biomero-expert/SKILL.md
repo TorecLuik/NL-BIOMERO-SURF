@@ -9,6 +9,23 @@ Use this skill for NL-BIOMERO work on dev or prod. Prefer inspection over guesse
 
 Never print secrets. Mask `.env`, container env, Metabase datasource JSON, passwords, secret keys, JWTs, and tokens in user-facing output.
 
+**Production is live and has users.** Before anything that restarts, rebuilds
+or redeploys it (`make deploy`, `make build`, `make up` after a config change,
+`systemctl restart nl-biomero`), check that no workflow or import is running
+(below) and ask the operator. Read-only inspection needs no permission.
+
+```bash
+# unfinished tasks in the last hours, and Spider jobs still queued or running
+sudo docker compose exec -T database-biomero psql -U biomero -d biomero -Atc \
+  "SELECT task_name, start_time FROM biomero_task_execution
+   WHERE end_time IS NULL AND start_time > now() - interval '6 hours'"
+sudo docker compose exec -T biomeroworker ssh spider 'squeue -u $USER -h'
+```
+
+Claims about a password, a process or a file need a probe that can fail: read
+[references/verification-pitfalls.md](references/verification-pitfalls.md)
+before trusting one.
+
 ## First Checks
 
 Start with the Makefile. `make` lists every target; these three answer most questions before any manual inspection:
@@ -29,17 +46,24 @@ make metabase-dashboards   # rebuild the embedded dashboards from the repository
 make logs-retention        # apply the OpenSearch retention policy, clear audit indices
 ```
 
-Known paths:
+Hosts:
 
 ```text
-dev workspace: /home/sloev/local-share/opt/omero/NL-BIOMERO
-prod stack:    /opt/omero/NL-BIOMERO
+prod  surfbiomero.biomero-data-ch.src.surf-hosted.nl  145.38.204.204
+      stack /opt/omero/NL-BIOMERO           data /data/surf-biomero-storage
+qa    biomeroqa.sda-development.src.surf-hosted.nl    145.38.189.61
+      stack /local-share/biomero-snellius-surf  data /data/biomero-data
+      a test box built from an empty volume; may be paused
+dev   biomerotest.sda-development.src.surf-hosted.nl
+      checkout /local-share/biomero-snellius-surf, where changes are made,
+      committed and pushed; prod and qa pull them
 ```
+
+Each is reached with plain `ssh <address>` from biomerotest. Prod's operator
+runbook is `deployment_docs/runbook.md`.
 
 The checkout directory name matters: compose derives container and image names
 from it, so do not assume the `nl-biomero-` prefix (see below).
-
-There is currently no production VM. The `biomero-prod` host in `.ssh/config` points at a deleted machine and refuses connections; ignore it until a replacement is provisioned and the entry is repointed.
 
 Docker requires `sudo` here. If `docker ps` fails on `/var/run/docker.sock`, retry with `sudo docker ...`; every `make` target already does.
 
@@ -81,12 +105,13 @@ sudo docker compose logs --tail=120 metabase omeroweb biomero-importer
 
 Read only the relevant reference before acting:
 
-- [references/permissions-and-deployment.md](references/permissions-and-deployment.md): host/container UID/GID issues, ports and public reachability, per-VM hostname values, project-local SSH, writable bind mounts, `chmod`/ownership workarounds, production vs dev compose, the `/logs` viewer (basic-auth credentials, the index pattern, OpenSearch retention), disk space and runaway container logs, backup/restore guardrails.
+- [references/permissions-and-deployment.md](references/permissions-and-deployment.md): the credentials the data depends on (`volume-identity`: fill, adopt, rotate), boot and restart, nightly backup and restore, host/container UID/GID issues, ports and public reachability, per-VM hostname values, project-local SSH, writable bind mounts, `chmod`/ownership workarounds, production vs dev compose, the `/logs` viewer (basic-auth credentials, the index pattern, OpenSearch retention), disk space and runaway container logs, backup/restore guardrails.
 - [references/metabase-dashboards.md](references/metabase-dashboards.md): BIOMERO Analyze/Import iframe failures, rebuilding both dashboards from `metabase/dashboards.json`, why the ids in `.env` are outputs rather than constants, Metabase's Postgres application database, datasource credential repair, signed embed smoke tests.
 - [references/slurm-and-gpu.md](references/slurm-and-gpu.md): Spider/Slurm behavior, GPU and MIG policy, per-workflow GPU assignment, generated job scripts, image pulls and Apptainer, the output-verification patch.
 - [references/workflow-runs.md](references/workflow-runs.md): tracing a workflow run by UUID, failures that name the wrong step, results that never reach OMERO, workflow input requirements (suffixes, channel counts, registered vs listed, ZARR), and images that look importable but are not.
 - [references/importer-analyzer-storage.md](references/importer-analyzer-storage.md): BIOMERO.importer, analyzer-to-importer result flow, `/data` path invariants, `.analyzed`/`.processed`, shared storage, import order polling, importer logs.
 - [references/fresh-vm.md](references/fresh-vm.md): deploying onto a machine that has never deployed this stack -- what only an empty volume reaches, failures that leave the stack looking healthy, and the UI gotchas when driving the panels by script.
+- [references/verification-pitfalls.md](references/verification-pitfalls.md): probes on this stack that succeed whatever the truth is -- passwords checked from inside Postgres, `omero login` session reuse, `pgrep` matching itself, root-only directories -- and the negative control that catches them.
 
 Deployment configuration lives outside this skill, in `deployment_docs/deployment.md`: versions, GPU policy, the runtime patch, observability, and how to rebuild. `deployment_docs/new-vm.md` is the end-to-end checklist for standing up a fresh VM: `make provision` prepares the host, then the secrets are restored and ports 4063/4064 opened in SURF Research Cloud, then `make deploy`. Those three manual items cannot be done from inside the VM, and `scripts/provision-vm.sh` checks rather than assumes them. `deployment_docs/runbook.md` covers operating the production VM and lists what is still open.
 `deployment_docs/pipeline-tests.md` is the browser-driven end-to-end test suite

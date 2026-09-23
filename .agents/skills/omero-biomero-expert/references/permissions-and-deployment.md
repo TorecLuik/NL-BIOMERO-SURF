@@ -32,11 +32,20 @@ Use `stat -c '%U:%G %a %n' <path>` and container `id` before changing ownership.
 443    public      HTTPS; nginx proxies / to 4080, /metabase to 3000, /logs to 5601
 4063   public      OMERO.insight
 4064   public      OMERO.insight SSL
-4080   localhost   OMERO.web, reached through nginx
-3000   localhost   Metabase, reached through nginx
-5601   localhost   OpenSearch Dashboards, reached through nginx
-9200   localhost   OpenSearch API
+4080   loopback    OMERO.web, reached through nginx
+3000   loopback    Metabase, reached through nginx
+5601   loopback    OpenSearch Dashboards, reached through nginx
+9200   loopback    OpenSearch API, no authentication
+9300   loopback    OpenSearch transport
+9600   loopback    OpenSearch Performance Analyzer
 ```
+
+Compose binds every backend port to `127.0.0.1`, so none of them is reachable
+from outside whatever the network rules say. Keep it that way: OpenSearch has
+no authentication, and a directly reachable 5601 bypasses the `/logs` basic
+auth. `sudo ss -ltnp` shows the binding; anything but `127.0.0.1` on those
+ports is a regression. To reach one from a workstation, tunnel:
+`ssh -L 5601:localhost:5601 <host>`.
 
 There is no host firewall on this VM. `ufw` is inactive and the iptables INPUT
 policy is ACCEPT, so reachability is decided in the SURF Research Cloud
@@ -53,8 +62,8 @@ for p in 443 4063 4064; do
 done
 ```
 
-4080, 3000 and 5601 being filtered is correct; they are published on the host
-for nginx and local debugging only.
+4080, 3000 and 5601 being closed from outside is correct; they listen on
+loopback for nginx only.
 
 If the public URL does not answer at all, the nginx location block is probably
 missing. `make doctor` reports this.
@@ -89,8 +98,13 @@ The intended pattern is:
 ```yaml
 biomeroworker:
   volumes:
-    - "./.ssh:/tmp/.ssh:ro"
+    - "./.ssh-worker:/tmp/.ssh:ro"
 ```
+
+`.ssh-worker/` is the deploy's group-readable copy of `.ssh/`: the container
+reads the key as "other", while OpenSSH on the host refuses a key anyone else
+can read, so one directory cannot serve both. `.ssh/` stays `0700`, owned by
+whoever ran `make new-key`.
 
 Then `biomeroworker/10-mount-ssh.sh` copies `/tmp/.ssh/.` into `/opt/omero/server/.ssh` on every startup, replacing old contents:
 
@@ -104,17 +118,9 @@ chmod 644 /opt/omero/server/.ssh/*.pub
 chmod 644 /opt/omero/server/.ssh/known_hosts
 ```
 
-Repo-local `.ssh/config` may contain deploy aliases such as:
-
-```text
-Host biomero-prod
-  HostName <ip>
-  User <user>
-```
-
-Use `ssh -F .ssh/config biomero-prod ...` if the alias is not in `~/.ssh/config`.
-
-The current `biomero-prod` entry points at a deleted VM and refuses connections. Commands in this skill that target it are the right pattern but cannot run until a replacement is provisioned and the `HostName` is updated. Until then, everything runs on the dev workspace.
+Repo-local `.ssh/config` holds the cluster hosts only (`spider`, and upstream's
+`localslurm`), written by the deploy. It is not a way to reach the VMs; those
+are plain `ssh <address>`, listed in SKILL.md.
 
 ## Deploy Script Permission Workarounds
 
@@ -247,20 +253,9 @@ sudo docker compose exec -T database-biomero psql -U biomero -d metabase \
 
 ### Backups
 
-`backup_and_restore/backup/backup_metabase.sh` archived the `./metabase` folder.
-With no folder to archive it now dumps the Postgres database instead, writing
-`metabase.{timestamp}.pg_dump`:
-
-```bash
-CONTAINER_ENGINE="sudo docker" ./backup_and_restore/backup/backup_metabase.sh
-```
-
-`CONTAINER_ENGINE` is needed on this host because the Docker socket is
-root-only. Restore with `pg_restore -U biomero -d metabase --clean`.
-
-The `metabase` database also sits on `database-biomero`, so the existing
-`database-biomero` volume backup already covers it; the dump is for restoring
-Metabase alone without touching the analytics data.
+The nightly backup dumps the `metabase` database with the others (see Backup
+Guardrails). Restoring Metabase alone, without touching the analytics data:
+`pg_restore -U biomero -d metabase --clean` from its `metabase.pg_dump`.
 
 ### File ownership, for an H2 deployment
 
@@ -326,6 +321,64 @@ To import pixels into the `/OMERO` volume, where the backup does cover them, use
 OMERO.insight or the `omero import` CLI without `--transfer`, not the BIOMERO
 Importer. Adding `--dereference` to the backup tar would capture the pixels but
 not fix the fragility, and would inflate every archive.
+
+## Values the Data Depends On
+
+A few values are read once, when what they protect is first created, and
+ignored afterwards: both Postgres passwords, `METABASE_SECRET_KEY`, the OMERO
+root password (`ROOTPASS` only applies at `omego db init`), the forms master's
+name, and Metabase's admin login. **Never regenerate them for existing data.**
+The stack would start, then fail to log in with errors that do not name the
+cause. The importer's password follows root's when it logs in as root.
+
+They are recorded next to the data in `<data>/config/volume-identity` (0600,
+read through `sudo`), and `scripts/volume-identity.sh` is the only thing that
+should write it:
+
+```bash
+./scripts/volume-identity.sh check    # fill unset values from the record; fail on disagreement
+./scripts/volume-identity.sh keys     # the list
+make adopt-volume                     # record a volume that has none, or add keys an old record lacks
+./scripts/volume-identity.sh rotate BIOMERO_POSTGRES_PASSWORD   # or POSTGRES_PASSWORD
+```
+
+- `make init-env` on a volume that has a record leaves these keys as
+  `CHANGE ME`; `make deploy` fills them. Preflight runs the fill before its
+  completeness check.
+- `adopt` verifies each value against the service that holds it -- a network
+  Postgres login, an OMERO login, a Metabase login -- before writing.
+- After `rotate`: `make up` (containers read `.env` at start), then
+  `scripts/restore-metabase-dashboards.sh` (Metabase keeps its own copy of the
+  BIOMERO password for its datasource).
+
+## Boot and Restart
+
+Every service is `RestartPolicy: "no"` on purpose: if Docker started Postgres
+before the data volume mounted, it would initialise an empty cluster on the
+boot disk and look healthy. `nl-biomero.service` (installed by
+`make install-services`) runs `make up` at boot with `RequiresMountsFor=` the
+data path, and `make down` at shutdown. `nl-biomero-backup.timer` runs the
+nightly backup.
+
+After pausing and resuming the workspace, or reattaching the volume later than
+boot: `make ps`, and if the stack is down, `sudo systemctl restart nl-biomero`.
+`make doctor` warns when either unit is missing.
+
+## Git over HTTPS on Ubuntu 22.04
+
+`git clone` or `git submodule update` from GitHub failing with "could not read
+Username", even for a public repository, is libcurl 7.81 mishandling GitHub's
+HTTP/2 `103 Early Hints`: it turns the following response into a bogus `401`.
+`git config --system http.version HTTP/1.1` fixes it; `make provision` sets it,
+but the first clone on a new VM comes before that. `GIT_TRACE_CURL=1` shows
+`200`, `103`, `401` in a row when this is the cause.
+
+## Private Notes
+
+`deployment_docs/private/` is gitignored and exists only on the prod VM,
+group-readable by the admins. It holds notes for the maintainers that must not
+be published before private disclosure, e.g. a security report. Never copy its
+contents into a tracked file, a commit message or an upstream issue.
 
 ## Importer Privilege Model
 
@@ -506,10 +559,45 @@ extends:
 
 `extends` is used instead of a YAML anchor because anchors do not resolve across separate files — each compose file parses independently, so an anchor defined in one file is invisible in another even under `include:`. `extends` genuinely merges from the external file, so `logging-defaults.yml` is the one real source; changing the cap there changes it everywhere. Any new service added to these files needs the same `extends:` block or it reverts to Docker's unbounded default.
 
+## Backups
+
+`scripts/backup-nightly.sh`, run at 02:30 by `nl-biomero-backup.timer` and on
+demand by `make backup`, writes `<data>/backups/nightly/<timestamp>/`, root-only,
+14 days kept:
+
+```text
+omero.pg_dump  biomero.pg_dump  metabase.pg_dump   from the running databases
+omero-files.tar.gz                                 OMERO repository, no caches
+secrets.tar.gz                                     .env, .ssh/, config/, web configs
+SHA256SUMS
+```
+
+It is small -- megabytes -- because it holds structure, not pixels: users,
+metadata, annotations, ROIs, tables, job history, dashboards, credentials. The
+pixels are in L-Drive, which it does not copy: imported images and workflow
+results are symlinks into `L-Drive`, including `<user>/.analyzed/`, which is
+the only copy of the result pixels and must never be cleaned up. The backups
+sit on the same volume as the data, so they cover a bad upgrade or a deletion,
+not losing the volume.
+
+Restoring a database: only the databases may run, since OMERO and the workers
+hold connections a `--clean` restore collides with; and the directory is
+root-only, so read it through `sudo`:
+
+```bash
+make down && sudo docker compose up -d database database-biomero
+sudo cat $B/omero.pg_dump | sudo docker compose exec -T database pg_restore -U omero -d omero --clean --if-exists
+make up
+```
+
+When unsure which night to use, restore into a scratch database first
+(`createdb`, `pg_restore -d <scratch>`, check, `dropdb`).
+
 ## Backup Guardrails
 
 Before mutating live prod state:
 
+- Check that no workflow or import is running and ask the operator (SKILL.md).
 - Identify host and stack path.
 - Back up the file/folder being changed.
 - Stop services that hold locks, especially Metabase.

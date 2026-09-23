@@ -27,10 +27,15 @@ Re-running is safe on a volume that already holds data: a dashboard is left
 alone when it is complete, meaning its tiles are present **and** embedding is
 on. `--force` replaces by name.
 
+Filters wired to query-builder cards target a field id too. Both scripts
+translate those mapping targets by name like the queries; a definitions file
+with a numeric `["field", <id>]` anywhere in it will break on any other install
+("Failed to fetch :metadata/column <id>").
+
 To change a dashboard, edit it in the UI and re-export:
 
 ```bash
-make export-metabase-dashboards          # ids 2 and 6 by default
+make export-metabase-dashboards          # the two ids .env embeds, by default
 make export-metabase-dashboards IDS=5    # or an explicit set
 ```
 
