@@ -109,7 +109,8 @@ The volume holds all state, so a new workspace only needs the code, `.env` and
 the cluster key:
 
 1. Attach the volume to the new workspace, open ports 4063 and 4064.
-2. `sudo git config --system http.version HTTP/1.1` (see Known Issues).
+2. `sudo git config --system http.version HTTP/1.1` so the clone works (see
+   Known Issues; `make provision` sets it too, but the clone comes first).
 3. Clone into `/opt/omero` as above, `make provision`.
 4. Restore `.env` and `.ssh/` from the latest `secrets.tar.gz`.
 5. `make init`, `make deploy`, `make install-services`.
@@ -121,8 +122,9 @@ refuses to start if `.env` disagrees with the volume.
 
 **git over HTTPS fails with "could not read Username".** Ubuntu 22.04's libcurl
 mishandles GitHub's HTTP/2 `103 Early Hints` responses and reports the
-following `401` as an auth failure, even for public repositories. Fixed on this
-host with `git config --system http.version HTTP/1.1`.
+following `401` as an auth failure, even for public repositories.
+`make provision` sets `git config --system http.version HTTP/1.1`. It has not
+hit the main clone so far, only the submodule, but it can.
 
 **L-Drive is world-writable.** Several container users write to it, so
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
