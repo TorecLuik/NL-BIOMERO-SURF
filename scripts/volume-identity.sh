@@ -150,7 +150,7 @@ verify_live_password() {
 omero_login_ok() {
   sudo docker compose exec -T -e U="$1" -e P="$2" omeroserver sh -c \
     '/opt/omero/server/venv3/bin/omero login -s localhost -u "$U" -w "$P" -q >/dev/null 2>&1 \
-     && /opt/omero/server/venv3/bin/omero logout -q >/dev/null 2>&1'
+     || exit 1; /opt/omero/server/venv3/bin/omero logout >/dev/null 2>&1; exit 0'
 }
 
 omero_user_exists() {
