@@ -9,10 +9,10 @@ user reports is usually two steps downstream of the fault.
 progress view first, then read the tasks:
 
 ```bash
-docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
+sudo docker compose exec -T database-biomero psql -U biomero -d biomero -x \
   -c "SELECT * FROM biomero_workflow_progress_view WHERE workflow_id='<uuid>';"
 
-docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
+sudo docker compose exec -T database-biomero psql -U biomero -d biomero -x \
   -c "SELECT task_name, status, error_type, start_time, end_time
       FROM biomero_task_execution ORDER BY start_time DESC LIMIT 10;"
 ```
@@ -20,7 +20,7 @@ docker exec nl-biomero-database-biomero-1 psql -U biomero -d biomero -x \
 For a fault inside the workflow container, the Slurm log has the traceback:
 
 ```bash
-docker exec nl-biomero-biomeroworker-1 ssh spider "tail -40 ~/omero-<jobid>.log"
+sudo docker compose exec -T biomeroworker ssh spider "tail -40 ~/omero-<jobid>.log"
 ```
 
 That log is also attached to the dataset in OMERO after the run, so it survives
@@ -34,7 +34,7 @@ folder was ever created on Spider. The message names the missing folder, not the
 fault. Real cause in `biomero.log`:
 
 ```bash
-docker exec nl-biomero-biomeroworker-1 \
+sudo docker compose exec -T biomeroworker \
   grep -i "Critical error\|ResourceError" \
   /opt/omero/server/OMERO.server/var/log/biomero.log | tail
 ```
@@ -117,11 +117,11 @@ false`. Submitting a Zarr-registered image (one read in place through
 
 ```bash
 # by-reference imports whose source has gone
-docker exec nl-biomero-omeroserver-1 bash -lc \
+sudo docker compose exec -T omeroserver bash -lc \
   'find /OMERO/ManagedRepository -type l ! -exec test -e {} \; -print'
 
 # pixel-less images; plate wells legitimately match, so exclude well samples
-docker exec nl-biomero-database-1 psql -U omero -d omero \
+sudo docker compose exec -T database psql -U omero -d omero \
   -c "SELECT i.id, i.name FROM image i JOIN pixels p ON p.image=i.id
       WHERE i.fileset IS NULL AND p.path IS NULL
         AND NOT EXISTS (SELECT 1 FROM wellsample ws WHERE ws.image=i.id);"

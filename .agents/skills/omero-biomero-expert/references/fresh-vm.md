@@ -80,6 +80,15 @@ column "description" of relation "imports" already exists
 **The Metabase dashboards do not exist.** Covered in
 [metabase-dashboards.md](metabase-dashboards.md).
 
+**`/logs` opens on a setup screen with every log already indexed.** Dashboards
+answers and fluent-bit ships, but the index pattern is a saved object nothing
+created, so the viewer shows none of it. `dashboards-init` creates it; see
+[permissions-and-deployment.md](permissions-and-deployment.md).
+
+These share a shape worth checking for directly: *responding and being usable
+are different claims.* A smoke test that proves the first while reporting the
+second is how a stack passes every check and still does not work.
+
 ## Judging "already done"
 
 When making a step idempotent, decide what *complete* means before checking it.

@@ -218,11 +218,15 @@ OMERO.web embeds them by number via `METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID` and
 
 ```bash
 sudo docker compose stop metabase
-sudo docker exec nl-biomero-database-biomero-1 \
+sudo docker compose exec -T database-biomero \
   psql -U biomero -d postgres -c "CREATE DATABASE metabase OWNER biomero;"
 
+# the network name is derived from the checkout directory, so read it back
+net=$(sudo docker inspect -f \
+  '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' metabase)
+
 # the H2 file must be WRITABLE: load-from-h2 runs migrations on the source first
-sudo docker run --rm --network nl-biomero_omero -v "$PWD/h2dir:/h2" \
+sudo docker run --rm --network "$net" -v "$PWD/h2dir:/h2" \
   -e MB_DB_TYPE=postgres -e MB_DB_HOST=database-biomero -e MB_DB_PORT=5432 \
   -e MB_DB_DBNAME=metabase -e MB_DB_USER=biomero -e MB_DB_PASS=<pass> \
   --entrypoint java metabase/metabase@sha256:<pin> \
@@ -237,7 +241,7 @@ unauthenticated callers even when embedding is on; read the `setting` table to
 check it for real:
 
 ```bash
-sudo docker exec nl-biomero-database-biomero-1 psql -U biomero -d metabase \
+sudo docker compose exec -T database-biomero psql -U biomero -d metabase \
   -c "SELECT key,value FROM setting WHERE key LIKE '%embedding%';"
 ```
 
@@ -293,7 +297,7 @@ sites -- with no setting, environment variable or order field to change it.
 So the managed repository holds symlinks into `/data`, not pixels:
 
 ```bash
-docker exec nl-biomero-omeroserver-1 \
+sudo docker compose exec -T omeroserver \
   find /OMERO/ManagedRepository -type l -exec readlink {} \;
 ```
 
@@ -313,7 +317,7 @@ space, so imported masks are the most exposed of all.
 Check for images whose source has already gone:
 
 ```bash
-docker exec nl-biomero-omeroserver-1 bash -lc \
+sudo docker compose exec -T omeroserver bash -lc \
   'find /OMERO/ManagedRepository -type l ! -exec test -e {} \; -print'
 ```
 
@@ -339,8 +343,8 @@ The importer image is built around `autoimportuser:autoimportgroup` uid/gid `100
 If preprocessing containers cannot start, test internal Podman:
 
 ```bash
-sudo docker exec -it nl-biomero-biomero-importer-1 podman info
-sudo docker exec -it nl-biomero-biomero-importer-1 podman run docker.io/godlovedc/lolcow
+sudo docker compose exec -T biomero-importer podman info
+sudo docker compose exec -T biomero-importer podman run docker.io/godlovedc/lolcow
 ```
 
 If logs cannot be written, check host `logs/biomero-importer` ownership and mode for uid/gid 1000.
@@ -350,6 +354,35 @@ If logs cannot be written, check host `logs/biomero-importer` ownership and mode
 `web/45-fix-forms-config.sh` uses a private `mktemp -d` scratch dir and `envsubst` to render `/opt/omero/web/config/01-default-webapps.omero`. This replaced an older predictable `/tmp/forms-config` pattern. Keep scratch dirs private for startup scripts that process env-derived config.
 
 `web/44-create_forms_user.py` creates/validates the forms master user. If forms startup fails, check `omeroweb` logs before changing OMERO user/group state.
+
+## The /logs Viewer
+
+`/logs` is OpenSearch Dashboards behind nginx basic auth. The credentials are
+`NGINX_LOGS_USER` and `NGINX_LOGS_PASSWORD` in `.env` -- they are what the
+browser asks for, and OpenSearch has no separate login in this deployment.
+`make logs-auth` writes them to `/etc/nginx/.htpasswd`; without that file nginx
+answers 401 on `/logs` while the rest of the site works.
+
+**Answering is not the same as being usable.** The viewer can be up with every
+log shipped and indexed, and still open on a "create an index pattern" setup
+screen showing nothing. The index template gives the data its field types; the
+Dashboards index pattern is a separate saved object, and it is what makes any of
+it browsable.
+
+`dashboards-init` creates the `biomero-logs` pattern and sets it as default. It
+is deliberately separate from `opensearch-init` because fluent-bit blocks on
+that one, and this waits on Dashboards, which is much slower to start.
+
+```bash
+sudo docker logs dashboards-init
+curl -s -H 'osd-xsrf: true' \
+  'http://localhost:5601/logs/api/saved_objects/_find?type=index-pattern&per_page=20' \
+  | grep -o 'biomero-logs'
+```
+
+`scripts/bootstrap-prod.sh` smoke-tests both claims separately. Re-running
+`dashboards-init` recreates the pattern; `opensearch/init-dashboards.sh` is
+idempotent, answering 409 when it already exists.
 
 ## Disk Space and Log Growth
 
@@ -410,6 +443,33 @@ sudo truncate -s 0 /var/lib/docker/containers/<id>/<id>-json.log
 ```
 
 OpenSearch specifically has a self-reinforcing failure mode worth recognizing: once disk usage crosses its flood-stage watermark, it marks indices read-only, including its own audit-log index. Every subsequent request then fails to audit-log, which OpenSearch reports as an `ERROR` with a full stack trace — for every request — which fills the disk further and keeps the watermark tripped. Truncating the log does not fix this; the block has to be lifted via the OpenSearch API once space exists, or the log regrows immediately.
+
+Two things made that watermark much easier to reach, both now fixed.
+
+**The disabled security plugin wrote an audit log anyway.** `plugins.security.disabled=true`
+does not stop it; the audit log is a separate switch, and on the QA VM it had
+reached 692MB against 56MB of real logs. `opensearch-compose.yml` now also sets
+`plugins.security.audit.type=noop` with `enable_rest` and `enable_transport`
+false. If a `security-auditlog-*` index reappears, that config did not take --
+the container was restarted rather than recreated.
+
+**Nothing aged anything off.** OpenSearch keeps every document forever unless an
+ISM policy says otherwise, and there was none, so `biomero-logs` grew for the
+life of the deployment with a full volume as the first symptom.
+`opensearch/retention-policy.json` rolls over at 20GB or 7 days and deletes at
+90; tune the ages there rather than in the script.
+
+```bash
+make logs-retention   # apply the policy, clear leftover audit indices
+
+curl -s 'http://localhost:9200/_cat/indices/security-auditlog-*?h=index,store.size'
+curl -s 'http://localhost:9200/_plugins/_ism/policies/biomero-logs-retention' | head -c 200
+```
+
+`scripts/apply-opensearch-retention.sh` is safe to re-run and runs from
+`make deploy`, though not under `START_LOG_STACK=0`. Updating an existing policy
+needs its current `_seq_no`/`_primary_term`, read back from the policy -- a 409
+body is an error, not the policy.
 
 Every service in `docker-compose.yml`, `docker-compose-dev.yml` and `opensearch-compose.yml` gets its log driver from `logging-defaults.yml`, a single shared stub service (`max-size: 10m`, `max-file: 5`, so roughly 50MB cap per container) pulled in per-service via:
 

@@ -21,6 +21,14 @@ make config   # BIOMERO settings as the worker resolves them
 
 `make doctor` is the fastest way to find the failure modes this deployment actually hits: a stale `biomero-importer` submodule, `.env` and `.env.example` disagreeing on pins, or an image that does not match the pin it was supposedly built from.
 
+Two repair targets run from `make deploy` and are safe to re-run alone, before
+reaching for manual fixes:
+
+```bash
+make metabase-dashboards   # rebuild the embedded dashboards from the repository
+make logs-retention        # apply the OpenSearch retention policy, clear audit indices
+```
+
 Known paths:
 
 ```text
@@ -73,8 +81,8 @@ sudo docker compose logs --tail=120 metabase omeroweb biomero-importer
 
 Read only the relevant reference before acting:
 
-- [references/permissions-and-deployment.md](references/permissions-and-deployment.md): host/container UID/GID issues, ports and public reachability, per-VM hostname values, project-local SSH, writable bind mounts, `chmod`/ownership workarounds, production vs dev compose, disk space and runaway container logs, backup/restore guardrails.
-- [references/metabase-dashboards.md](references/metabase-dashboards.md): BIOMERO Analyze/Import iframe failures, dashboard IDs, embedding secrets, H2 inspection, datasource credential repair, signed embed smoke tests.
+- [references/permissions-and-deployment.md](references/permissions-and-deployment.md): host/container UID/GID issues, ports and public reachability, per-VM hostname values, project-local SSH, writable bind mounts, `chmod`/ownership workarounds, production vs dev compose, the `/logs` viewer (basic-auth credentials, the index pattern, OpenSearch retention), disk space and runaway container logs, backup/restore guardrails.
+- [references/metabase-dashboards.md](references/metabase-dashboards.md): BIOMERO Analyze/Import iframe failures, rebuilding both dashboards from `metabase/dashboards.json`, why the ids in `.env` are outputs rather than constants, Metabase's Postgres application database, datasource credential repair, signed embed smoke tests.
 - [references/slurm-and-gpu.md](references/slurm-and-gpu.md): Spider/Slurm behavior, GPU and MIG policy, per-workflow GPU assignment, generated job scripts, image pulls and Apptainer, the output-verification patch.
 - [references/workflow-runs.md](references/workflow-runs.md): tracing a workflow run by UUID, failures that name the wrong step, results that never reach OMERO, workflow input requirements (suffixes, channel counts, registered vs listed, ZARR), and images that look importable but are not.
 - [references/importer-analyzer-storage.md](references/importer-analyzer-storage.md): BIOMERO.importer, analyzer-to-importer result flow, `/data` path invariants, `.analyzed`/`.processed`, shared storage, import order polling, importer logs.
@@ -91,7 +99,8 @@ The `biomero-importer` runs `biomero-converter` with rootless Podman inside the 
 
 ```bash
 docker build -t cellularimagingcf/biomero-converter:latest .
-docker save cellularimagingcf/biomero-converter:latest | docker exec -i nl-biomero-biomero-importer-1 podman load
+docker save cellularimagingcf/biomero-converter:latest \
+  | sudo docker compose exec -T biomero-importer podman load
 ```
 
 If importer Python code changes, mounted source may update immediately but worker processes can cache modules. Restart the service:
@@ -130,7 +139,7 @@ Common in-container paths:
 Use Postgres for high-confidence import verification:
 
 ```bash
-docker exec -it nl-biomero-database-1 psql -U omero -d omero
+make psql    # or: sudo docker compose exec -T database psql -U omero -d omero
 ```
 
 Useful checks:
