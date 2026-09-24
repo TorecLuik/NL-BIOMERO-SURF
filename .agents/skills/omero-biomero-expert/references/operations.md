@@ -11,6 +11,10 @@
 
 A `make deploy` result can pass while a feature is degraded. A running container alone is not application readiness. An outage, restore, credential rotation, nginx change, data cleanup or backup requiring quiescence needs its own authorization. Restore is destructive and requires an approved outage plan.
 
+## Production Git delivery
+
+For every production update, including changes to this agent skill, review the diff and stage only intended tracked files. Commit them on the production branch, push to its configured remote branch, and verify the remote ref resolves to the full local commit ID. Record that ID in the change or deployment report. For a deployment, complete this delivery before starting the deployment so the live update has a recoverable source revision. If the push or verification fails, report Git delivery as incomplete and stop before deploying that revision; do not describe an unpushed local commit as delivered. Never stage or push .env, .ssh, logs, generated credentials, private configuration, database files, storage content, or backup artifacts. This rule does not replace the active-work, storage-mount, or operator-approval gates for disruptive operations.
+
 ## Integration tests
 
 Tiers: read-only smoke; isolated importer smoke; isolated analyzer smoke; extended importer formats; extended workflow chain; explicitly selected benchmark/full tests. Select mutating tiers explicitly; do not hide them inside `smoke`, `audit`, or `doctor`.

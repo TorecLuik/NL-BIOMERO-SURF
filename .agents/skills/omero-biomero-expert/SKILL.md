@@ -24,6 +24,10 @@ This is a public-facing production service. Work from `/opt/omero/NL-BIOMERO`. R
 
 Read [references/operations.md](references/operations.md) for deployment gates, active work, audits, backup truthfulness, and test isolation. **For every deployment-status, smoke-audit, post-deployment, and post-integration-test report, read and follow [references/status-report.md](references/status-report.md).** A running container is evidence only that a process is running; verify application readiness separately.
 
+## Production Git delivery
+
+For every production update to tracked code, configuration, documentation, or this skill, commit the intended changes and push them to the configured remote production branch. Verify the remote branch contains the commit and record its full commit ID. A production deployment must be based on that pushed commit; do not call local-only changes delivered or deploy them as the planned update. Review the exact diff and staged files first. Never stage secrets, private configuration, logs, database files, backups, or storage content. Follow [references/operations.md](references/operations.md) for the Git-delivery checks. Pushing a commit does not authorize a restart or deployment.
+
 ## Storage is production data
 
 The attached XFS volume must be mounted at `/data/surf-biomero-storage`, and Compose must resolve database, OMERO, and L-Drive binds there before **any** start, restart, rebuild, or redeploy. `python3 scripts/check-storage-mount.py` checks this without writing. An existing directory at the mount path proves nothing. Never initialize PostgreSQL, OMERO, or L-Drive on the VM root filesystem.
