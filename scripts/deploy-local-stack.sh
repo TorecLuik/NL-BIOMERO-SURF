@@ -41,6 +41,9 @@ LOG_DIRS=(
 # Run all file operations relative to the repository root.
 cd "${PROJECT_ROOT_DIR}"
 
+python3 scripts/check-storage-mount.py
+"${PROJECT_ROOT_DIR}/scripts/check-active-work.sh" --require-idle
+
 echo "Reminder: access the web UIs via SSH port forwarding:"
 echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601 <user>@<server>"
 

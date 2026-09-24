@@ -17,6 +17,7 @@
 #
 # Usage:
 #   volume-identity.sh check    fill .env from the volume, or report a conflict
+#   volume-identity.sh verify   compare without writing .env
 #   volume-identity.sh write    record the current .env (empty volume only)
 #   volume-identity.sh adopt    record a populated volume, verifying first; on
 #                               a volume already recorded, add any key its
@@ -197,7 +198,9 @@ gen_password() {
 }
 
 case "${1:-check}" in
-  check)
+  check|verify)
+    READ_ONLY=0
+    [[ "${1:-check}" == verify ]] && READ_ONLY=1
     if ! volume_has_data; then
       echo "  [ ok ] volume is empty; .env will initialise it"
       exit 0
@@ -215,8 +218,12 @@ case "${1:-check}" in
       [[ -n "${recorded}" ]] || continue
       current="$(env_value "${key}")"
       if needs_value "${current}"; then
-        fill_env "${key}" "${recorded}"
-        filled+=("${key}")
+        if [[ "${READ_ONLY}" -eq 1 ]]; then
+          drift+=("${key} (missing; deploy would fill it)")
+        else
+          fill_env "${key}" "${recorded}"
+          filled+=("${key}")
+        fi
       elif [[ "${current}" != "${recorded}" ]]; then
         drift+=("${key}")
       fi
@@ -226,11 +233,15 @@ case "${1:-check}" in
     if [[ "$(env_value OMERO_IMPORTER_USER)" == "root" ]] \
        && needs_value "$(env_value OMERO_IMPORTER_PASSWORD)" \
        && [[ -n "$(stamp_value OMERO_ROOT_PASSWORD)" ]]; then
-      fill_env OMERO_IMPORTER_PASSWORD "$(stamp_value OMERO_ROOT_PASSWORD)"
-      filled+=(OMERO_IMPORTER_PASSWORD)
+      if [[ "${READ_ONLY}" -eq 1 ]]; then
+        drift+=("OMERO_IMPORTER_PASSWORD (missing; deploy would fill it)")
+      else
+        fill_env OMERO_IMPORTER_PASSWORD "$(stamp_value OMERO_ROOT_PASSWORD)"
+        filled+=(OMERO_IMPORTER_PASSWORD)
+      fi
     fi
     if [[ "${#drift[@]}" -gt 0 ]]; then
-      echo "  [FAIL] .env disagrees with the volume on: ${drift[*]}" >&2
+      echo "  [FAIL] .env does not match the volume on: ${drift[*]}" >&2
       echo "         The volume's values are fixed by its data. Remove these from" >&2
       echo "         .env to take the volume's, or attach the matching volume." >&2
       exit 1
@@ -318,7 +329,7 @@ case "${1:-check}" in
     printf '%s\n' "${VOLUME_KEYS[@]}"
     ;;
   *)
-    echo "usage: volume-identity.sh [check|write|adopt|rotate KEY|keys]" >&2
+    echo "usage: volume-identity.sh [check|verify|write|adopt|rotate KEY|keys]" >&2
     exit 2
     ;;
 esac

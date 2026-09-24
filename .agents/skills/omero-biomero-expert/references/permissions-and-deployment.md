@@ -7,12 +7,12 @@ NL-BIOMERO mixes host files, Docker volumes, and containers running as different
 High-risk write paths:
 
 ```text
-web/L-Drive                 # mounted as /data in server, worker, web, importer
+/data/surf-biomero-storage/L-Drive  # mounted as /data in server, worker, web, importer
 logs/*                      # mounted into service-specific log paths
 web/slurm-config.ini        # written by OMERO.biomero admin UI from omeroweb
 web/biomero-config.json     # written/read by OMERO.biomero and worker
 web/group-mappings.json     # dev/newer OMERO.biomero group mapping file
-metabase/                   # H2 app DB, owned by metabase uid/gid 2000
+/data/surf-biomero-storage/database-biomero  # Metabase Postgres application DB
 .ssh/                       # project-local copy mounted into biomeroworker
 ```
 
@@ -120,24 +120,15 @@ chmod 644 /opt/omero/server/.ssh/known_hosts
 
 Repo-local `.ssh/config` holds the cluster hosts only (`spider`, and upstream's
 `localslurm`), written by the deploy. It is not a way to reach the VMs; those
-are plain `ssh <address>`, listed in SKILL.md.
+are plain `ssh <address>` and are outside this VM’s local operation.
 
 ## Deploy Script Permission Workarounds
 
-`scripts/deploy-local-stack.sh` creates expected bind-mount paths and applies pragmatic permissions:
-
-```bash
-mkdir -p .ssh web/L-Drive logs/omeroserver logs/omeroworker-1 logs/biomeroworker logs/omeroweb logs/biomero-importer
-chmod 700 .ssh
-chmod 600 .ssh/$SLURM_ACCESS_KEY
-chmod 644 .ssh/$SLURM_ACCESS_KEY.pub .ssh/known_hosts .ssh/config
-sudo chmod -R 777 web/L-Drive logs
-sudo chmod 666 web/slurm-config.ini web/biomero-config.json web/group-mappings.json
-sudo chown -R 1000:1000 logs/biomero-importer
-sudo chmod -R 775 logs/biomero-importer
-```
-
-Treat broad `777` as a compatibility workaround for mixed host/container users, not a security ideal. Prefer targeted ownership or ACLs once writer UIDs are known.
+`scripts/deploy-local-stack.sh` creates required paths and applies permissions.
+Before any deployment, `scripts/check-storage-mount.py` must confirm the
+attached XFS volume and resolved database, OMERO and L-Drive bind sources.
+The current L-Drive path is `/data/surf-biomero-storage/L-Drive`, not
+`web/L-Drive`. Avoid ad hoc recursive chmod/chown on production data.
 
 The cluster key is always addressed as `$SLURM_ACCESS_KEY` (from `.env`, defaulting to `slurm_access_key`), never by a literal filename. A hardcoded `id_rsa` once survived in this script after the key was renamed, and because the script runs under `set -euo pipefail`, the missing path aborted the whole deploy on a message that names no cause:
 
@@ -157,11 +148,11 @@ When `make deploy` dies on a bare `chmod`/`cp`/`ln` error immediately after pref
 Production `docker-compose.yml`:
 
 - uses built images and normal entrypoints
-- mounts `./.ssh:/tmp/.ssh:ro` for the worker
+- mounts `./.ssh-worker:/tmp/.ssh:ro` for the worker
 - exposes OMERO, OMERO.web, and Metabase on host ports
 - uses `profiles: ["IMPORTER_ENABLED"]` for `biomero-importer`
-- mounts `./web/L-Drive:/data` consistently
-- mounts `./metabase:/metabase-data`
+- mounts `${OMERO_DATA_PATH}/L-Drive:/data` consistently
+- stores the Metabase application database in `database-biomero` Postgres
 
 Development `docker-compose-dev.yml`:
 
@@ -270,17 +261,8 @@ mkdir -p backups
 sudo tar -czf "backups/metabase.pre-change.$TS.tar.gz" metabase
 ```
 
-When copying a working `metabase/` folder between hosts, preserve numeric ownership:
-
-```bash
-tar --numeric-owner -czf - metabase | ssh -F .ssh/config biomero-prod '
-  cd /opt/omero/NL-BIOMERO &&
-  sudo rm -rf metabase &&
-  sudo tar --numeric-owner -xzf -
-'
-```
-
-After cross-host copy, repair datasource credentials for the target environment; the H2 DB carries database passwords, admin users, and embedding settings.
+This H2 procedure is historical. The current production deployment uses Postgres.
+Any cross-host migration or restore requires a separate approved outage plan.
 
 ## The Importer Always Links, Never Copies
 
@@ -360,8 +342,9 @@ boot disk and look healthy. `nl-biomero.service` (installed by
 data path, and `make down` at shutdown. `nl-biomero-backup.timer` runs the
 nightly backup.
 
-After pausing and resuming the workspace, or reattaching the volume later than
-boot: `make ps`, and if the stack is down, `sudo systemctl restart nl-biomero`.
+After pausing and resuming the workspace, check `make ps` and
+`python3 scripts/check-storage-mount.py`. Check active work and obtain operator
+approval before restarting `nl-biomero`; do not restart if the mount gate fails.
 `make doctor` warns when either unit is missing.
 
 ## Git over HTTPS on Ubuntu 22.04
@@ -398,7 +381,6 @@ If preprocessing containers cannot start, test internal Podman:
 
 ```bash
 sudo docker compose exec -T biomero-importer podman info
-sudo docker compose exec -T biomero-importer podman run docker.io/godlovedc/lolcow
 ```
 
 If logs cannot be written, check host `logs/biomero-importer` ownership and mode for uid/gid 1000.
@@ -450,16 +432,11 @@ sudo du -sxh /var/lib/docker/* 2>/dev/null | sort -rh | head
 sudo docker system df -v
 ```
 
-Ordinary, safe-to-reclaim space (does not touch running containers or their data):
-
-```bash
-sudo docker image prune -a -f      # dangling/unused images only
-sudo journalctl --vacuum-time=3d   # systemd journal, self-regrows, safe to trim
-```
-
-Before removing any image shown as reclaimable, confirm with `docker inspect <container> --format='{{.Image}}'` that no running container actually references it — a tag can be reassigned to a new build while a running container still holds the old image ID, so the stale tag looks orphaned but the digest under it may not be.
-
-Stale `~/.vscode-server` installs from failed/interrupted remote connections can also hold several GB; safe to `rm -rf ~/.vscode-server` on the affected user, VS Code reinstalls it on next connect.
+Inspect the affected filesystem and candidate usage with `df -h`, `df -i`,
+`sudo -n docker system df` and targeted `du` before proposing cleanup. Docker
+images, build cache, logs and backups require explicit deletion authorization.
+Do not run `docker image prune`, `docker system prune`, journal vacuum, or
+recursive removal as part of an audit.
 
 ### Runaway container logs
 
@@ -563,13 +540,13 @@ extends:
 
 `scripts/backup-nightly.sh`, run at 02:30 by `nl-biomero-backup.timer` and on
 demand by `make backup`, writes `<data>/backups/nightly/<timestamp>/`, root-only,
-14 days kept:
+retained until separately approved cleanup:
 
 ```text
 omero.pg_dump  biomero.pg_dump  metabase.pg_dump   from the running databases
 omero-files.tar.gz                                 OMERO repository, no caches
 secrets.tar.gz                                     .env, .ssh/, config/, web configs
-SHA256SUMS
+SHA256SUMS  COMPLETE (new sets)
 ```
 
 It is small -- megabytes -- because it holds structure, not pixels: users,

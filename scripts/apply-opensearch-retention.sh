@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# Apply the log retention policy, and clear out the security audit indices.
+# Apply the log retention policy; report existing security audit indices.
 #
 # OpenSearch keeps every document forever unless an ISM policy says otherwise.
 # Without this, biomero-logs grows for the life of the deployment and the only
 # signal is the volume filling up.
 #
-# It also deletes any security-auditlog-* indices. The security plugin is
-# disabled in opensearch-compose.yml, but its audit log wrote anyway --
-# ~8.5M documents and 1.5GB a day of transport records, twelve times the size
-# of the logs anyone wants. The compose file turns that off; this clears what
-# earlier runs already accumulated.
-#
-# Safe to re-run: applying an unchanged policy is a no-op, and there is nothing
-# to delete once the audit indices are gone.
+# Existing security-auditlog indices are reported but not deleted.
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,14 +22,11 @@ if ! curl -fsS --max-time 20 "${OS_URL}/_cluster/health" >/dev/null 2>&1; then
   exit 0
 fi
 
-# The audit indices first: they are the bulk of the disk use.
+# Existing audit indices are production logs. Report their presence; deletion
+# requires a separate explicit operator authorization.
 audit="$(curl -fsS --max-time 20 "${OS_URL}/_cat/indices/security-auditlog-*?h=index" 2>/dev/null || true)"
 if [[ -n "${audit}" ]]; then
-  bytes="$(curl -fsS --max-time 20 "${OS_URL}/_cat/indices/security-auditlog-*?h=store.size&bytes=b" 2>/dev/null \
-           | awk '{s+=$1} END {print s+0}')"
-  curl -fsS -X DELETE --max-time 60 "${OS_URL}/security-auditlog-*" >/dev/null 2>&1 || true
-  printf '  [ ok ] removed %d security audit index(es), about %d MB\n' \
-    "$(wc -l <<<"${audit}")" "$(( bytes / 1024 / 1024 ))"
+  printf '  [warn] %d security audit index(es) remain; cleanup requires approval\n' "$(wc -l <<<"${audit}")"
 fi
 
 code="$(curl -s -o /tmp/ism-out -w '%{http_code}' --max-time 30 \

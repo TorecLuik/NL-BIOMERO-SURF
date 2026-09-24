@@ -43,6 +43,22 @@
     "0": {
       "folder": "root",
       "groupName": "system"
+    },
+    "3": {
+      "folder": "amsterdam_umc",
+      "groupName": "Amsterdam"
+    },
+    "53": {
+      "folder": "leiden",
+      "groupName": "Leiden"
+    },
+    "54": {
+      "folder": "maastricht",
+      "groupName": "Maastricht"
+    },
+    "55": {
+      "folder": "groningen",
+      "groupName": "Groningen"
     }
   }
 }

@@ -66,14 +66,10 @@ the untouched install, and it is what makes both status pages read "Not found."
 
 ## Environment Alignment
 
-Verify `omeroweb` and `metabase` agree on URL and secret:
-
-```bash
-cd /opt/omero/NL-BIOMERO
-sudo docker compose exec -T metabase env | sort | grep -E 'MB_|METABASE' | sed -E 's/(PASSWORD|SECRET|KEY)=.*/\1=***MASKED***/'
-sudo docker compose exec -T omeroweb env | sort | grep -E 'METABASE_(IMPORTS|WORKFLOWS|SITE|SECRET)' | sed -E 's/(PASSWORD|SECRET|KEY)=.*/\1=***MASKED***/'
-grep -nE 'METABASE_(SITE|IMPORTS|WORKFLOWS|SECRET)' .env | sed -E 's/(SECRET_KEY=).*/\1***MASKED***/'
-```
+Verify the public Metabase URL and embedding settings through the read-only
+API or `make audit`. If a secret mismatch is suspected, compare only the
+necessary keys in memory and report equality, never the values. Do not dump
+container environments or `.env` into logs.
 
 Metabase env should include:
 

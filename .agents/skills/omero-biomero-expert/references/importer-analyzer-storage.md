@@ -14,7 +14,7 @@ omeroweb        -> /data for UI file selection/config
 The compose mount is usually:
 
 ```yaml
-- "./web/L-Drive:/data"
+- "${OMERO_DATA_PATH}/L-Drive:/data"
 ```
 
 If paths differ between containers, imports can queue correctly but fail with file-not-found, broken symlink, or result import polling failures.
@@ -87,15 +87,14 @@ sudo docker compose exec biomeroworker \
   /opt/omero/server/venv3/bin/python -c "import biomero_importer; print('ok')"
 ```
 
-Verify DB URLs align:
+Check DB URL presence (this does not prove the values align). Check only presence from inside each service; do not print the URL or entire environment:
 
 ```bash
-sudo docker compose exec -T biomeroworker env | grep INGEST_TRACKING_DB_URL
-sudo docker compose exec -T biomero-importer env | grep INGEST_TRACKING_DB_URL
-sudo docker compose exec -T omeroweb env | grep INGEST_TRACKING_DB_URL
+for svc in biomeroworker biomero-importer omeroweb; do
+  sudo -n docker compose exec -T "$svc" sh -c 'test -n "$INGEST_TRACKING_DB_URL"' \
+    && echo "$svc: set" || echo "$svc: missing"
+done
 ```
-
-Mask passwords in user-facing output.
 
 ## BIOMERO.importer Model
 
@@ -144,7 +143,7 @@ sudo docker compose logs --tail=200 biomero-importer biomeroworker
 
 ## Retry Failed Import Order
 
-A failed order can be retried by setting it back to pending in the BIOMERO DB. Confirm schema/stage names in the running DB first.
+A failed order can be retried by setting it back to pending in the BIOMERO DB. This mutates production tracking state: obtain authorization, record the exact UUID and confirm schema/stage names in the running DB first.
 
 Example from docs:
 
@@ -228,3 +227,14 @@ submodule and a stale image at the same time.
 
 A fresh clone has an empty `biomero-importer/` and the build fails outright.
 Run `make init` first.
+
+## Converter and physical units
+
+The importer runs `biomero-converter` through Podman **inside the importer
+container**. Its internal image store is ephemeral on container recreation; a
+converter rebuild requires a deliberate image reload and importer restart after
+checking active work and obtaining approval. Do not run host rootless Podman.
+
+When registration code creates OMERO physical unit model values, pass raw
+numbers, e.g. `TimeI(d_t, UnitsTime.SECOND)`, rather than a gateway `rdouble`
+wrapper.

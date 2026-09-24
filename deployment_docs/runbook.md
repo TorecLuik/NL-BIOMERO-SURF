@@ -1,6 +1,6 @@
 # Production Runbook
 
-*Created 2026-09-23 · last updated 2026-09-23*
+*Created 2026-09-23 · last updated 2026-09-24*
 
 How the production deployment at
 `https://surfbiomero.biomero-data-ch.src.surf-hosted.nl` is laid out, how to
@@ -35,7 +35,7 @@ Admins are the members of the CO group `rsc_co_202570`. They are also in the
 | `…/omero` | OMERO binary repository | uid 1000 |
 | `…/L-Drive` | user data; in-place imports link here | `0777`, set by `make deploy` |
 | `…/config/volume-identity` | the database passwords this volume needs | `0600`, read through sudo |
-| `…/backups/nightly` | nightly dumps, 14 days | root only |
+| `…/backups/nightly` | nightly dumps, retained until approved cleanup | root only |
 | `…/backups/pre-upgrade-20260824` | snapshot of the previous deployment | root only |
 | `…/backups/runtime-pre-rebuild-20260923` | the previous deployment's live data, as it was left on 2026-09-01 | root only |
 
@@ -48,6 +48,10 @@ removed without affecting it.
 cd /opt/omero/NL-BIOMERO
 make ps                 # container status
 make doctor             # configuration drift; changes nothing
+make check              # read-only preflight
+make audit              # read-only status audit
+make smoke              # read-only service smoke
+make backup-verify      # read-only latest backup verification
 make logs:omeroserver   # follow one service
 make up / make down     # start / stop everything
 make backup             # run the nightly backup now
@@ -75,8 +79,10 @@ systemctl status nl-biomero.service
 make install-services           # (re)install the units from .env
 ```
 
-After pausing and resuming the workspace in the portal, check `make ps`: if the
-volume was reattached after boot, run `sudo systemctl restart nl-biomero`.
+After pausing and resuming the workspace in the portal, check `make ps` and
+`python3 scripts/check-storage-mount.py`. If the volume was reattached after
+boot, check active imports and workflows and obtain operator approval before
+`sudo systemctl restart nl-biomero`. Never restart against an unmounted path.
 
 ## Backups
 
@@ -97,7 +103,11 @@ journalctl -u nl-biomero-backup.service -n 20
 ```
 
 These backups sit on the same volume as the data. They cover a bad upgrade or a
-deleted project, **not the loss of the volume**. See Open Items.
+deleted project, **not the loss of the volume**. `make backup-verify` checks the
+newest set without restoring it; new sets have a `COMPLETE` marker. Backup sets
+are retained until an operator separately authorizes deletion; monitor volume
+space as sets accumulate. Independently
+captured dumps and files are not an atomic recovery point. See Open Items.
 
 ### Restoring a Database
 

@@ -19,19 +19,19 @@
 # off the VM for that; see deployment_docs/runbook.md.
 #
 # Usage:
-#   scripts/backup-nightly.sh               back up, then prune past KEEP_DAYS
-#   KEEP_DAYS=30 scripts/backup-nightly.sh  keep a different number of days
+#   scripts/backup-nightly.sh               write one complete backup set
+#   Retention deletion requires separate explicit authorization.
 set -euo pipefail
 
 PROJECT_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_ROOT_DIR}"
 
-KEEP_DAYS="${KEEP_DAYS:-14}"
 COMPOSE=(docker compose)
 [[ "$(id -u)" -eq 0 ]] || COMPOSE=(sudo docker compose)
 
 env_value() { grep -hE "^$1=" .env | tail -1 | cut -d= -f2-; }
 
+python3 scripts/check-storage-mount.py
 DATA_PATH="$(env_value OMERO_DATA_PATH)"
 [[ -d "${DATA_PATH}/omero" ]] || { echo "no ${DATA_PATH}/omero; is the volume attached?" >&2; exit 1; }
 
@@ -61,7 +61,6 @@ sudo tar -C "${PROJECT_ROOT_DIR}" -czf "${DEST}/secrets.tar.gz" \
   -C "${DATA_PATH}" config
 
 sudo sh -c "cd '${DEST}' && sha256sum *.pg_dump *.tar.gz > SHA256SUMS"
-
-sudo find "${DEST_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime "+${KEEP_DAYS}" -exec rm -rf {} +
+sudo touch "${DEST}/COMPLETE"
 
 echo "backup written to ${DEST} ($(sudo du -sh "${DEST}" | cut -f1))"

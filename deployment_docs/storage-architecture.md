@@ -1,6 +1,6 @@
 # Storage Architecture
 
-*Created 2026-09-17 · last updated 2026-09-23*
+*Created 2026-09-17 · last updated 2026-09-24*
 
 Every piece of state this deployment must not lose lives on an attached storage
 volume, not on the VM. The VM holds the repository, the Docker images and the
@@ -292,8 +292,9 @@ sudo du -sh /data/<volume-name>/*
 df -h / /data/<volume-name>
 ```
 
-The boot disk fills first, with Docker images and build cache; `docker system
-prune` is the remedy there, not a larger volume.
+The boot disk may fill with Docker images and build cache. Identify the
+affected filesystem and candidates with read-only checks; any image, cache or
+log deletion requires explicit operator authorization.
 
 ## Constraints Worth Knowing
 

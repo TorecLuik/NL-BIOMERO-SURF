@@ -1,6 +1,6 @@
 # End-to-End Pipeline Tests
 
-*Created 2026-09-17 · last updated 2026-09-23*
+*Created 2026-09-17 · last updated 2026-09-24*
 
 Manual tests that exercise the full chain — import, export to Spider, remote
 conversion, Slurm workflow, results back in OMERO — using the datasets in
@@ -10,6 +10,17 @@ the importer picking up files unattended.
 
 Everything here is done in the browser. Terminal commands appear only for
 diagnosing a failure, never to run a test.
+
+
+## Production test isolation
+
+The browser tests below change OMERO, BIOMERO and Spider state. Run a selected
+test only after approval, using a unique run ID. Copy the minimum fixture to
+an approved isolated directory under L-Drive, record the exact paths and
+created object/import/workflow/Slurm IDs, then verify both result usability
+and cleanup. Keep failed-run evidence. Never import or clean an authoritative
+fixture directly. For `cellssmall`, copy both `experiment.db` and `images-0.db`
+with their relative layout. Do not delete by wildcard, prefix or folder name.
 
 ## Before starting
 
@@ -136,9 +147,9 @@ sudo docker compose exec database psql -U omero -d omero \
         AND NOT EXISTS (SELECT 1 FROM wellsample ws WHERE ws.image=i.id);"
 ```
 
-**Pass:** no rows. Delete any that appear before going further -- and never use
-*Select ALL* in the picker while one exists, because a single bad image aborts
-the whole batch and every other image in that run is lost.
+**Pass:** no rows. Investigate any rows before going further; deletion of
+production objects requires separate authorization and exact IDs. Avoid
+*Select ALL* while one exists, because a single bad image can abort the batch.
 
 ## Chain A — $FIG7
 

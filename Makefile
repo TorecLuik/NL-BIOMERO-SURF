@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor audit backup-verify active-work set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -22,6 +22,9 @@ help:
 	@echo "  make init               submodules, runtime config, hostname, /logs auth"
 	@echo "  make deploy             set up and start the stack, then smoke test"
 	@echo "  make doctor             diagnose configuration drift, changes nothing"
+	@echo "  make audit              read-only production status audit"
+	@echo "  make active-work        read-only imports, tasks and Spider queue"
+	@echo "  make backup-verify      verify latest backup without restoring"
 	@echo "  make render-config      render slurm-config.ini from the template"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make adopt-volume       record an existing volume's database credentials"
@@ -52,7 +55,7 @@ help:
 	@echo ""
 	@echo "Verify"
 	@echo "  make check              preflight only, changes nothing"
-	@echo "  make smoke              full deploy-and-smoke-test"
+	@echo "  make smoke              read-only smoke checks of the running stack"
 	@echo "  make gpu                effective Slurm params per workflow"
 	@echo "  make config             BIOMERO settings as the worker resolves them"
 	@echo ""
@@ -101,8 +104,7 @@ render-config:
 # pages read "Not found." make deploy runs the restore; these are for doing it
 # on its own, and for re-exporting after editing a dashboard in the UI.
 # OpenSearch keeps every document forever without an ISM policy. This also
-# clears the security audit indices, which the disabled security plugin writes
-# anyway at about 1.5GB a day.
+# reports security audit indices; their deletion requires separate approval.
 logs-retention:
 	@./scripts/apply-opensearch-retention.sh
 
@@ -169,7 +171,7 @@ show-key:
 # match the pins they were supposedly built from.
 doctor:
 	@echo "== Submodule =="
-	@if [ -f biomero-importer/Dockerfile ]; then 		printf '  [ ok ] biomero-importer checked out at %s\n' "$$(cd biomero-importer && git describe --tags 2>/dev/null || echo unknown)"; 		pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); 		have=$$(cd biomero-importer && git describe --tags 2>/dev/null | sed 's/^v//'); 		if [ "$$have" = "$$pin" ]; then printf '  [ ok ] submodule matches BIOMERO_IMPORTER_VERSION (%s)\n' "$$pin"; 		else printf '  [warn] submodule is %s but pin is %s; the importer image would build from the wrong source\n' "$$have" "$$pin"; fi; 	else 		echo "  [FAIL] biomero-importer/ is empty; run: make init"; 	fi
+	@if [ -f biomero-importer/Dockerfile ]; then 		printf '  [ ok ] biomero-importer checked out at %s\n' "$$(git -c safe.directory=$(CURDIR)/biomero-importer -C biomero-importer describe --tags 2>/dev/null || echo unknown)"; 		pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); 		have=$$(git -c safe.directory=$(CURDIR)/biomero-importer -C biomero-importer describe --tags 2>/dev/null | sed 's/^v//'); 		if [ "$$have" = "$$pin" ]; then printf '  [ ok ] submodule matches BIOMERO_IMPORTER_VERSION (%s)\n' "$$pin"; 		else printf '  [warn] submodule is %s but pin is %s; the importer image would build from the wrong source\n' "$$have" "$$pin"; fi; 	else 		echo "  [FAIL] biomero-importer/ is empty; run: make init"; 	fi
 	@echo "== Pins =="
 	@for v in BIOMERO_VERSION OMERO_BIOMERO_VERSION BIOMERO_IMPORTER_VERSION OMERO_FORMS_VERSION; do 		lo=$$(grep -E "^$$v=" .env 2>/dev/null | cut -d= -f2); 		if [ -z "$$lo" ]; then printf '  [warn] %-26s not set in .env\n' "$$v"; 		else printf '  [ ok ] %-26s %s\n' "$$v" "$$lo"; fi; 	done
 	@echo "== Installed vs pins =="
@@ -179,7 +181,8 @@ doctor:
 # .ssh/config is written by make deploy, not by make init, so it is legitimately
 # absent between the two. Reporting it as [FAIL] there sent people looking for a
 # file they were never meant to create by hand.
-	@if [ -e .ssh/config ]; then printf '  [ ok ] %s\n' ".ssh/config"; 		else printf '  [warn] %s not written yet; make deploy creates it\n' ".ssh/config"; fi
+	@if [ ! -x .ssh ]; then echo "  [warn] .ssh inaccessible to this account; not tested"; \
+	elif [ -e .ssh/config ]; then printf '  [ ok ] %s\n' ".ssh/config"; 		else printf '  [warn] %s not written yet; make deploy creates it\n' ".ssh/config"; fi
 	@echo "== Public hostname =="
 	@host=$$(hostname -f 2>/dev/null); \
 	envfile=.env; \
@@ -203,12 +206,12 @@ doctor:
 	@echo "== Importer image =="
 	@pin=$$(grep -E '^BIOMERO_IMPORTER_VERSION=' .env | cut -d= -f2); \
 	img=$$($(COMPOSE) config --images 2>/dev/null | grep -m1 'biomero-importer'); \
-	got=$$([ -n "$$img" ] && sudo docker run --rm --entrypoint sh "$$img" -c '/opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null' 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
-	sub=$$(cd biomero-importer 2>/dev/null && git describe --tags --exact-match 2>/dev/null | sed 's/^v//'); \
+	got=$$([ -n "$$img" ] && $(COMPOSE) exec -T biomero-importer /opt/conda/envs/auto-import-env/bin/pip list 2>/dev/null | awk '/^biomero-importer /{print $$2}'); \
+	sub=$$(git -c safe.directory=$(CURDIR)/biomero-importer -C biomero-importer describe --tags --exact-match 2>/dev/null | sed 's/^v//'); \
 	if [ -z "$$got" ]; then echo "  [warn] could not read the importer image; is it built?"; \
 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] importer image is %s\n' "$$got"; \
 	elif [ "$$got" = "0.0.0" ] && [ "$$sub" = "$$pin" ]; then \
-	     printf '  [ ok ] importer submodule is at %s (image self-reports 0.0.0)\n' "$$sub"; \
+	     printf '  [warn] importer image self-reports 0.0.0; submodule is %s, image build provenance NOT TESTED\n' "$$sub"; \
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
 	@echo "== Metabase app DB =="
@@ -298,6 +301,7 @@ set-host:
 # -- stack ------------------------------------------------------------------
 
 up:
+	@python3 scripts/check-storage-mount.py
 	$(COMPOSE) up -d
 	$(LOGS_STACK) up -d
 
@@ -311,6 +315,7 @@ ps:
 	@$(COMPOSE) ps --format 'table {{.Service}}\t{{.Status}}'
 
 build:
+	@python3 scripts/check-storage-mount.py
 	$(COMPOSE) up -d --build
 
 # -- inspect ----------------------------------------------------------------
@@ -324,7 +329,16 @@ check:
 	@./scripts/bootstrap-prod.sh --check-only
 
 smoke:
-	@./scripts/bootstrap-prod.sh
+	@./scripts/smoke-readonly.sh
+
+audit:
+	@./scripts/audit-readonly.sh
+
+active-work:
+	@./scripts/check-active-work.sh
+
+backup-verify:
+	@./scripts/verify-backup-readonly.sh
 
 # Effective Slurm parameters per workflow. Run this after touching GPU config:
 # it is what catches a --gres and --gpus conflict before Spider rejects the job.
@@ -379,9 +393,11 @@ logs\:%:
 	$(COMPOSE) logs -f $*
 
 restart\:%:
+	@python3 scripts/check-storage-mount.py
 	$(COMPOSE) restart $*
 
 rebuild\:%:
+	@python3 scripts/check-storage-mount.py
 	$(COMPOSE) up -d --build $*
 
 shell\:%:
