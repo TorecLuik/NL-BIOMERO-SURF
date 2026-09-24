@@ -16,11 +16,16 @@ This is a public-facing production service. Work from `/opt/omero/NL-BIOMERO`. R
 | Current state | `make audit` | Read-only audit |
 | Running application | `make smoke` | Read-only smoke; no import or workflow |
 | Latest backup | `make backup-verify` | Read-only checksum and archive checks |
+| Spider access | `make spider` | Interactive SSH from inside `biomeroworker` |
 | Deployment | `make deploy` | Builds, writes config, starts both Compose stacks |
 | Backup | `make backup` | Captures a new backup set; requires separate authorization |
 | Restore | Runbook procedure | Destructive; separate outage plan |
 
-`make ps`, `make config`, and `make active-work` are useful initial checks. `docker-compose.yml` holds the core services; `opensearch-compose.yml` holds logging. `make up` starts both. Use Compose **service names**, never derived container names. The Makefile invokes `sudo docker compose`; for direct commands use `sudo -n docker compose`. No ACC paths, rootless host Podman, or ACC systemd environment apply here. Podman exists only inside `biomero-importer` for conversion.
+Start with `make` to list the current targets and use the Makefile wrapper for routine operations. Use `make ps` for container state; `make doctor`, `make check`, `make audit`, `make smoke`, `make active-work`, and `make backup-verify` for read-only checks; and `make config` or `make gpu` to inspect effective BIOMERO and Slurm settings. Use `make logs:SVC` for one Compose service. These targets are the supported entry points on this server; inspect their definitions before assuming a target is read-only or invoking it in automation.
+
+Use `make spider` for interactive SSH to Spider **from inside `biomeroworker`**, the same connection path BIOMERO uses. Use `make smoke` for a read-only worker-to-Spider Slurm reachability check and `make active-work` for the queue and active-task check. A host account's inability to traverse the checkout's `.ssh/` does not prove the worker cannot reach Spider; report the host-side check separately. Do not run interactive `make spider` as a status or audit probe.
+
+`docker-compose.yml` holds the core services; `opensearch-compose.yml` holds logging. `make up` starts both. Use Compose **service names**, never derived container names. The Makefile invokes `sudo docker compose`; for direct commands use `sudo -n docker compose`. No ACC paths, rootless host Podman, or ACC systemd environment apply here. Podman exists only inside `biomero-importer` for conversion.
 
 Read [references/operations.md](references/operations.md) for deployment gates, active work, audits, backup truthfulness, and test isolation. **For every deployment-status, smoke-audit, post-deployment, and post-integration-test report, read and follow [references/status-report.md](references/status-report.md).** A running container is evidence only that a process is running; verify application readiness separately.
 
