@@ -1,6 +1,6 @@
 # Production Runbook
 
-*Created 2026-09-23 · last updated 2026-09-24*
+*Created 2026-09-23 · last updated 2026-10-14*
 
 How the production deployment at
 `https://surfbiomero.biomero-data-ch.src.surf-hosted.nl` is laid out, how to
@@ -156,6 +156,22 @@ the cluster key:
 refuses to start if `.env` disagrees with the volume.
 
 ## Known Issues
+
+**Admin image downloads can ignore container environment settings.** The OMERO
+processor filters the environment of script subprocesses. Its allowlist omits
+`BIOMERO_IMAGE_PULL_VIA_SBATCH` and `BIOMERO_APPTAINER_*`, so setting these only
+in Docker does not configure the Slurm Init admin script. Keep
+`slurm_image_pull_via_sbatch`, `image_pull_cpus`, `image_pull_mem`,
+`apptainer_tmpdir`, and `apptainer_cachedir` in the `[SLURM]` section too; the
+template supplies these defaults. For an existing deployment, update only those
+keys in the rendered file, preserving workflows added through the UI.
+
+On 2026-10-13, the fallback login-node pulls exhausted `/tmp`. The fallback
+script printed `finished` even after Apptainer failed, leaving missing versions
+shown as pending. Inspect `sing.log` and `squeue` rather than treating that UI
+label as proof of an active download. Retry missing images through CPU Slurm
+jobs with project-backed temporary storage, validate each SIF before publishing
+it, and preserve existing images and failure logs.
 
 **git over HTTPS fails with "could not read Username".** Ubuntu 22.04's libcurl
 mishandles GitHub's HTTP/2 `103 Early Hints` responses and reports the
