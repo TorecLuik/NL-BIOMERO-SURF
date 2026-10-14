@@ -144,6 +144,7 @@ def translate(node):
             named = name_field(node[1])
             if named:
                 return ["field/name", named] + [translate(x) for x in node[2:]]
+            raise ValueError("Cannot export unresolved Metabase field ID %s" % node[1])
         return [translate(x) for x in node]
     if isinstance(node, dict):
         res = {}
@@ -151,6 +152,11 @@ def translate(node):
             if k == "source-table" and isinstance(v, int):
                 named = name_table(v)
                 res["source-table/name"] = named if named else v
+            elif k == "column_settings" and isinstance(v, dict):
+                # Metabase serializes field references inside JSON object keys.
+                # Recursing over values alone leaves these installation IDs behind.
+                res[k] = {json.dumps(translate(json.loads(key)), separators=(",", ":")):
+                          translate(settings) for key, settings in v.items()}
             else:
                 res[k] = translate(v)
         return res
@@ -186,6 +192,8 @@ for d in dashboards:
         card = tile.get("card")
         if not card:
             continue
+        tile["visualization_settings"] = translate(tile["visualization_settings"])
+        card["visualization_settings"] = translate(card["visualization_settings"])
         q = card["dataset_query"]
         if isinstance(q, str):
             q = json.loads(q)

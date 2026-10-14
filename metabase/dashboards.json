@@ -267,14 +267,7 @@
         "size_y": 8,
         "visualization_settings": {
           "column_settings": {
-            "[\"ref\",[\"field\",2586,null]]": {
-              "click_behavior": {
-                "linkTemplate": "http://localhost:4080/webclient/search/?search_query=\"{{workflow_id}}\"",
-                "linkType": "url",
-                "type": "link"
-              }
-            },
-            "[\"ref\",[\"field\",2587,null]]": {
+            "[\"ref\",[\"field/name\",{\"database\":\"BIOMERO\",\"schema\":\"public\",\"table\":\"biomero_workflow_progress_view\",\"field\":\"group\"},null]]": {
               "click_behavior": {
                 "parameterMapping": {
                   "96748cdd": {
@@ -293,7 +286,26 @@
                 "type": "crossfilter"
               }
             },
-            "[\"ref\",[\"field\",2590,null]]": {
+            "[\"ref\",[\"field/name\",{\"database\":\"BIOMERO\",\"schema\":\"public\",\"table\":\"biomero_workflow_progress_view\",\"field\":\"main_task_name\"},null]]": {
+              "click_behavior": {
+                "parameterMapping": {
+                  "ea808f4a": {
+                    "id": "ea808f4a",
+                    "source": {
+                      "id": "main_task_name",
+                      "name": "Main Task Name",
+                      "type": "column"
+                    },
+                    "target": {
+                      "id": "ea808f4a",
+                      "type": "parameter"
+                    }
+                  }
+                },
+                "type": "crossfilter"
+              }
+            },
+            "[\"ref\",[\"field/name\",{\"database\":\"BIOMERO\",\"schema\":\"public\",\"table\":\"biomero_workflow_progress_view\",\"field\":\"start_time\"},null]]": {
               "click_behavior": {
                 "parameterMapping": {
                   "6b4ee65e": {
@@ -312,7 +324,7 @@
                 "type": "crossfilter"
               }
             },
-            "[\"ref\",[\"field\",2591,null]]": {
+            "[\"ref\",[\"field/name\",{\"database\":\"BIOMERO\",\"schema\":\"public\",\"table\":\"biomero_workflow_progress_view\",\"field\":\"task\"},null]]": {
               "click_behavior": {
                 "parameterMapping": {
                   "ea808f4a": {
@@ -331,23 +343,11 @@
                 "type": "crossfilter"
               }
             },
-            "[\"ref\",[\"field\",4473,null]]": {
+            "[\"ref\",[\"field/name\",{\"database\":\"BIOMERO\",\"schema\":\"public\",\"table\":\"biomero_workflow_progress_view\",\"field\":\"workflow_id\"},null]]": {
               "click_behavior": {
-                "parameterMapping": {
-                  "ea808f4a": {
-                    "id": "ea808f4a",
-                    "source": {
-                      "id": "main_task_name",
-                      "name": "Main Task Name",
-                      "type": "column"
-                    },
-                    "target": {
-                      "id": "ea808f4a",
-                      "type": "parameter"
-                    }
-                  }
-                },
-                "type": "crossfilter"
+                "linkTemplate": "http://localhost:4080/webclient/search/?search_query=\"{{workflow_id}}\"",
+                "linkType": "url",
+                "type": "link"
               }
             }
           }

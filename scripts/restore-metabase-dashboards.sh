@@ -227,6 +227,9 @@ def untranslate(node):
                 if tid is None:
                     missing.append("table %(database)s.%(schema)s.%(table)s" % v)
                 out["source-table"] = tid if tid is not None else 0
+            elif k == "column_settings" and isinstance(v, dict):
+                out[k] = {json.dumps(untranslate(json.loads(key)), separators=(",", ":")):
+                          untranslate(settings) for key, settings in v.items()}
             else:
                 out[k] = untranslate(v)
         return out
@@ -287,7 +290,7 @@ for spec in definitions:
                 "description": card.get("description"),
                 "display": card["display"],
                 "dataset_query": q,
-                "visualization_settings": card.get("visualization_settings") or {},
+                "visualization_settings": untranslate(card.get("visualization_settings") or {}),
             }, tok)
             card_id = made["id"]
             name_to_new_card[card["name"]] = card_id
@@ -309,7 +312,7 @@ for spec in definitions:
             "row": tile["row"], "col": tile["col"],
             "size_x": tile["size_x"], "size_y": tile["size_y"],
             "parameter_mappings": mappings,
-            "visualization_settings": tile.get("visualization_settings") or {},
+            "visualization_settings": untranslate(tile.get("visualization_settings") or {}),
         })
 
     call("PUT", "/api/dashboard/%d" % did, {"dashcards": dashcards}, tok)
