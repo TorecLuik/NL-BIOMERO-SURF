@@ -262,9 +262,9 @@ docs-dates:
 		[ -n "$$c" ] || continue; \
 		if git diff --quiet -- "$$f" && git diff --cached --quiet -- "$$f"; then :; else m=$$(date +%F); fi; \
 		if head -4 "$$f" | grep -q '^\*Created '; then \
-			sed -i -E "s|^\*Created .*|*Created $$c Â· last updated $$m*|" "$$f"; \
+			sed -i -E "s|^\*Created .*|*Created $$c · last updated $$m*|" "$$f"; \
 		else \
-			sed -i "1a\\\n*Created $$c Â· last updated $$m*" "$$f"; \
+			sed -i "1a\\\n*Created $$c · last updated $$m*" "$$f"; \
 		fi; \
 		printf '  %-38s %s -> %s\n' "$$(basename $$f)" "$$c" "$$m"; \
 	done

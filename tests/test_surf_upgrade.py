@@ -100,6 +100,26 @@ class ConfigurationUpgradeTests(unittest.TestCase):
         self.assertIn("image_pull_cpus = 3", slurm_path.read_text())
         self.assertEqual(json.loads(groups_path.read_text())["55"]["folder"], "admin-new-path")
 
+    def test_retired_environment_overrides_migrate_once_with_precedence(self):
+        path = self.root / ".env"
+        path.write_text(self.original_env + "BIOMERO_PULL_CPUS=2\nBIOMERO_PULL_MEM=9G\n"
+                        "BIOMERO_APPTAINER_TMPDIR=/project/${SPIDER_PROJECT}/custom-tmp\n"
+                        "BIOMERO_APPTAINER_CACHEDIR=/project/${SPIDER_PROJECT}/custom-cache\n"
+                        "BIOMERO_IMAGE_PULL_VIA_SBATCH=false\nBIOMERO_ENV_FILE_SUBMISSION=false\n")
+        self.apply(self.plan()[0])
+        slurm_path = self.volume / "config/slurm-config.ini"
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(slurm_path)
+        for key, expected in {"image_pull_cpus": "2", "image_pull_mem": "9G",
+                              "apptainer_tmpdir": "/project/demo/custom-tmp",
+                              "apptainer_cachedir": "/project/demo/custom-cache",
+                              "slurm_image_pull_via_sbatch": "false",
+                              "env_file_submission": "false", "inject_gpu_flag": "false"}.items():
+            self.assertEqual(config["SLURM"][key], expected)
+        slurm_path.write_text(slurm_path.read_text().replace("image_pull_cpus = 2", "image_pull_cpus = 5"))
+        self.assertEqual(self.plan(), ({}, []))
+        self.assertIn("image_pull_cpus = 5", slurm_path.read_text())
+
     def test_missing_mount_refuses_before_any_write(self):
         with patch.object(UPGRADE.os.path, "ismount", return_value=False):
             with self.assertRaisesRegex(ValueError, "attached mount"):

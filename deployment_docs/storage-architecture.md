@@ -89,8 +89,9 @@ One variable, `OMERO_DATA_PATH`, set in `.env`:
 - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
 ```
 
-`docker-compose.yml` declares no named volumes. Every mount is a bind mount
-under `$OMERO_DATA_PATH`.
+The SURF override uses bind mounts for persistent user and database data;
+upstream also declares named volumes, including the importer container cache.
+The database, OMERO and L-Drive binds resolve under `$OMERO_DATA_PATH`.
 
 The `:?` guard matters more than it looks. Without it, an unset variable would
 expand to an empty string, Docker would create the directories, and OMERO would

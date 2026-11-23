@@ -19,6 +19,15 @@ RUNTIME_FILES = {
     "BIOMERO_CONFIG_HOST_PATH": "biomero-config.json",
     "GROUP_MAPPINGS_HOST_PATH": "group-mappings.json",
 }
+LEGACY_SLURM_ENVIRONMENT = {
+    "BIOMERO_INJECT_GPU_FLAG": "inject_gpu_flag",
+    "BIOMERO_ENV_FILE_SUBMISSION": "env_file_submission",
+    "BIOMERO_IMAGE_PULL_VIA_SBATCH": "slurm_image_pull_via_sbatch",
+    "BIOMERO_PULL_CPUS": "image_pull_cpus",
+    "BIOMERO_PULL_MEM": "image_pull_mem",
+    "BIOMERO_APPTAINER_TMPDIR": "apptainer_tmpdir",
+    "BIOMERO_APPTAINER_CACHEDIR": "apptainer_cachedir",
+}
 LEGACY_PREPROCESSING = {
     "screen_db": {"container": "cellularimagingcf/biomero-converter:latest"},
     "dataset_leica_uuid": {
@@ -49,16 +58,47 @@ def unquote(value: str) -> str:
     return value
 
 
-def resolve_path(value: str, values: dict[str, str], root: Path) -> Path:
-    """Resolve deployment path variables without sourcing the environment."""
+def expand_environment(value: str, values: dict[str, str]) -> str:
+    """Expand deployment variables without sourcing the environment."""
     value = unquote(value)
     for _ in range(10):
         expanded = Template(value).substitute({k: unquote(v) for k, v in values.items()})
         if expanded == value:
-            path = Path(value)
-            return path if path.is_absolute() else root / path
+            return value
         value = expanded
     raise ValueError("Recursive deployment path variables")
+
+
+def resolve_path(value: str, values: dict[str, str], root: Path) -> Path:
+    """Resolve deployment path variables relative to the target checkout."""
+    path = Path(expand_environment(value, values))
+    return path if path.is_absolute() else root / path
+
+
+def migrate_slurm_environment(text: str, values: dict[str, str]) -> str:
+    """Transfer retired environment overrides once, retaining their precedence."""
+    overrides = {setting: expand_environment(values[key], values)
+                 for key, setting in LEGACY_SLURM_ENVIRONMENT.items()
+                 if unquote(values.get(key, ""))}
+    # Old Compose supplied these defaults even when .env omitted/emptied them.
+    for setting in ("inject_gpu_flag", "env_file_submission", "slurm_image_pull_via_sbatch"):
+        overrides.setdefault(setting, "true")
+    lines = []
+    in_slurm = False
+    for line in text.splitlines(keepends=True):
+        section = re.match(r"\s*\[([^]]+)\]", line)
+        if section:
+            in_slurm = section.group(1) == "SLURM"
+        setting = re.match(r"\s*([a-zA-Z0-9_]+)\s*[=:]", line) if in_slurm else None
+        if setting and setting.group(1).lower() in overrides:
+            name = setting.group(1).lower()
+            line = f"{name} = {overrides.pop(name)}\n"
+        lines.append(line)
+    migrated = "".join(lines)
+    if overrides:
+        additions = "\n".join(f"{key} = {value}" for key, value in overrides.items())
+        migrated = migrated.replace("[SLURM]", f"[SLURM]\n{additions}", 1)
+    return migrated
 
 
 def update_environment(original: str, defaults: dict[str, str]) -> tuple[str, list[str]]:
@@ -134,6 +174,7 @@ def prepare_upgrade(root: Path, source: Path = SOURCE_ROOT) -> tuple[dict[Path, 
     """Plan configuration changes using live files before committed examples."""
     env_path = root / ".env"
     original = env_path.read_text(encoding="utf-8")
+    legacy_values = read_environment(original)
     defaults = read_environment((source / ".env.example").read_text(encoding="utf-8"))
     updated, keys = update_environment(original, defaults)
     values = read_environment(updated)
@@ -164,6 +205,8 @@ def prepare_upgrade(root: Path, source: Path = SOURCE_ROOT) -> tuple[dict[Path, 
         else:
             content = (source / "web" / name).read_text(encoding="utf-8")
         if name == "slurm-config.ini":
+            if "SLURM_CONFIG_HOST_PATH" not in legacy_values:
+                content = migrate_slurm_environment(content, legacy_values)
             content = add_slurm_defaults(content, values)
         elif name == "biomero-config.json":
             content = upgrade_preprocessing(

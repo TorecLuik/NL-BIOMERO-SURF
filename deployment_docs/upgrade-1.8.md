@@ -46,7 +46,10 @@ pending, 0 means current, and 2 means a validation error.
 - Create `config/group-mappings.json` from the existing BIOMERO file's
   `group_mappings`. The release reads this separate file; upstream demo group
   IDs must not replace SURF's mappings.
-- Add missing Slurm controls. Advance only the three unchanged legacy
+- On the first layout transition, move the former Slurm environment overrides
+  into the INI with their effective precedence (including image-pull resources
+  and Apptainer paths). Subsequent runs preserve UI edits. Then add missing
+  Slurm controls. Advance only the three unchanged legacy
   preprocessing recipes to release defaults; leave custom converters intact.
 
 The paths are named by `SLURM_CONFIG_HOST_PATH`, `BIOMERO_CONFIG_HOST_PATH` and
