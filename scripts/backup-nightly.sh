@@ -53,20 +53,29 @@ dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" "$(env_value BIOMERO_
 dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" metabase                           metabase.pg_dump
 
 # The repository's symlinks point into L-Drive; tar keeps them as links.
-# Live OMERO activity can change directory metadata during traversal (tar exit
-# 1). Retry that capture, never suppress the error or mark an unstable archive
-# complete. Fatal tar errors stop immediately. These online captures remain
+# Live OMERO activity can change directory metadata during traversal. Retry
+# only exit 1 accompanied exclusively by the confirmed GNU tar diagnostic.
+# Keep each attempt's stderr in the private backup set. Fatal or unrecognized
+# errors stop immediately. These online captures remain
 # independent of the database dumps, not an atomic recovery point.
 archive_ok=0
 for attempt in 1 2 3; do
-  if sudo tar -C "${DATA_PATH}" -czf "${DEST}/omero-files.tar.gz" \
-      --exclude=omero/BioFormatsCache --exclude=omero/FullText omero; then
+  # -czf truncates/recreates the archive on every attempt; a failed archive is
+  # never reused as input or accepted as a completed capture.
+  archive_diagnostics="${DEST}/omero-files.attempt-${attempt}.stderr"
+  if sudo sh -c '
+      LC_ALL=C tar -C "$1" -czf "$2/omero-files.tar.gz" \
+        --exclude=omero/BioFormatsCache --exclude=omero/FullText omero 2>"$3"
+      ' sh "${DATA_PATH}" "${DEST}" "${archive_diagnostics}"; then
     archive_ok=1
     break
   else
     archive_status=$?
-    if [[ "${archive_status}" -ne 1 ]]; then
-      echo "OMERO archive failed (tar exit ${archive_status}); incomplete set retained: ${DEST}" >&2
+    if [[ "${archive_status}" -ne 1 ]] || ! sudo awk '
+        NF { seen=1; if ($0 !~ /^tar: .+: file changed as we read it$/) unexpected=1 }
+        END { exit !(seen && !unexpected) }
+        ' "${archive_diagnostics}"; then
+      echo "OMERO archive failed (tar exit ${archive_status}); diagnostics: ${archive_diagnostics}; incomplete set retained: ${DEST}" >&2
       exit "${archive_status}"
     fi
     echo "OMERO changed during archive attempt ${attempt}/3; retrying if attempts remain" >&2

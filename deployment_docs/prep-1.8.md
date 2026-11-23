@@ -43,11 +43,15 @@ archiving the live repository; set -e stopped the script before secrets,
 checksums and COMPLETE. Preserve that incomplete set as evidence.
 
 The existing backup script now retries the OMERO archive up to three times
-only for tar exit 1. Success requires a subsequent exit 0. Fatal errors stop
-immediately, and repeated changes leave an incomplete set without COMPLETE.
-Shell syntax and simulated success, retry-success, retry-exhaustion and fatal
-error cases are checked before live validation through make backup and
-make backup-verify.
+only when tar exits 1 and every nonempty stderr line is the confirmed
+"file changed as we read it" diagnostic. Other exit-1 cases, empty or mixed
+diagnostics, and fatal errors stop immediately. Each attempt recreates the
+archive and keeps its stderr in the private backup directory. Success requires
+a subsequent exit 0; repeated changes leave an incomplete set without COMPLETE.
+The completion marker remains after all dumps, archives and checksum generation.
+Shell syntax and eight simulated success/failure cases pass, including
+unrecognized/mixed/empty diagnostics and retry exhaustion. Live validation uses
+make backup and make backup-verify.
 
 Nightly captures still consist of independent database dumps, OMERO repository
 and configuration archives. They are not an atomic recovery point or a tested
@@ -63,8 +67,11 @@ SLURM_Import_Results.py task created on 2026-10-14 at 09:45:19 UTC. Its event
 stream contains TaskCreated and TaskStarted, with no terminal task event.
 Its parent workflow `579506e7-ac77-4a3c-a3e9-d8b8f9e3ef67` (stardist5d)
 recorded WorkflowFailed at 09:45:23 UTC that day and remains FAILED at 50%.
-The preceding compute task completed. Current checks show zero open imports
-and zero jobs in the Spider queue.
+The preceding compute task completed: Slurm job 41518475 has COMPLETED/0:0
+in sacct. OMERO jobs 3745 and 3746 reached Error at 09:45:23 and 09:45:22 UTC;
+the parent error records an SSH protocol-banner failure during SlurmClient
+initialization in the result-import script. Current checks show zero open
+imports and zero jobs in the Spider queue.
 
 Disposition: stale child-task tracking under a terminal failed parent, not
 current compute work. No tracking or event records were changed. The existing
