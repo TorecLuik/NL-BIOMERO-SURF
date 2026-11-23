@@ -32,15 +32,14 @@ $OMERO_DATA_PATH/
 ├── database-biomero/    BIOMERO Postgres
 ├── omero/               OMERO image repository
 ├── L-Drive/             user data, /data in the containers
-├── config/              volume-identity
+├── config/              volume-identity and mutable runtime settings
 └── backups/             nightly/: scripts/backup-nightly.sh
 ```
 
-`docker-compose.yml` declares no named volumes; every mount is a bind mount
-under that path. The repository's `.env` and `.ssh/` are per-VM and gitignored, and
+The SURF Compose override binds database, OMERO and L-Drive storage under
+that path. The importer also uses a named container cache volume. The repository's `.env` and `.ssh/` are per-VM and gitignored, and
 `make init` seeds missing runtime configuration on the volume; see
 [upgrade-1.8.md](upgrade-1.8.md) for migrating the existing deployment.
-configuration.
 
 Full detail, including how to set up a fresh VM and how to populate an empty
 volume, is in [storage-architecture.md](storage-architecture.md).

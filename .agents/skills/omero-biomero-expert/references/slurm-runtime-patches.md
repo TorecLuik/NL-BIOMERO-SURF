@@ -1,7 +1,7 @@
 # Slurm / HPC Runtime Configuration
 
 Runtime policy is administrator-managed through the canonical
-`web/slurm-config.ini`. The legacy env override names below describe compatibility
+`<volume>/config/slurm-config.ini`. The legacy env override names below describe compatibility
 capabilities, not recommended demo defaults. Do not copy resource, partition,
 worker-count or image-selection overrides into Compose environments: they would
 override changes saved through OMERO.biomero. Keep container feature flags in
@@ -136,10 +136,10 @@ Mapping from old patch behavior to current config (env vars set in `docker-compo
 `scripts/render-slurm-config.sh` renders:
 
 ```text
-web/slurm-config-template.ini -> web/slurm-config.ini
+web/slurm-config-template.ini -> <volume>/config/slurm-config.ini
 ```
 
-It substitutes HPC credential env vars (e.g. `SPIDER_USER` and `SPIDER_PROJECT` for Spider), then sets `web/slurm-config.ini` mode `0666` because OMERO.biomero writes this bind-mounted file from `omeroweb` as uid 999.
+It substitutes HPC credential env vars (e.g. `SPIDER_USER` and `SPIDER_PROJECT` for Spider), then sets `<volume>/config/slurm-config.ini` mode `0666` because OMERO.biomero writes this bind-mounted file from `omeroweb` as uid 999.
 
 `web/slurm-config-template.ini` includes comments documenting GPU policy.
 

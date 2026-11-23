@@ -73,7 +73,7 @@ hyphens (`fractal-cellpose-sam-biaflows`). `grep -E '^[a-z0-9_]+_repo='` misses
 both and makes registered workflows look unregistered:
 
 ```bash
-grep -E '^[a-z0-9_-]+_repo *=' web/slurm-config.ini
+grep -E '^[a-z0-9_-]+_repo *=' <volume>/config/slurm-config.ini
 ```
 
 ## Printing values while checking them

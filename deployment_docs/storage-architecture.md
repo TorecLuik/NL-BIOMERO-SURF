@@ -52,7 +52,7 @@ Three things sit deliberately on the VM despite looking like state:
 ├── database-biomero/    BIOMERO Postgres        owner 999:999, mode 0700
 ├── omero/               OMERO image repository  owner 1000:0,  mode 0755
 ├── L-Drive/             user data, /data in the containers
-├── config/              volume-identity, the databases' credentials
+├── config/              volume-identity and mutable runtime settings
 └── backups/             nightly/: scripts/backup-nightly.sh
 ```
 

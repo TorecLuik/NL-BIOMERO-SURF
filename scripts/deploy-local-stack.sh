@@ -14,10 +14,6 @@ WORKER_SSH_DIR="${PROJECT_ROOT_DIR}/.ssh-worker"
 # deployment_docs/storage-architecture.md.
 OMERO_DATA_PATH_VAL="$(grep -hE '^OMERO_DATA_PATH=' "${PROJECT_ROOT_DIR}/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
 LDRIVE_DIR="${OMERO_DATA_PATH_VAL}/L-Drive"
-SLURM_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/slurm-config.ini"
-SLURM_TEMPLATE_PATH="${PROJECT_ROOT_DIR}/web/slurm-config-template.ini"
-BIOMERO_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/biomero-config.json"
-GROUP_MAPPINGS_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/group-mappings.json"
 IMPORTER_DIR="${PROJECT_ROOT_DIR}/biomero-importer"
 IMPORTER_DOCKERFILE_PATH="${IMPORTER_DIR}/Dockerfile"
 
@@ -47,8 +43,8 @@ echo "Reminder: access the web UIs via SSH port forwarding:"
 echo "  ssh -L 4080:localhost:4080 -L 3000:localhost:3000 -L 5601:localhost:5601 <user>@<server>"
 
 # .env is per-VM and lives here, gitignored, copied from .env.example. The
-# volume carries only what unlocks its data -- volume-identity and
-# slurm-config.ini -- and volume-identity.sh fills the credentials it holds into
+# volume carries volume-identity and mutable runtime settings.
+# volume-identity.sh fills the credentials it holds into
 # this file. See deployment_docs/storage-architecture.md.
 #
 # An earlier layout kept .env and .ssh/ on the volume and symlinked them here.
