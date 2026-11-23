@@ -80,3 +80,27 @@ If a correction is approved, reconcile the OMERO import failure evidence and
 append a truthful terminal failure via WorkflowTracker.fail_task; preserve
 history and do not directly edit the projection or fabricate successful output.
 The integration must address terminal child-task recording on parent failure.
+
+## Validation handoff — 2026-11-23, 16:10 CET
+
+- Slurm preservation commit: `84eb511e98aa77fb7d0ea70b7d8af3f7d990a628`.
+- Initial bounded-retry repair: `b867a0e5fb3feb383a1a8a58108f529a1460397e`;
+  superseded by strict diagnostic matching in
+  `e7a013f92a14295faede95fec9fb97beeffedb37`.
+- PASS: make backup and make backup-verify with the strict revision. New set:
+  `/data/surf-biomero-storage/backups/nightly/20261123-160951`, 36 MiB,
+  COMPLETE present, all six required files present, checksums match, all three
+  dump tables of contents and both archives readable. No retry was required
+  in this live capture; retry/error handling was exercised in simulation.
+- Earlier validation set `20261123-160817` also passed verification. It and the
+  failed `20261123-151653` set are retained; no backup cleanup was performed.
+- PASS: 11/11 long-running services remain running; runtime Slurm checksum is
+  unchanged. The original biomero-config.json newline-only modification is
+  preserved and excluded from commits.
+- WARN: one stale child task remains visible to make active-work; zero open
+  imports and zero Spider queue jobs. No database correction was performed.
+- WARN: same-volume recovery exposure and L-Drive exclusion remain. The prior
+  failed systemd service result remains historical evidence; invoking make
+  backup does not reset it. Confirm the next scheduled timer run succeeds.
+- NOT TESTED: restore consistency/recovery time, off-volume recovery, GPU
+  execution and beta.16 integration. No upgrade, restart or quiescence occurred.
