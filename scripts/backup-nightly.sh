@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly backup of everything this deployment cannot rebuild from git.
+# Nightly database, OMERO repository and configuration backup (excludes L-Drive).
 #
 # Writes one timestamped directory under <volume>/backups/nightly/ holding:
 #
@@ -53,8 +53,29 @@ dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" "$(env_value BIOMERO_
 dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" metabase                           metabase.pg_dump
 
 # The repository's symlinks point into L-Drive; tar keeps them as links.
-sudo tar -C "${DATA_PATH}" -czf "${DEST}/omero-files.tar.gz" \
-  --exclude=omero/BioFormatsCache --exclude=omero/FullText omero
+# Live OMERO activity can change directory metadata during traversal (tar exit
+# 1). Retry that capture, never suppress the error or mark an unstable archive
+# complete. Fatal tar errors stop immediately. These online captures remain
+# independent of the database dumps, not an atomic recovery point.
+archive_ok=0
+for attempt in 1 2 3; do
+  if sudo tar -C "${DATA_PATH}" -czf "${DEST}/omero-files.tar.gz" \
+      --exclude=omero/BioFormatsCache --exclude=omero/FullText omero; then
+    archive_ok=1
+    break
+  else
+    archive_status=$?
+    if [[ "${archive_status}" -ne 1 ]]; then
+      echo "OMERO archive failed (tar exit ${archive_status}); incomplete set retained: ${DEST}" >&2
+      exit "${archive_status}"
+    fi
+    echo "OMERO changed during archive attempt ${attempt}/3; retrying if attempts remain" >&2
+  fi
+done
+if [[ "${archive_ok}" -ne 1 ]]; then
+  echo "OMERO remained unstable; incomplete set retained: ${DEST}" >&2
+  exit 1
+fi
 
 sudo tar -C "${PROJECT_ROOT_DIR}" -czf "${DEST}/secrets.tar.gz" \
   .env .ssh web/slurm-config.ini web/biomero-config.json \
