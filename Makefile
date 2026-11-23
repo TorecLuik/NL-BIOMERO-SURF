@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor audit backup-verify active-work set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init upgrade-config render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor audit backup-verify active-work set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -25,7 +25,8 @@ help:
 	@echo "  make audit              read-only production status audit"
 	@echo "  make active-work        read-only imports, tasks and Spider queue"
 	@echo "  make backup-verify      verify latest backup without restoring"
-	@echo "  make render-config      render slurm-config.ini from the template"
+	@echo "  make upgrade-config     update release pins and preserve runtime config on the volume"
+	@echo "  make render-config      explicitly replace runtime Slurm config from the template"
 	@echo "  make set-host HOST=fqdn set the per-VM public hostname"
 	@echo "  make adopt-volume       record an existing volume's database credentials"
 	@echo "  make new-key            generate the cluster SSH key (FORCE=1 to replace)"
@@ -84,18 +85,17 @@ init-env:
 # HOST overrides the public hostname, which otherwise comes from hostname -f.
 init:
 	git submodule update --init --recursive
-	@$(MAKE) --no-print-directory render-config
+	@$(MAKE) --no-print-directory upgrade-config
 	@$(MAKE) --no-print-directory set-host HOST=$(if $(HOST),$(HOST),$$(hostname -f))
 	@$(MAKE) --no-print-directory logs-auth
 	@$(MAKE) --no-print-directory doctor
 
-# slurm-config.ini is rendered from the committed template and the values in
-# .env, so it is reproducible per VM rather than state that travels with the
-# data. make deploy renders it too; this is for setting it up before deploying.
-#
-# The OMERO.biomero admin UI can write this file from the omeroweb container.
-# Those edits are deliberately not preserved -- the next render overwrites
-# them -- so a change worth keeping belongs in web/slurm-config-template.ini.
+# This also supports preparing a live checkout from a separate integration checkout:
+# make upgrade-config ROOT=/opt/omero/NL-BIOMERO CHECK=1 (read-only plan).
+upgrade-config:
+	@sudo python3 scripts/upgrade-config.py $(if $(ROOT),--root "$(ROOT)",) $(if $(CHECK),--check,)
+
+# Deliberately replaces the runtime INI. Routine deploys preserve admin edits.
 render-config:
 	@./scripts/render-slurm-config.sh
 
@@ -177,7 +177,7 @@ doctor:
 	@echo "== Installed vs pins =="
 	@pin=$$(grep -E '^BIOMERO_VERSION=' .env 2>/dev/null); pin=$${pin#*=}; 	got=$$($(COMPOSE) exec -T biomeroworker $(WORKER_PY) -m pip list 2>/dev/null | awk '/^biomero /{print $$2}'); 	if [ -z "$$got" ]; then echo "  [warn] worker not running; start it with: make up"; 	elif [ "$$got" = "$$pin" ]; then printf '  [ ok ] worker biomero %s matches pin\n' "$$got"; 	else printf '  [warn] worker biomero is %s but pin is %s; rebuild with: make build\n' "$$got" "$$pin"; fi
 	@echo "== Required files =="
-	@for f in .env web/slurm-config.ini; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
+	@for f in .env; do 		if [ -e "$$f" ]; then printf '  [ ok ] %s\n' "$$f"; else printf '  [FAIL] %s missing\n' "$$f"; fi; 	done
 # .ssh/config is written by make deploy, not by make init, so it is legitimately
 # absent between the two. Reporting it as [FAIL] there sent people looking for a
 # file they were never meant to create by hand.
@@ -215,7 +215,7 @@ doctor:
 	else printf '  [warn] importer image is %s but the submodule pin is %s\n' "$$got" "$$pin"; \
 	     echo "         the image builds from biomero-importer/, so rebuild it: make rebuild:biomero-importer"; fi
 	@echo "== Metabase app DB =="
-	@if grep -q 'MB_DB_TYPE: postgres' docker-compose.yml; then \
+	@if $(COMPOSE) config --format json | python3 -c 'import json,sys; sys.exit(json.load(sys.stdin)["services"]["metabase"]["environment"].get("MB_DB_TYPE") != "postgres")'; then \
 	  printf '  [ ok ] compose points Metabase at Postgres\n'; \
 	  got=$$($(COMPOSE) exec -T database-biomero psql -U $${BIOMERO_POSTGRES_USER:-biomero} -d metabase -tAc 'SELECT count(*) FROM report_dashboard' 2>/dev/null); \
 	  if [ -n "$$got" ]; then printf '  [ ok ] metabase database reachable, %s dashboards\n' "$$got"; \
@@ -262,9 +262,9 @@ docs-dates:
 		[ -n "$$c" ] || continue; \
 		if git diff --quiet -- "$$f" && git diff --cached --quiet -- "$$f"; then :; else m=$$(date +%F); fi; \
 		if head -4 "$$f" | grep -q '^\*Created '; then \
-			sed -i -E "s|^\*Created .*|*Created $$c · last updated $$m*|" "$$f"; \
+			sed -i -E "s|^\*Created .*|*Created $$c Â· last updated $$m*|" "$$f"; \
 		else \
-			sed -i "1a\\\n*Created $$c · last updated $$m*" "$$f"; \
+			sed -i "1a\\\n*Created $$c Â· last updated $$m*" "$$f"; \
 		fi; \
 		printf '  %-38s %s -> %s\n' "$$(basename $$f)" "$$c" "$$m"; \
 	done

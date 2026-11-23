@@ -1,7 +1,14 @@
-FROM openmicroscopy/omero-server:5.6.18
+FROM openmicroscopy/omero-server:5.6.18-1
 
 ARG BIOMERO_VERSION
 ARG BIOMERO_IMPORTER_VERSION
+ARG BIOMERO_SCRIPTS_VERSION
+
+# ARG BIOMERO_SCHEMA_BRANCH=main
+# ARG BIOMERO_SHALLOWER_BRANCH=main
+# ARG BIOMERO_IMPORTER_BRANCH=main
+# ARG BIOMERO_BRANCH=main
+# ARG BIOMERO_SCRIPTS_BRANCH=master
 
 USER root
 
@@ -40,39 +47,45 @@ ENV PATH="$PATH:/opt/bioformats2raw-0.12.0-rc1/bin"
 ## Add BIOMERO Omero Slurm Client
 RUN yum -y install ack
 
-# Install the importer first and BIOMERO second, in two separate pip runs.
-#
-# These packages pin incompatible ezomero versions: biomero-importer wants
-# ezomero==3.2.3, biomero[full] wants ezomero==1.1.1. A single pip install fails
-# with ResolutionImpossible, so the order is deliberate and lets BIOMERO's pin
-# win, leaving ezomero 1.1.1 installed.
-#
-# Safe for the importer: it calls only ezomero.ezimport, ezomero.get_group_id
-# and ezomero.post_map_annotation, all present in 1.1.1, and calls ezimport with
-# keyword arguments, so the ln_s parameter absent in 3.x is not a positional
-# hazard. `pip check` reports the mismatch by design.
-#
-# BIOMERO 2.9 moves to ezomero==3.2.3; collapse these into one pip run when
-# adopting it.
-RUN $VIRTUAL_ENV/bin/python -m pip install --upgrade pip \
-    && $VIRTUAL_ENV/bin/python -m pip install biomero-importer==${BIOMERO_IMPORTER_VERSION} \
-    && $VIRTUAL_ENV/bin/python -m pip install "biomero[full]==${BIOMERO_VERSION}"
+# Development option: uncomment the branch ARGs and ADD/RUN block below, and
+# comment the release RUN block. Branch heads invalidate the install layer.
+# ADD "https://api.github.com/repos/NL-BioImaging/biomero-schema/commits/${BIOMERO_SCHEMA_BRANCH}" /latest_commit_biomero_schema
+# ADD "https://api.github.com/repos/NL-BioImaging/BIOMERO.shallower/commits/${BIOMERO_SHALLOWER_BRANCH}" /latest_commit_biomero_shallower
+# ADD "https://api.github.com/repos/NL-BioImaging/BIOMERO.importer/commits/${BIOMERO_IMPORTER_BRANCH}" /latest_commit_biomero_importer
+# ADD "https://api.github.com/repos/NL-BioImaging/biomero/commits/${BIOMERO_BRANCH}" /latest_commit_biomero
+# RUN $VIRTUAL_ENV/bin/python -m pip install --upgrade pip \
+#     && $VIRTUAL_ENV/bin/python -m pip install \
+#         "biomero-schema @ git+https://github.com/NL-BioImaging/biomero-schema.git@${BIOMERO_SCHEMA_BRANCH}" \
+#         "biomero-shallower @ git+https://github.com/NL-BioImaging/BIOMERO.shallower.git@${BIOMERO_SHALLOWER_BRANCH}" \
+#         "biomero-importer[identity] @ git+https://github.com/NL-BioImaging/BIOMERO.importer.git@${BIOMERO_IMPORTER_BRANCH}" \
+#         "biomero[full] @ git+https://github.com/NL-BioImaging/biomero.git@${BIOMERO_BRANCH}" \
+#     && $VIRTUAL_ENV/bin/python -m pip check
 
-# Add workflow output verification to BIOMERO's generated Slurm job scripts.
-# See patch_biomero_runtime.py.
-COPY biomeroworker/patch_biomero_runtime.py /tmp/patch_biomero_runtime.py
-COPY biomeroworker/patches /tmp/patches
-RUN $VIRTUAL_ENV/bin/python /tmp/patch_biomero_runtime.py
+# Release option: install BIOMERO and its full runtime from PyPI.
+RUN test -n "$BIOMERO_VERSION" || (echo "BIOMERO_VERSION build arg is required" >&2; exit 1)
+RUN $VIRTUAL_ENV/bin/python -m pip install --upgrade pip \
+    && $VIRTUAL_ENV/bin/python -m pip install "biomero[full]==${BIOMERO_VERSION}" "biomero-importer[identity]==${BIOMERO_IMPORTER_VERSION}" \
+    && $VIRTUAL_ENV/bin/python -m pip check
+
+## The detached supervisor imports the workflow pipeline after the launcher
+## exits, so install the same scripts release as server/Dockerfile.
+ENV OMERO_DIST=/opt/omero/server/OMERO.server
+# ADD "https://api.github.com/repos/NL-BioImaging/biomero-scripts/commits/${BIOMERO_SCRIPTS_BRANCH}" /latest_commit_biomero_scripts
+# RUN cd $OMERO_DIST/lib/scripts/ && \
+#     git clone --depth 1 --branch ${BIOMERO_SCRIPTS_BRANCH} --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
+#     rm -rf biomero/tests
+
+# Release option for scripts: use the same selected tag as the server.
+RUN test -n "$BIOMERO_SCRIPTS_VERSION" || (echo "BIOMERO_SCRIPTS_VERSION build arg is required" >&2; exit 1)
+RUN cd $OMERO_DIST/lib/scripts/ && \
+    git clone --depth 1 --branch ${BIOMERO_SCRIPTS_VERSION} --single-branch https://github.com/NL-BioImaging/biomero-scripts.git biomero && \
+    rm -rf biomero/tests
 
 ## Adjust processor code with BIOMERO Processor
 # This version forwards HTTP(S) PROXY environment variables to the subprocesses (scripts)
 # See latest OME version @ https://raw.githubusercontent.com/ome/omero-py/master/src/omero/processor.py
 # Might need to merge important changes from time to time to keep this version compatible.
 COPY biomeroworker/processor.py /opt/omero/server/venv3/lib/python3.11/site-packages/omero/
-
-## slurm-config for biomero: none is baked in. The deploy renders
-## web/slurm-config-template.ini and bind-mounts it, and BIOMERO_SLURM_CONFIG_FILE
-## makes that the only file BIOMERO reads.
 
 ## OMERO: Replace the default startup scripts
 RUN rm /startup/60-database.sh

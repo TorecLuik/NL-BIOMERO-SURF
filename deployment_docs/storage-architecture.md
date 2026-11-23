@@ -1,6 +1,6 @@
 # Storage Architecture
 
-*Created 2026-09-17 · last updated 2026-09-24*
+*Created 2026-09-17 · last updated 2026-11-23*
 
 Every piece of state this deployment must not lose lives on an attached storage
 volume, not on the VM. The VM holds the repository, the Docker images and the
@@ -62,8 +62,7 @@ Any copy of this data must preserve it — use `cp -a`, never a plain `cp`.
 
 ### config/volume-identity
 
-`config/` holds what belongs to the volume rather than to any VM, which is this
-one file. It carries the database passwords and `METABASE_SECRET_KEY`, decided
+`config/volume-identity` carries the database passwords and `METABASE_SECRET_KEY`, decided
 once when the volume is empty and fixed by its data afterwards: Postgres ignores
 `POSTGRES_PASSWORD` once the cluster exists, and `METABASE_SECRET_KEY` decrypts
 what Metabase has already written. They open this volume and nothing else, so
@@ -74,12 +73,11 @@ refuses to start when the two disagree.
 It is mode 0600 beside the database files it opens, so it is no more exposed
 than they are. `scripts/volume-identity.sh` is the only thing that writes it.
 
-Nothing else on the volume is configuration. The rest lives in the repository,
-per-VM and gitignored: `.env`, copied from `.env.example`; `.ssh/`, holding a
-cluster key that is an authorisation granted on Spider rather than a property of
-the data, generated with `make new-key`; and `web/slurm-config.ini`, rendered
-from the committed `web/slurm-config-template.ini` by `make render-config` and
-by every deploy.
+`config/` also holds `slurm-config.ini`, `biomero-config.json` and
+`group-mappings.json`. These are mutable site settings shared by the containers,
+seeded by `make upgrade-config` and retained across deploys and VM replacement.
+`.env` and `.ssh/` remain private per-VM files in the checkout. See
+[upgrade-1.8.md](upgrade-1.8.md) for migration and backup coverage.
 
 ## The variable that ties it together
 

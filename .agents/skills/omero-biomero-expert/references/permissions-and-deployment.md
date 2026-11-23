@@ -9,8 +9,8 @@ High-risk write paths:
 ```text
 /data/surf-biomero-storage/L-Drive  # mounted as /data in server, worker, web, importer
 logs/*                      # mounted into service-specific log paths
-web/slurm-config.ini        # written by OMERO.biomero admin UI from omeroweb
-web/biomero-config.json     # written/read by OMERO.biomero and worker
+<volume>/config/slurm-config.ini        # written by OMERO.biomero admin UI from omeroweb
+<volume>/config/biomero-config.json     # written/read by OMERO.biomero and worker
 web/group-mappings.json     # dev/newer OMERO.biomero group mapping file
 /data/surf-biomero-storage/database-biomero  # Metabase Postgres application DB
 .ssh/                       # project-local copy mounted into biomeroworker
@@ -141,11 +141,11 @@ When `make deploy` dies on a bare `chmod`/`cp`/`ln` error immediately after pref
 
 `id_rsa` in `README.md` and `docs/sysadmin/slurm-integration.md` is upstream NL-BIOMERO documentation for a generic local-Slurm dev setup using the developer's own `~/.ssh/id_rsa`. It is unrelated to this deployment's cluster key and is not drift; leave it.
 
-`scripts/render-slurm-config.sh` renders `web/slurm-config.ini` from `web/slurm-config-template.ini` and sets mode `0666` because OMERO.biomero writes the bind-mounted config from `omeroweb` as uid 999.
+`scripts/render-slurm-config.sh` explicitly resets `SLURM_CONFIG_HOST_PATH` from `web/slurm-config-template.ini`; ordinary deployment preserves it and sets mode `0666` because OMERO.biomero writes the bind-mounted config from `omeroweb` as uid 999.
 
 ## Compose Differences
 
-Production `docker-compose.yml`:
+Production `docker-compose.yml` plus `docker-compose.override.yml`:
 
 - uses built images and normal entrypoints
 - mounts `./.ssh-worker:/tmp/.ssh:ro` for the worker

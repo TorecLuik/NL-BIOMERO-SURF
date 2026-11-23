@@ -18,7 +18,6 @@ SLURM_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/slurm-config.ini"
 SLURM_TEMPLATE_PATH="${PROJECT_ROOT_DIR}/web/slurm-config-template.ini"
 BIOMERO_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/biomero-config.json"
 GROUP_MAPPINGS_CONFIG_PATH="${PROJECT_ROOT_DIR}/web/group-mappings.json"
-MOUNT_SSH_SCRIPT_PATH="${PROJECT_ROOT_DIR}/biomeroworker/10-mount-ssh.sh"
 IMPORTER_DIR="${PROJECT_ROOT_DIR}/biomero-importer"
 IMPORTER_DOCKERFILE_PATH="${IMPORTER_DIR}/Dockerfile"
 
@@ -117,9 +116,7 @@ fi
 # through git rather than cloning a URL by hand. An earlier version cloned a
 # different fork here, which silently produced an importer built from the wrong
 # source whenever the submodule was missing.
-if [[ ! -f "${IMPORTER_DOCKERFILE_PATH}" ]]; then
-  git -C "${PROJECT_ROOT_DIR}" submodule update --init --recursive
-fi
+git -C "${PROJECT_ROOT_DIR}" submodule update --init --recursive
 
 if [[ ! -f "${IMPORTER_DOCKERFILE_PATH}" ]]; then
   echo "biomero-importer/ is still empty after submodule update." >&2
@@ -183,57 +180,14 @@ Host spider
     StrictHostKeyChecking yes
 EOF
 
-# Bootstrap a template from the current runtime config if the template is missing.
-if [[ ! -f "${SLURM_TEMPLATE_PATH}" && -f "${SLURM_CONFIG_PATH}" ]]; then
-  cp "${SLURM_CONFIG_PATH}" "${SLURM_TEMPLATE_PATH}"
-  sed -i \
-    -e "s#${SPIDER_USER}#\${SPIDER_USER}#g" \
-    -e "s#${SPIDER_PROJECT}#\${SPIDER_PROJECT}#g" \
-    "${SLURM_TEMPLATE_PATH}"
-  echo "Generated ${SLURM_TEMPLATE_PATH} from ${SLURM_CONFIG_PATH}"
-fi
-
-# Render the runtime Slurm config from the parameterized template. Not guarded
-# on the template existing: the block above recreates it from a runtime config,
-# and it is committed, so by here its absence is a broken checkout rather than a
-# state to tolerate. Skipping quietly would leave no slurm-config.ini for the
-# bind mounts, so Docker would mount a directory in its place and the stack
-# would come up misconfigured -- or the chmod below would abort the deploy on a
-# missing file, naming the symptom and not the cause.
-if [[ ! -f "${SLURM_TEMPLATE_PATH}" ]]; then
-  echo "Missing ${SLURM_TEMPLATE_PATH}, and no runtime config to rebuild it from." >&2
-  echo "  It is committed; restore it with: git checkout -- web/slurm-config-template.ini" >&2
-  exit 1
-fi
-"${PROJECT_ROOT_DIR}/scripts/render-slurm-config.sh"
-
-# Keep the worker startup script on the fixed SSH-copy implementation so
-# restarts do not leave stale nested .ssh directories behind.
-cat > "${MOUNT_SSH_SCRIPT_PATH}" <<'EOF'
-#!/usr/bin/env bash
-set -e
-
-# Using `-v $HOME/.ssh:/opt/omero/server/.ssh:ro` produce permissions error while in the container
-# when working from Linux and maybe from Windows.
-# To prevent that we offer the strategy to mount the `.ssh` folder with
-# `-v $HOME/.ssh:/tmp/.ssh:ro` thus this entrypoint will automatically handle problem.
-
-if [[ -d /tmp/.ssh ]]; then
-  # Replace the target directory contents on every startup to avoid nesting
-  # /opt/omero/server/.ssh/.ssh on container restarts.
-  rm -rf /opt/omero/server/.ssh
-  mkdir -p /opt/omero/server/.ssh
-  # TODO: error on windows ? this didn't copy 'config'
-  cp -R /tmp/.ssh/. /opt/omero/server/.ssh/
-  chmod 700 /opt/omero/server/.ssh
-  chmod 600 /opt/omero/server/.ssh/*
-  chmod 644 /opt/omero/server/.ssh/*.pub
-  chmod 644 /opt/omero/server/.ssh/known_hosts
-fi
-
-exec "$@"
-EOF
-chmod 755 "${MOUNT_SSH_SCRIPT_PATH}"
+# Explicit upgrade-config seeds volume-backed configuration and preserves UI edits.
+# Deployment uses those files as-is; make render-config remains an explicit reset.
+SLURM_CONFIG_PATH="${SLURM_CONFIG_HOST_PATH:?run make upgrade-config}"
+BIOMERO_CONFIG_PATH="${BIOMERO_CONFIG_HOST_PATH:?run make upgrade-config}"
+GROUP_MAPPINGS_CONFIG_PATH="${GROUP_MAPPINGS_HOST_PATH:?run make upgrade-config}"
+for config_path in "${SLURM_CONFIG_PATH}" "${BIOMERO_CONFIG_PATH}" "${GROUP_MAPPINGS_CONFIG_PATH}"; do
+  [[ -f "${config_path}" ]] || { echo "Missing runtime configuration; run make upgrade-config" >&2; exit 1; }
+done
 
 sudo chmod -R 777 "${LDRIVE_DIR}" "${PROJECT_ROOT_DIR}/logs"
 # OMERO.biomero writes these bind-mounted files from inside the web container.
@@ -269,6 +223,7 @@ chmod 644 "${SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" "${SSH_DIR}/known_hosts" "${
 # gid and produced a 600-digit "group" that chgrp rejected. Take the last
 # non-empty line, which is id's own output, and accept it only if it is a
 # plausible gid.
+sudo docker compose build
 WORKER_GID="$(sudo docker compose run --rm --no-deps --entrypoint id -T biomeroworker -g 2>/dev/null \
               | tr -d '\r' | grep -oE '^[0-9]+$' | tail -1)"
 if [[ -z "${WORKER_GID}" ]]; then
@@ -294,9 +249,8 @@ chmod 644 "${WORKER_SSH_DIR}/${SLURM_ACCESS_KEY_NAME}.pub" \
 sudo chown -R 1000:1000 "${PROJECT_ROOT_DIR}/logs/biomero-importer"
 sudo chmod -R 775 "${PROJECT_ROOT_DIR}/logs/biomero-importer"
 
-# Bring up or refresh the full local stack. We keep --build here because
-# biomeroworker startup behavior lives in the image via 10-mount-ssh.sh.
-sudo docker compose up -d --build
+# Start the images built above after preparing their SSH and configuration mounts.
+sudo docker compose up -d
 
 # Metabase keeps its application database in Postgres on database-biomero, but
 # Postgres only creates POSTGRES_DB at first init, so the metabase database does

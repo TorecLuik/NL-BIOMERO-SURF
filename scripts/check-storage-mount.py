@@ -15,6 +15,7 @@ REQUIRED = {
     'omeroworker-1': {'/OMERO': 'omero', '/data': 'L-Drive'},
     'biomeroworker': {'/OMERO': 'omero', '/data': 'L-Drive'},
     'omeroweb': {'/data': 'L-Drive'},
+    'zarrviewer-nginx': {'/data': 'L-Drive'},
     'biomero-importer': {'/OMERO': 'omero', '/data': 'L-Drive'},
 }
 

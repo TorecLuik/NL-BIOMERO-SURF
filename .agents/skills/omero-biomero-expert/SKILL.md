@@ -17,7 +17,8 @@ This is a public-facing production service. Work from `/opt/omero/NL-BIOMERO`. R
 | Running application | `make smoke` | Read-only smoke; no import or workflow |
 | Latest backup | `make backup-verify` | Read-only checksum and archive checks |
 | Spider access | `make spider` | Interactive SSH from inside `biomeroworker` |
-| Deployment | `make deploy` | Builds, writes config, starts both Compose stacks |
+| Configuration upgrade | `make upgrade-config CHECK=1` / `make upgrade-config` | Plan / apply release pins and persistent runtime config; no service start |
+| Deployment | `make deploy` | Builds, prepares SSH, preserves runtime config, starts both Compose stacks |
 | Backup | `make backup` | Captures a new backup set; requires separate authorization |
 | Restore | Runbook procedure | Destructive; separate outage plan |
 
@@ -25,9 +26,12 @@ Start with `make` to list the current targets and use the Makefile wrapper for r
 
 Use `make spider` for interactive SSH to Spider **from inside `biomeroworker`**, the same connection path BIOMERO uses. Use `make smoke` for a read-only worker-to-Spider Slurm reachability check and `make active-work` for the queue and active-task check. A host account's inability to traverse the checkout's `.ssh/` does not prove the worker cannot reach Spider; report the host-side check separately. Do not run interactive `make spider` as a status or audit probe.
 
-`docker-compose.yml` holds the core services; `opensearch-compose.yml` holds logging. `make up` starts both. Use Compose **service names**, never derived container names. The Makefile invokes `sudo docker compose`; for direct commands use `sudo -n docker compose`. No ACC paths, rootless host Podman, or ACC systemd environment apply here. Podman exists only inside `biomero-importer` for conversion.
+`docker-compose.yml` holds upstream core services and `docker-compose.override.yml` holds SURF overrides (both are required); `opensearch-compose.yml` holds logging. `make up` starts both. Use Compose **service names**, never derived container names. The Makefile invokes `sudo docker compose`; for direct commands use `sudo -n docker compose`. No ACC paths, rootless host Podman, or ACC systemd environment apply here. Podman exists only inside `biomero-importer` for conversion.
 
 Read [references/operations.md](references/operations.md) for deployment gates, active work, audits, backup truthfulness, and test isolation. **For every deployment-status, smoke-audit, post-deployment, and post-integration-test report, read and follow [references/status-report.md](references/status-report.md).** A running container is evidence only that a process is running; verify application readiness separately.
+
+Read [deployment_docs/upgrade-1.8.md](../../../../deployment_docs/upgrade-1.8.md)
+for the configuration transition and server acceptance handoff.
 
 ## Production Git delivery
 

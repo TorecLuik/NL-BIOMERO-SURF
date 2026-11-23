@@ -1,0 +1,110 @@
+# SURF's site layer. Docker Compose loads this beside docker-compose.yml,
+# including when invoked through the existing Make targets and scripts.
+# Requires Compose 2.24.4+ for !override. Keep docker-compose.yml upstream.
+# OMERO_DATA_PATH retains SURF's meaning: the attached volume root.
+services:
+  database:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/database:/var/lib/postgresql/data"
+    extends: {file: logging-defaults.yml, service: default-logging}
+
+  database-biomero:
+    environment:
+      POSTGRES_PASSWORD: ${BIOMERO_POSTGRES_PASSWORD:?set BIOMERO_POSTGRES_PASSWORD}
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/database-biomero:/var/lib/postgresql/data"
+    extends: {file: logging-defaults.yml, service: default-logging}
+
+  omeroserver:
+    environment:
+      ROOTPASS: ${OMERO_ROOT_PASSWORD:?set OMERO_ROOT_PASSWORD}
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/omero:/OMERO"
+      - "${OMERO_DATA_PATH}/L-Drive:/data"
+      - "${OMERO_DATA_PATH}/L-Drive/uploads:/tus_destination"
+      - "./logs/omeroserver:/opt/omero/server/OMERO.server/var/log"
+
+  omeroworker-1:
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/omero:/OMERO"
+      - "${OMERO_DATA_PATH}/L-Drive:/data"
+      - "${OMERO_DATA_PATH}/L-Drive/uploads:/tus_destination"
+      - "./logs/omeroworker-1:/opt/omero/server/OMERO.server/var/log"
+
+  biomeroworker:
+    build:
+      args:
+        BIOMERO_IMPORTER_VERSION: ${BIOMERO_IMPORTER_VERSION}
+    environment:
+      BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME:-today}
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/omero:/OMERO"
+      - "./.ssh-worker:/tmp/.ssh:ro"
+      - "${SLURM_CONFIG_HOST_PATH:?run make upgrade-config}:/opt/omero/server/slurm-config.ini:ro"
+      - "${OMERO_DATA_PATH}/L-Drive:/data"
+      - "${OMERO_DATA_PATH}/L-Drive/uploads:/tus_destination"
+      - "./config/biomero-importer:/opt/omero/server/config-importer:ro"
+      - "${BIOMERO_CONFIG_HOST_PATH:?run make upgrade-config}:/opt/omero/server/biomero-config.json:ro"
+      - "${GROUP_MAPPINGS_HOST_PATH:?run make upgrade-config}:/opt/omero/server/group-mappings.json:ro"
+      - "./logs/biomeroworker:/opt/omero/server/OMERO.server/var/log"
+
+  omeroweb:
+    build:
+      args:
+        BIOMERO_VERSION: ${BIOMERO_VERSION}
+        BIOMERO_IMPORTER_VERSION: ${BIOMERO_IMPORTER_VERSION}
+    environment:
+      CONFIG_omero_web_csrf__trusted__origins: ${OMERO_CSRF_TRUSTED_ORIGINS:?set OMERO_CSRF_TRUSTED_ORIGINS}
+      METABASE_SECRET_KEY: ${METABASE_SECRET_KEY:?set METABASE_SECRET_KEY}
+      FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD:?set FORMS_MASTER_PASSWORD}
+      BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME:-today}
+    volumes: !override
+      - "${SLURM_CONFIG_HOST_PATH:?run make upgrade-config}:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
+      - "${BIOMERO_CONFIG_HOST_PATH:?run make upgrade-config}:/opt/omero/web/OMERO.web/var/biomero-config.json:rw"
+      - "${GROUP_MAPPINGS_HOST_PATH:?run make upgrade-config}:/opt/omero/web/OMERO.web/var/group-mappings.json:rw"
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/L-Drive:/data:rw"
+      - "${OMERO_DATA_PATH}/L-Drive/uploads:/tus_destination:rw"
+      - "./logs/omeroweb:/opt/omero/web/OMERO.web/var/log"
+
+  zarrviewer-nginx:
+    ports: !override
+      - "127.0.0.1:4080:4080"
+    volumes: !override
+      - "./nginx/zarrviewer-surf.conf:/etc/nginx/nginx.conf:ro"
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/L-Drive:/data:ro"
+    extends: {file: logging-defaults.yml, service: default-logging}
+
+  metabase:
+    environment:
+      MB_DB_FILE: !reset null
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: database-biomero
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: ${BIOMERO_POSTGRES_USER}
+      MB_DB_PASS: ${BIOMERO_POSTGRES_PASSWORD:?set BIOMERO_POSTGRES_PASSWORD}
+      MB_PASSWORD: ${METABASE_PASSWORD:?set METABASE_PASSWORD}
+      MB_SITE_URL: ${METABASE_SITE_URL}
+      MB_ENABLE_EMBEDDING: "true"
+      MB_ENABLE_EMBEDDING_STATIC: "true"
+      MB_EMBEDDING_SECRET_KEY: ${METABASE_SECRET_KEY:?set METABASE_SECRET_KEY}
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    volumes: !reset []
+    depends_on: [database-biomero]
+    extends: {file: logging-defaults.yml, service: default-logging}
+
+  biomero-importer:
+    environment:
+      OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD:?set OMERO_IMPORTER_PASSWORD}
+    volumes: !override
+      - "${OMERO_DATA_PATH:?set OMERO_DATA_PATH}/omero:/OMERO"
+      - "${OMERO_DATA_PATH}/L-Drive:/data"
+      - "${OMERO_DATA_PATH}/L-Drive/uploads:/tus_destination"
+      - "./config/biomero-importer:/auto-importer/config:ro"
+      - "${BIOMERO_CONFIG_HOST_PATH:?run make upgrade-config}:/auto-importer/managed-config/biomero-config.json:ro"
+      - "${GROUP_MAPPINGS_HOST_PATH:?run make upgrade-config}:/auto-importer/managed-config/group-mappings.json:ro"
+      - "./logs/biomero-importer:/auto-importer/logs"
+      - "biomero-importer-containers:/home/autoimportuser/.local/share/containers"

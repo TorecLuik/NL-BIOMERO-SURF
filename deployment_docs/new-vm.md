@@ -1,6 +1,6 @@
 # Deploying to a New VM
 
-*Created 2026-09-16 · last updated 2026-09-23*
+*Created 2026-09-16 · last updated 2026-11-23*
 
 Standing up NL-BIOMERO on a fresh SURF Research Cloud VM is two commands with
 one manual stop between them:
@@ -11,7 +11,7 @@ one manual stop between them:
 make provision              # host packages, submodule, nginx
 make init-env               # writes .env, generating every secret
 make new-key                # then register the public half on Spider
-make init                   # submodule, rendered config, hostname, /logs auth
+make init                   # submodule, persistent config, hostname, /logs auth
 # open ports 4063 and 4064
 make deploy                 # build, start, smoke test
 make install-services       # production: start at boot, nightly backup
@@ -81,12 +81,13 @@ and pins, and the cluster key is an authorisation granted on Spider.
 ```bash
 make init-env               # asks for SPIDER_USER and SPIDER_PROJECT, generates the rest
 make new-key                # the cluster key, if it is not being reused
-make init                   # renders slurm-config.ini, sets the hostname
+make init                   # reuses/seeds volume config, sets the hostname
 ```
 
-`make render-config` writes `web/slurm-config.ini` from the committed template
-and this VM's `.env`. Nothing on the volume is involved: admin-UI edits to that
-file are not preserved, so a change worth keeping goes in the template.
+`make init` uses the existing runtime files in the volume's `config/`, seeding
+only missing files. `make render-config` is an explicit reset of the runtime
+Slurm INI from the template, not part of ordinary deployment. See
+[upgrade-1.8.md](upgrade-1.8.md).
 
 Some values go the other way, because they are fixed by the data. On a volume that already holds data, `make init-env` leaves those values unset
 and `make deploy` fills them from `config/volume-identity`: the database
@@ -116,7 +117,7 @@ make deploy
 
 Preflight, build, start, then smoke tests: services running, both databases
 answering, the web login page, installed versions against the pins, the runtime
-patch, Spider reachability, the log stack, and the public URL.
+package dependencies, Spider reachability, the log stack, and the public URL.
 
 If the host was not fully prepared, preflight says so and refuses to deploy.
 

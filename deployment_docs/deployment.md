@@ -1,6 +1,6 @@
 # NL-BIOMERO Deployment
 
-*Created 2026-09-15 · last updated 2026-09-24*
+*Created 2026-09-15 · last updated 2026-11-23*
 
 Current state of this deployment: what it runs, how it is configured, and how to
 rebuild it. This describes how things are, not how they came to be.
@@ -38,8 +38,8 @@ $OMERO_DATA_PATH/
 
 `docker-compose.yml` declares no named volumes; every mount is a bind mount
 under that path. The repository's `.env` and `.ssh/` are per-VM and gitignored, and
-`web/slurm-config.ini` is rendered from the committed template, so a fresh clone
-carries no secrets and nothing on the volume but `volume-identity` is
+`make init` seeds missing runtime configuration on the volume; see
+[upgrade-1.8.md](upgrade-1.8.md) for migrating the existing deployment.
 configuration.
 
 Full detail, including how to set up a fresh VM and how to populate an empty
@@ -111,7 +111,7 @@ before Spider rejects the job.
 ## Rebuilding
 
 ```bash
-make init      # submodule, rendered config, hostname, /logs auth, doctor
+make init      # submodule, persistent config, hostname, /logs auth, doctor
 make deploy    # preflight, deploy, smoke test
 make doctor    # diagnose without changing anything
 make check     # read-only deployment preflight
@@ -129,7 +129,7 @@ build fails on an empty directory. Keep the submodule tag and the pin in step;
 
 `make deploy` runs `scripts/bootstrap-prod.sh`: it checks prerequisites, deploys
 through `scripts/deploy-local-stack.sh`, then smoke tests services, databases,
-the web login page, installed versions, the runtime patches, Spider
+the web login page, installed versions, package dependency consistency, Spider
 reachability, the log stack and the public URL.
 
 ## Ports
@@ -241,54 +241,16 @@ sbatch --partition=gpu_a100_mig --gres=gpu:a100_3g.20gb:1 --cpus-per-task=3 \
   python -c 'import torch;print(torch.cuda.is_available(),torch.cuda.device_count())'"
 ```
 
-## Runtime Patches
+## Release implementations
 
-Two patches, both idempotent and both failing loudly if upstream moves their
-anchor. If one fails after a version bump, check whether upstream fixed the
-behaviour itself and delete the patch rather than re-anchoring it.
+The release replaces the two former site patches: the result-import script
+handles an empty ROI-target list, and core validates generated workflow output.
+The patch files and build-time injection have been removed. Verify both
+behaviors with the selected pipeline tests after upgrading.
 
-`server/patch_biomero_scripts.py` guards an unchecked empty ID list in
-`SLURM_Import_Results.py`. 2.8.2 reads the optional `ROI_Target_Image_IDs`
-parameter and passes it straight to `getObjects("Image", ids=...)`; nothing
-supplies it unless ROIs are requested, so an ordinary segmentation run sends
-OMERO `where obj.id in ()` and every workflow fails at 90% with its results
-already on disk. Delete the patch on moving to BIOMERO 2.9, which guards the
-empty list itself. See [upstream-suggestions.md](upstream-suggestions.md)
-item 7.
-
-The second is applied in both the worker and web images, because OMERO.biomero
-submits analyzer jobs from the web process:
-
-`biomeroworker/patch_biomero_runtime.py` injects
-`biomeroworker/patches/generated_job_postprocess.py`, which appends
-`set -eo pipefail` and `_nl_biomero_verify_outputs` to generated job scripts. A
-workflow container can print a traceback, exit zero, and leave `data/out` empty;
-without the check BIOMERO enters import and hangs around 90%.
-
-Everything else this deployment needs is upstream configuration:
-
-```text
-BIOMERO_ENV_FILE_SUBMISSION     per-job env files, sourced by generated scripts
-BIOMERO_IMAGE_PULL_VIA_SBATCH   image pulls run as Slurm jobs, not on the login node
-BIOMERO_PULL_CPUS / _MEM        bound those pull jobs
-BIOMERO_APPTAINER_TMPDIR        project-local Apptainer temp
-BIOMERO_APPTAINER_CACHEDIR      project-local Apptainer cache
-BIOMERO_SLURM_ZIP_CMD           unset; the default detects 7z or 7za
-slurm_conversion_partition      blank, so conversions use Spider's default
-```
-
-## Dependency Constraint
-
-`biomero-importer` pins `ezomero==3.2.3` and `biomero[full]` pins
-`ezomero==1.1.1`, so the worker image installs them in two separate pip runs and
-lets BIOMERO's pin win. `pip check` reports the mismatch by design.
-
-This is safe: the importer calls only `ezimport`, `get_group_id` and
-`post_map_annotation`, all present in 1.1.1, and calls `ezimport` with keyword
-arguments, so the `ln_s` parameter dropped in 3.x is not a positional hazard.
-
-BIOMERO 2.9 moves to `ezomero==3.2.3`; when adopting it, collapse the two pip
-runs back into one.
+Worker and web install the coordinated core/importer versions together.
+`pip check` must pass; the former deliberate ezomero conflict is no longer
+part of the deployment. See [upgrade-1.8.md](upgrade-1.8.md).
 
 ## Spider Paths
 
@@ -304,12 +266,12 @@ puts BIOMERO in authoritative-file mode, so its default search path -- which
 starts with upstream's local-dev `/etc/slurm-config.ini`, still baked into the
 worker image -- is never consulted.
 
-`scripts/render-slurm-config.sh` renders `web/slurm-config-template.ini` into
-`web/slurm-config.ini`, substituting `SPIDER_USER` and `SPIDER_PROJECT` and
-setting mode 0666 because OMERO.biomero writes that file from `omeroweb` as
-uid 999. `make deploy` runs it every time, so an edit made through the admin UI
-survives only until the next deploy -- a change worth keeping goes in the
-template.
+Runtime configuration lives under the attached volume's `config/` directory.
+`make upgrade-config` seeds missing files from the live legacy configuration,
+then preserves existing settings. `make deploy` does not render over admin
+edits. `make render-config` explicitly replaces the runtime Slurm file from
+`web/slurm-config-template.ini`, substituting `SPIDER_USER` and
+`SPIDER_PROJECT`; use it only when intentionally resetting that configuration.
 
 ## Metabase Dashboards
 

@@ -86,9 +86,14 @@ if [[ "${archive_ok}" -ne 1 ]]; then
   exit 1
 fi
 
+# Runtime settings now live in the volume's config/ alongside volume-identity.
+# Keep legacy files when present so an older layout can still be restored.
+CONFIG_FILES=(.env .ssh config/biomero-importer)
+for legacy in web/slurm-config.ini web/biomero-config.json web/group-mappings.json; do
+  [[ ! -f "${legacy}" ]] || CONFIG_FILES+=("${legacy}")
+done
 sudo tar -C "${PROJECT_ROOT_DIR}" -czf "${DEST}/secrets.tar.gz" \
-  .env .ssh web/slurm-config.ini web/biomero-config.json \
-  -C "${DATA_PATH}" config
+  "${CONFIG_FILES[@]}" -C "${DATA_PATH}" config
 
 sudo sh -c "cd '${DEST}' && sha256sum *.pg_dump *.tar.gz > SHA256SUMS"
 sudo touch "${DEST}/COMPLETE"

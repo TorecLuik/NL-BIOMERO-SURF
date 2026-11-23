@@ -40,7 +40,7 @@ smoke_fail() { printf 'FAIL: %s\n' "$1"; SMOKE_FAILURES=$((SMOKE_FAILURES + 1));
 smoke_skip() { printf 'NOT TESTED: %s\n' "$1"; SMOKE_SKIPPED=$((SMOKE_SKIPPED + 1)); }
 
 # 1. Every expected service is running.
-EXPECTED_SERVICES=(database database-biomero omeroserver omeroworker-1 omeroweb biomeroworker biomero-importer metabase)
+EXPECTED_SERVICES=(database database-biomero omeroserver omeroworker-1 omeroweb zarrviewer-nginx biomeroworker biomero-importer metabase)
 if [[ "${START_LOG_STACK}" != 0 ]]; then EXPECTED_SERVICES+=(opensearch opensearch-dashboards fluent-bit); fi
 RUNNING="$(compose ps --status running --format '{{.Service}}' 2>/dev/null || true)"
 for svc in "${EXPECTED_SERVICES[@]}"; do
@@ -108,33 +108,41 @@ else
 fi
 fi
 
-# 5. The runtime patches are present. Both fail the same way if they silently
-#    stop applying: a workflow that runs correctly still fails at 90%.
-if [[ "${WORKER_UP}" -eq 0 ]]; then
-  smoke_skip "BIOMERO output-verification patch (biomeroworker is not running)"
-elif compose exec -T biomeroworker grep -q '_nl_biomero_verify_outputs' \
-     /opt/omero/server/venv3/lib/python3.11/site-packages/biomero/slurm_client.py 2>/dev/null; then
-  smoke_ok "BIOMERO output-verification patch applied in worker"
-else
-  smoke_fail "BIOMERO output-verification patch missing in worker"
-fi
-
-if grep -qx omeroserver <<<"${RUNNING}"; then
-  ROI_GUARD_MISSING=()
-  for _script in SLURM_Import_Results.py SLURM_Get_Results.py; do
-    if ! compose exec -T omeroserver grep -q '\[\] if not _roi_target_ids else \[' \
-         "/opt/omero/server/OMERO.server/lib/scripts/biomero/_data/${_script}" 2>/dev/null; then
-      ROI_GUARD_MISSING+=("${_script}")
-    fi
-  done
-  if [[ "${#ROI_GUARD_MISSING[@]}" -eq 0 ]]; then
-    smoke_ok "empty ROI_Target_Image_IDs guard applied in server scripts"
+# 5. Upstream releases replace the former site patches. Check the installed
+# package versions/dependency consistency instead of grepping retired patch text.
+check_package() {
+  local service="$1" python="$2" package="$3" key="$4"
+  local expected
+  expected="$(env_value "${key}")"
+  if ! grep -qx "${service}" <<<"${RUNNING}"; then
+    smoke_skip "${service} ${package} (service is not running)"
+  elif compose exec -T "${service}" "${python}" -c '
+import sys
+from importlib.metadata import version
+from packaging.version import Version
+actual = version(sys.argv[1])
+print(f"{sys.argv[1]} installed: {actual}")
+sys.exit(0 if Version(actual) == Version(sys.argv[2]) else 1)
+' "${package}" "${expected}"; then
+    smoke_ok "${service} ${package} matches release pin"
   else
-    smoke_fail "ROI_Target_Image_IDs guard missing in ${ROI_GUARD_MISSING[*]}; imports will fail at 90%"
+    smoke_fail "${service} ${package} does not match release pin"
   fi
-else
-  smoke_skip "ROI_Target_Image_IDs guard (omeroserver is not running)"
-fi
+}
+check_package biomeroworker /opt/omero/server/venv3/bin/python biomero-importer BIOMERO_IMPORTER_VERSION
+check_package omeroweb /opt/omero/web/venv3/bin/python biomero BIOMERO_VERSION
+check_package omeroweb /opt/omero/web/venv3/bin/python omero-biomero OMERO_BIOMERO_VERSION
+check_package omeroweb /opt/omero/web/venv3/bin/python biomero-zarr-viewer BIOMERO_ZARR_VIEWER_VERSION
+for svc in biomeroworker omeroweb; do
+  if [[ "${svc}" == biomeroworker ]]; then py=/opt/omero/server/venv3/bin/python; else py=/opt/omero/web/venv3/bin/python; fi
+  if ! grep -qx "${svc}" <<<"${RUNNING}"; then
+    smoke_skip "${svc} dependency check (service is not running)"
+  elif compose exec -T "${svc}" "${py}" -m pip check; then
+    smoke_ok "${svc} package dependencies consistent"
+  else
+    smoke_fail "${svc} package dependency conflict"
+  fi
+done
 
 # 6. The worker can reach Spider, which is what actually runs workflows.
 if [[ "${WORKER_UP}" -eq 0 ]]; then

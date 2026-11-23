@@ -1,0 +1,50 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 8, "bottom": 30}}}}%%
+flowchart TB
+    subgraph PREP["Input: canonical source"]
+        direction TB
+        EXIST["<b>Existing backing Zarr</b><br/>Authoritative managed input"]
+        FRESH["<b>Eligible fresh export</b><br/>No reusable backing store"]
+        LOCATE["<b>Record source binding + semantics</b><br/>Defer unused original-image hashing"]
+        HASHBOTH["<b>ISCC-BIO: read OMERO + export</b><br/>Compare Instance-Code + semantic guards"]
+        EXIST --> LOCATE
+        FRESH --> HASHBOTH
+        LOCATE -->|"Index in place"| REGISTER["<b>Register canonical generation</b><br/>Canonical marker file + OMERO source annotations<br/>Path + generation + available fingerprints"]
+        HASHBOTH -->|"Match: commit to stable storage"| REGISTER
+        LOCATE -. "No supported source binding" .-> FALLBACK["Full input without deduplication"]
+        HASHBOTH -. "No match / verification unavailable" .-> FALLBACK
+        CACHED["<b>Valid canonical record</b><br/>Reuse current fingerprints when available"]
+        REGISTER --> SNAP["<b>Record workflow input snapshot</b><br/>Source generation + metadata"]
+        CACHED --> SNAP
+    end
+    SNAP --> WORK["Run workflow on HPC"]
+    FALLBACK --> WORK
+    subgraph RETURN["Output: choose result handling"]
+        direction TB
+        CHECK{"Known source + compatible format/layout?"}
+        POLICY{"Usable run-bound label declaration<br/>or workflow policy?"}
+        HASHOUT["<b>Compare compatible stored pixels</b><br/>Current profile + semantic guards<br/>Images at selected level; labels full resolution"]
+        MATCH{"Matching fingerprints?"}
+        SHALLOW["<b>Shallow result</b><br/>Omit duplicates; keep new/changed labels"]
+        FULL["<b>Full result</b><br/>Retain returned arrays"]
+        CHECK -->|"Yes"| POLICY
+        CHECK -->|"No"| FULL
+        POLICY -->|"Yes: use known source"| SHALLOW
+        POLICY -->|"No: comparison required"| HASHOUT
+        HASHOUT --> MATCH
+        MATCH -->|"Yes, eligible"| SHALLOW
+        MATCH -->|"Changed / unsupported / uncertain"| FULL
+    end
+    WORK --> CHECK
+    REFRESH["<b>Missing/stale fingerprint</b><br/>Remote: return full result<br/>Local: read authoritative source and refresh cache"]
+    HASHOUT -. "Source record needs refresh" .-> REFRESH
+    REFRESH --> HASHOUT
+    style PREP fill:#f8fafc,stroke:#526171,stroke-width:2px;
+    style RETURN fill:#f8fafc,stroke:#526171,stroke-width:2px;
+    classDef pixelread fill:#fff3d6,stroke:#a57918,stroke-width:2px,color:#17354a;
+    classDef canonical fill:#e7eff6,stroke:#245b83,stroke-width:2px,color:#17354a;
+    classDef full fill:#f3f5f7,stroke:#526171,stroke-width:3px,color:#17354a;
+    classDef shallow fill:#ede9fe,stroke:#7c3aed,stroke-width:3px,color:#4c1d95;
+    class HASHBOTH,HASHOUT,REFRESH pixelread;
+    class LOCATE,REGISTER,CACHED,SNAP canonical;
+    class FULL,FALLBACK full;
+    class SHALLOW shallow;

@@ -80,7 +80,7 @@ make ps
 | Database credentials, `METABASE_SECRET_KEY`, OMERO root password, forms master name, Metabase admin | the volume, `config/volume-identity`, and `.env` | the first deploy onto an empty volume records them; later deploys fill `.env` from the record |
 | Hostname values | `.env` | `make init` (through `make set-host`) |
 | Cluster identity, other generated secrets | `.env` | `make init-env` |
-| `slurm-config.ini` | `web/`, rendered | `make init` and every deploy, from `web/slurm-config-template.ini` |
+| Slurm, BIOMERO and group-mapping configuration | attached volume `config/` | `make init` seeds missing files; admin edits survive deployment |
 
 The first row is fixed by the volume's data: each value is read once, when what
 it protects is first created. Postgres ignores `POSTGRES_PASSWORD` once the
@@ -167,7 +167,7 @@ start, with the ownership its service needs.
 | `database/`, `database-biomero/` | the Postgres containers, which also set their ownership |
 | `omero/` | `make deploy`, as uid 1000, which OMERO runs as |
 | `L-Drive/` | `make deploy`; user data and workflow results |
-| `config/` | `make deploy`: `volume-identity` |
+| `config/` | `make init`: runtime settings; `make deploy`: `volume-identity` |
 | `backups/nightly/` | `scripts/backup-nightly.sh` |
 
 **Do not pre-create these directories**, and do not chown them. `make deploy`
