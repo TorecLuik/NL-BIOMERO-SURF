@@ -11,15 +11,18 @@ query() { compose exec -T database-biomero psql -U biomero -d biomero -Atc "$1" 
 tasks="$(query "SELECT count(*) FROM biomero_task_execution WHERE end_time IS NULL" )"
 # Detached launcher tasks are durable control records, not executing work.
 # Exempt one only when the source workflow is terminal; leave history intact.
+# libpq enforces read-only connections, including tracker setup/table checks.
 terminal_launchers=0
 if [[ "$tasks" =~ ^[0-9]+$ ]] && (( tasks > 0 )); then
-  if counts="$(compose exec -T biomeroworker /opt/omero/server/venv3/bin/python - <<'PYTHON'
+  if counts="$(compose exec -T -e 'PGOPTIONS=-c default_transaction_read_only=on' biomeroworker /opt/omero/server/venv3/bin/python - <<'PYTHON'
+from sqlalchemy import text
 from biomero import SlurmClient
 from biomero.database import EngineManager, TaskExecution
 from biomero.eventsourcing import is_launcher_task
 
 with SlurmClient.from_config(init_slurm=False, config_only=False) as client:
     session = EngineManager.get_session()
+    assert session.execute(text("SHOW transaction_read_only")).scalar() == "on"
     rows = session.query(TaskExecution).filter_by(end_time=None).all()
     terminal_launchers = 0
     for row in rows:

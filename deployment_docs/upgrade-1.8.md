@@ -133,7 +133,9 @@ The active-work check treats detached launcher records separately: a marked
 launcher whose source workflow has finished is reported as a terminal control
 record. It is retained unchanged. Launchers for nonterminal workflows and all
 unfinished execution/import tasks still block `--require-idle`; an unreadable
-classification retains the raw unfinished count. Spider jobs are checked
+classification retains the raw unfinished count. Its worker probe uses enforced
+read-only PostgreSQL connections, so missing tracking tables cause failure
+instead of schema creation. Spider jobs are checked
 independently. This does not reconcile or hide stale execution tasks.
 
 ## Agreed maintenance window
