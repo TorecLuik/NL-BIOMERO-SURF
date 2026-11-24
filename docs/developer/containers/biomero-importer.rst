@@ -137,7 +137,16 @@ Security and runtime requirements
 ---------------------------------
 
 .. note::
-   BIOMERO.importer runs podman-in-podman (or podman-in-docker). The container currently requires ``--privileged`` and access to ``/dev/fuse`` for running preprocessing containers as the importer user. Some reports suggest alternatives may be possible on specific platforms, but our attempts without privileged have not been reliable yet. A potential future improvement is to switch the podman engine that runs BIOMERO.importer to a different model so the inner podman can run without privileged.
+   The importer uses rootless Podman with VFS storage inside its outer container.
+   This configuration does not require privileged mode or ``/dev/fuse``. VFS is
+   the inner Podman storage driver; it does not select Docker's storage driver.
+   The outer runtime must permit the namespace and mount operations used by
+   nested Podman. On SURF, the Docker service inherits ``seccomp=unconfined``
+   and selects ``apparmor=unconfined`` in its site override because Docker's
+   default AppArmor profile denies mounts. This removes AppArmor confinement
+   for the importer service only; it adds no capabilities or devices. See
+   ``deployment_docs/upgrade-1.8.md`` for the isolated layer-unpack test and
+   required SURF validation.
 
 Related Documentation
 ---------------------

@@ -33,6 +33,46 @@ proxy. Metabase remains on its existing Postgres application database.
 
 ## Configuration transition
 
+### Nested Podman VFS on Docker
+
+VFS is the importer's inner Podman storage driver. The outer runtime differs
+from ACC's rootless Podman setup: SURF uses Docker with an enforcing
+`docker-default` AppArmor profile. That profile denies mount operations,
+including making `/` recursively private during image-layer extraction. SURF
+reported this failure while seccomp was already unconfined; no corresponding
+kernel denial was recorded, so the server still needs the controlled A/B check.
+
+The candidate site override adds only `apparmor=unconfined` for the importer.
+It keeps privileged mode off, adds no capabilities/devices and retains the
+existing image, VFS storage and component pins. This is an AppArmor exception
+for the nested-container service, not a restricted custom AppArmor profile.
+Other services retain their existing profiles. Source of the mount restriction:
+[Docker's default profile](https://github.com/moby/profiles/blob/main/apparmor/template.go).
+
+Run the controlled check from the candidate checkout with an already-built
+importer image ID (obtain that ID from the live checkout without displaying its
+environment):
+
+```sh
+sudo python3 tests/test_podman_vfs.py --image <importer-image-id> --require-apparmor
+```
+
+This creates two uniquely named disposable containers with no network or host
+binds and fresh anonymous stores. It checks rootless VFS, imports the same tiny
+layer with the site security options, and repeats with only AppArmor changed
+to `docker-default`. The candidate must unpack successfully; the default-profile
+control must reproduce a remount permission denial. The script removes only
+its own containers and anonymous volumes. It does not start the application,
+submit imports, recreate live services or change the host's AppArmor policy.
+
+After that check passes on SURF, validate the actual failed preprocessing case
+in the existing isolated rehearsal using the candidate importer configuration.
+Record the image ID, effective AppArmor profile and result before applying the
+reviewed change to the live importer through the existing deployment procedure.
+Layer extraction alone does not prove converter execution or end-to-end import.
+
+### Migrating runtime settings
+
 `make upgrade-config CHECK=1` reports proposed file paths and environment key
 names, without displaying values or writing files. Exit 1 means changes are
 pending, 0 means current, and 2 means a validation error.

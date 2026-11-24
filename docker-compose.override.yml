@@ -97,6 +97,11 @@ services:
     extends: {file: logging-defaults.yml, service: default-logging}
 
   biomero-importer:
+    # Docker's default AppArmor profile denies mount operations used even by
+    # rootless Podman VFS. Scope the exception to the nested-container service.
+    # Keep the inherited seccomp setting; no privileged mode/capabilities/devices.
+    security_opt:
+      - "apparmor=unconfined"
     environment:
       OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD:?set OMERO_IMPORTER_PASSWORD}
     volumes: !override

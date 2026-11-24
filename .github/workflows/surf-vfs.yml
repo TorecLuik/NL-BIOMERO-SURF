@@ -1,0 +1,29 @@
+name: SURF unprivileged VFS
+
+on:
+  pull_request:
+    branches: [prod-rebuild]
+    paths: [docker-compose.yml, docker-compose.override.yml, .env.example, "tests/**", .github/workflows/surf-vfs.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unpack:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Pull the pinned importer image
+        run: |
+          version=$(sed -n 's/^BIOMERO_IMPORTER_VERSION=//p' .env.example)
+          test -n "$version"
+          image="cellularimagingcf/biomero-importer:$version"
+          docker pull "$image"
+          echo "IMPORTER_TEST_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Compare rootless VFS unpack with and without default AppArmor
+        run: python tests/test_podman_vfs.py --image "$IMPORTER_TEST_IMAGE" --require-apparmor
