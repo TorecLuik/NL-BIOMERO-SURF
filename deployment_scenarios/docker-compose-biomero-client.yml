@@ -10,6 +10,7 @@ services:
       CONFIG_omero_master_host: "${EXTERNAL_OMERO_HOST}"
       CONFIG_omero_master_port: ${EXTERNAL_OMERO_PORT}
       OMERO_WORKER_NAME: biomeroworker-external
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/server/slurm-config.ini
       CONFIG_omero_logging_level: ${OMERO_LOGGING_LEVEL}
       CONFIG_omero_sessions_timeout: ${OMERO_SESSIONS_TIMEOUT}
       CONFIG_omero_scripts_timeout: ${OMERO_SCRIPTS_TIMEOUT}
@@ -18,6 +19,15 @@ services:
       SQLALCHEMY_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@${EXTERNAL_OMERO_HOST}:${BIOMERO_POSTGRES_HOST_PORT}/${BIOMERO_POSTGRES_DB}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@${EXTERNAL_OMERO_HOST}:${BIOMERO_POSTGRES_HOST_PORT}/${BIOMERO_POSTGRES_DB}
       IMPORTER_ENABLED: ${IMPORTER_ENABLED}
+      BIOMERO_DETACHED_WORKFLOWS: ${BIOMERO_DETACHED_WORKFLOWS:-false}
+      BIOMERO_MAX_ACTIVE_WORKFLOWS: ${BIOMERO_MAX_ACTIVE_WORKFLOWS:-4}
+      BIOMERO_SUPERVISOR_POLL_SECONDS: ${BIOMERO_SUPERVISOR_POLL_SECONDS:-10}
+      BIOMERO_SUPERVISOR_STARTUP_GRACE_SECONDS: ${BIOMERO_SUPERVISOR_STARTUP_GRACE_SECONDS:-60}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      IMPORT_MOUNT_PATH: /data
+      OMERO_BIOMERO_CONFIG_FILE: /opt/omero/server/biomero-config.json
+      OMERO_BIOMERO_GROUP_MAPPINGS_FILE: /opt/omero/server/group-mappings.json
       OMERO_USER: ${EXTERNAL_OMERO_USER:-root}
       OMERO_PASSWORD: ${EXTERNAL_OMERO_PASSWORD}
     ports:
@@ -25,11 +35,12 @@ services:
     volumes:
       - "${HOST_OMERO_DATA_PATH}:/OMERO"  # Same host-mounted shared storage (simulates NFS)
       - "~/.ssh:/tmp/.ssh:ro"
-      - "../web/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
+      - "../web/slurm-config.ini:/opt/omero/server/slurm-config.ini:ro"
       - "${HOST_L_DRIVE_PATH}:/data"
       - "../biomeroworker/99-run-external.sh:/startup/99-run.sh:ro"
       - "../config/biomero-importer:/opt/omero/server/config-importer:ro"
       - "../web/biomero-config.json:/opt/omero/server/biomero-config.json:ro"
+      - "../web/group-mappings.json:/opt/omero/server/group-mappings.json:ro"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -41,7 +52,11 @@ services:
     environment:
       # Connect to external OMERO via host
       OMEROHOST: ${EXTERNAL_OMERO_HOST}
+      BIOMERO_ZARR_VIEWER_ENABLED: ${BIOMERO_ZARR_VIEWER_ENABLED:-false}
+      BIOMERO_ZARR_VIEWER_SOURCE_ROOT: ${BIOMERO_ZARR_VIEWER_SOURCE_ROOT:-}
+      CONFIG_omero_web_zarr__viewer_max__metadata__bytes: "${BIOMERO_ZARR_MAX_METADATA_BYTES:-4194304}"
       OMEROPORT: ${EXTERNAL_OMERO_PORT}
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/web/OMERO.web/var/slurm-config.ini
       CONFIG_omero_web_login__logo: "https://cembo.eu/wp-content/uploads/2021/04/Amsterdam-UMC.png"
       CONFIG_omero_scripts_timeout: ${OMERO_SCRIPTS_TIMEOUT}
       CONFIG_omero_web_session__expire__at__browser__close: "${OMERO_WEB_SESSION_EXPIRE_AT_BROWSER_CLOSE}"
@@ -59,6 +74,9 @@ services:
       FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD}
       ROOTPASS: ${EXTERNAL_OMERO_PASSWORD}
       IMPORTER_ENABLED: ${IMPORTER_ENABLED}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      BIOMERO_DETACHED_WORKFLOWS: ${BIOMERO_DETACHED_WORKFLOWS:-false}
       ANALYZER_ENABLED: ${ANALYZER_ENABLED}
     ports:
       - "${BIOMERO_WEB_HOST_PORT}:4080"  # Expose on different port

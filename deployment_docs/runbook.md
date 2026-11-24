@@ -1,6 +1,6 @@
 # Production Runbook
 
-*Created 2026-09-23 · last updated 2026-10-14*
+*Created 2026-09-23 · last updated 2026-11-23*
 
 How the production deployment at
 `https://surfbiomero.biomero-data-ch.src.surf-hosted.nl` is laid out, how to
@@ -13,8 +13,8 @@ built: [SETUP.md](../SETUP.md); why the storage is split this way:
 ```text
 VM         surfbiomero.biomero-data-ch.src.surf-hosted.nl   145.38.204.204
            SURF Research Cloud workspace, Ubuntu 22.04, CO rsc_co_202570
-code       /opt/omero/NL-BIOMERO     branch prod-rebuild of
-                                     github.com/slawa-loev/NL-BIOMERO
+code       /opt/omero/NL-BIOMERO     github.com/TorecLuik/NL-BIOMERO-SURF
+           branch/SHA: inspect live git; candidate documented in upgrade-1.8.md
 data       /data/surf-biomero-storage   500G attached volume
 cluster    Spider, account SPIDER_USER in .env, project biomero
 ```
@@ -89,7 +89,10 @@ boot, check active imports and workflows and obtain operator approval before
 `nl-biomero-backup.timer` runs `scripts/backup-nightly.sh` at 02:30. Each run
 writes `backups/nightly/<timestamp>/`: dumps of the OMERO, BIOMERO and Metabase
 databases, the OMERO repository without caches, and `secrets.tar.gz` (`.env`,
-`.ssh/`, `volume-identity`, the web configs). L-Drive is not copied.
+`.ssh/`, checkout `config/biomero-importer/`, volume `config/`, plus legacy web
+configs when present). L-Drive is not copied. Extract checkout material to the
+checkout; restore the volume configuration to the attached volume, preserving
+permissions. Inspect archive members first because both roots use `config/`.
 
 L-Drive is more than uploaded source files. Workflow results are unpacked into
 `L-Drive/<user>/.analyzed/<workflow>/<timestamp>/`, and the result images in
@@ -183,10 +186,10 @@ set it by hand before the first clone.
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
 members have accounts.
 
-**`web/biomero-config.json` is edited in the working tree.** It holds this
-VM's group → folder mapping (Amsterdam, Leiden, Maastricht, Groningen), so
-`git status` shows it modified. `git pull` keeps it unless upstream changes the
-same file; then stash, pull, and reapply the `group_mappings` block.
+**Runtime configuration is on the volume.** The admin UI edits the files under
+`config/`; the source examples under `web/` are not the running configuration.
+Group-folder mappings now live in `config/group-mappings.json`. Upgrade with
+`make upgrade-config` and preserve these files when restoring or reattaching.
 
 **`.ssh/` belongs to whoever ran `make new-key`.** OpenSSH refuses a key that
 anyone else can read, so it cannot be group-shared. A new owner either takes it

@@ -42,10 +42,13 @@ if [[ ! -f "${TEMPLATE_PATH}" ]]; then
   fi
 fi
 
+# The environment selects the shared runtime file kept with the data.
+OUTPUT_PATH="${SLURM_CONFIG_HOST_PATH:?run make upgrade-config}"
+# This explicit target replaces it; deploy-local-stack.sh does not call it.
 # Substitute Spider deployment values into the runtime config consumed by the containers.
-envsubst '${SPIDER_USER} ${SPIDER_PROJECT}' < "${TEMPLATE_PATH}" > "${OUTPUT_PATH}"
+envsubst '${SPIDER_USER} ${SPIDER_PROJECT}' < "${TEMPLATE_PATH}" | sudo tee "${OUTPUT_PATH}" >/dev/null
 # The OMERO.biomero admin UI writes this bind-mounted runtime file from the
 # omeroweb container as uid 999. A normal git checkout creates 0644 files owned
 # by the host user, which is readable but not writable in the container.
-chmod 0666 "${OUTPUT_PATH}"
+sudo chmod 0666 "${OUTPUT_PATH}"
 echo "Rendered ${OUTPUT_PATH}"

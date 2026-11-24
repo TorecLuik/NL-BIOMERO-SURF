@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly backup of everything this deployment cannot rebuild from git.
+# Nightly database, OMERO repository and configuration backup (excludes L-Drive).
 #
 # Writes one timestamped directory under <volume>/backups/nightly/ holding:
 #
@@ -53,12 +53,47 @@ dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" "$(env_value BIOMERO_
 dump database-biomero "$(env_value BIOMERO_POSTGRES_USER)" metabase                           metabase.pg_dump
 
 # The repository's symlinks point into L-Drive; tar keeps them as links.
-sudo tar -C "${DATA_PATH}" -czf "${DEST}/omero-files.tar.gz" \
-  --exclude=omero/BioFormatsCache --exclude=omero/FullText omero
+# Live OMERO activity can change directory metadata during traversal. Retry
+# only exit 1 accompanied exclusively by the confirmed GNU tar diagnostic.
+# Keep each attempt's stderr in the private backup set. Fatal or unrecognized
+# errors stop immediately. These online captures remain
+# independent of the database dumps, not an atomic recovery point.
+archive_ok=0
+for attempt in 1 2 3; do
+  # -czf truncates/recreates the archive on every attempt; a failed archive is
+  # never reused as input or accepted as a completed capture.
+  archive_diagnostics="${DEST}/omero-files.attempt-${attempt}.stderr"
+  if sudo sh -c '
+      LC_ALL=C tar -C "$1" -czf "$2/omero-files.tar.gz" \
+        --exclude=omero/BioFormatsCache --exclude=omero/FullText omero 2>"$3"
+      ' sh "${DATA_PATH}" "${DEST}" "${archive_diagnostics}"; then
+    archive_ok=1
+    break
+  else
+    archive_status=$?
+    if [[ "${archive_status}" -ne 1 ]] || ! sudo awk '
+        NF { seen=1; if ($0 !~ /^tar: .+: file changed as we read it$/) unexpected=1 }
+        END { exit !(seen && !unexpected) }
+        ' "${archive_diagnostics}"; then
+      echo "OMERO archive failed (tar exit ${archive_status}); diagnostics: ${archive_diagnostics}; incomplete set retained: ${DEST}" >&2
+      exit "${archive_status}"
+    fi
+    echo "OMERO changed during archive attempt ${attempt}/3; retrying if attempts remain" >&2
+  fi
+done
+if [[ "${archive_ok}" -ne 1 ]]; then
+  echo "OMERO remained unstable; incomplete set retained: ${DEST}" >&2
+  exit 1
+fi
 
+# Runtime settings now live in the volume's config/ alongside volume-identity.
+# Keep legacy files when present so an older layout can still be restored.
+CONFIG_FILES=(.env .ssh config/biomero-importer)
+for legacy in web/slurm-config.ini web/biomero-config.json web/group-mappings.json; do
+  [[ ! -f "${legacy}" ]] || CONFIG_FILES+=("${legacy}")
+done
 sudo tar -C "${PROJECT_ROOT_DIR}" -czf "${DEST}/secrets.tar.gz" \
-  .env .ssh web/slurm-config.ini web/biomero-config.json \
-  -C "${DATA_PATH}" config
+  "${CONFIG_FILES[@]}" -C "${DATA_PATH}" config
 
 sudo sh -c "cd '${DEST}' && sha256sum *.pg_dump *.tar.gz > SHA256SUMS"
 sudo touch "${DEST}/COMPLETE"

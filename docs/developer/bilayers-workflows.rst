@@ -84,6 +84,9 @@ I/O Directory Handling
 
 This is the most important difference from BIAFLOWS.
 
+.. tip::
+   🎥 **Visual explanation · 0:58:** :ref:`See how one OME-Zarr transfer path supports flexible workflow interfaces <video-one-format-flexible-workflows>`.
+
 In a BIAFLOWS workflow the job template always passes ``--infolder`` and
 ``--outfolder`` at fixed positions. The workflow must accept exactly those flags.
 
@@ -127,6 +130,10 @@ the descriptor (TIFF, OME-Zarr, Zarr plate, …) and passes that path to every `
 entry.  Results are collected from ``$DATA_PATH/data/out``, which is the path passed to
 every ``outputs`` entry and every ``output_dir_set`` parameter.  All required ``inputs``
 entries share the same ``data/in`` directory; all outputs share ``data/out``.
+
+For OME-Zarr workflows, the directory contains a conventional OME-Zarr rather
+than a BIOMERO-specific interchange format. See :doc:`zarr-workflow-development`
+for the image and label data contract.
 
 .. note::
    Extra files such as model weights or CSV files are not yet supported as inputs.
@@ -230,6 +237,58 @@ parse it, and make it available in the script UI without any further
 configuration.
 
 See also: :doc:`workflow-development` for the full workflow packaging guide.
+
+.. _workflow-file-url:
+
+Pointing to a Specific Descriptor File
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of registering the repository root, you can point directly at a specific
+``config.yaml`` or ``descriptor.json`` file inside the repository.  Use the raw
+GitHub file URL as the workflow value:
+
+.. code-block:: ini
+
+   [workflows]
+   W_MyWorkflow_Bilayers  = https://raw.githubusercontent.com/myorg/W_MyWorkflow/main/config.yaml
+   W_MyWorkflow_BIAFLOWS  = https://raw.githubusercontent.com/myorg/W_MyWorkflow/main/descriptor.json
+
+BIOMERO fetches that URL directly, detects the format from the file content, and
+registers it as a normal workflow.
+
+**Why is this useful?**
+
+* **One repo, two descriptor formats.** If your workflow can be driven by either a
+  Bilayers ``config.yaml`` or a BIAFLOWS ``descriptor.json`` (e.g. you maintain both
+  for compatibility), you can register both independently under different workflow
+  names.
+
+* **Two UIs for one container.** You can ship two ``config.yaml`` files in the same
+  repo — one for single-image analysis and one for HCS plate analysis (using
+  ``subtype: plate``) — and register them as distinct workflows.  Users see two
+  separate entries in the OMERO script menu, each with its own parameter set, but
+  both run the same underlying container image.
+
+  .. code-block:: ini
+
+     [workflows]
+     W_MyWorkflow           = https://raw.githubusercontent.com/myorg/W_MyWorkflow/main/config.yaml
+     W_MyWorkflow_Plate     = https://raw.githubusercontent.com/myorg/W_MyWorkflow/main/config_plate.yaml
+
+* **Mono-repo layout.** If you maintain multiple workflows in a single repository
+  (each in its own subdirectory), you can register them individually:
+
+  .. code-block:: ini
+
+     [workflows]
+     W_Segment   = https://raw.githubusercontent.com/myorg/workflows/main/segment/config.yaml
+     W_Classify  = https://raw.githubusercontent.com/myorg/workflows/main/classify/config.yaml
+
+.. note::
+   When using a file URL, BIOMERO does **not** search the repository for other
+   descriptors — it only reads the file you point at.  This is intentional: it lets
+   you have both a ``config.yaml`` and a ``descriptor.json`` in the same repo without
+   them interfering with each other.
 
 Bilayers Features Not Supported by BIOMERO
 --------------------------------------------

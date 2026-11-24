@@ -43,7 +43,7 @@ The worker creates an upload order in the BIOMERO.importer tracking DB and polls
 
 The group base path is resolved in this order:
 
-1. explicit mapping in `web/biomero-config.json`
+1. explicit mapping in the volume-backed `GROUP_MAPPINGS_HOST_PATH`
 2. fallback `<base_dir>/<group_name>`, where `base_dir` comes from importer `settings.yml`
 
 The active OMERO group at workflow launch determines where analysis results land.
@@ -70,14 +70,15 @@ INGEST_TRACKING_DB_URL      # same DB for web, worker, importer
 IMPORTER_ENABLED=true       # needed on biomeroworker, not just web/importer
 SQLALCHEMY_URL              # BIOMERO event-sourcing DB
 config/biomero-importer/settings.yml
-web/biomero-config.json
+${BIOMERO_CONFIG_HOST_PATH}
 ```
 
 The worker requires:
 
 ```yaml
 - "./config/biomero-importer:/opt/omero/server/config-importer:ro"
-- "./web/biomero-config.json:/opt/omero/server/biomero-config.json:ro"
+- "${BIOMERO_CONFIG_HOST_PATH}:/opt/omero/server/biomero-config.json:ro"
+- "${GROUP_MAPPINGS_HOST_PATH}:/opt/omero/server/group-mappings.json:ro"
 ```
 
 Verify the worker library:

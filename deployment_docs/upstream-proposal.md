@@ -1,5 +1,8 @@
 # Proposal: A Production Path for NL-BIOMERO
 
+> Historical SURF proposal/findings. Current release integration and retired
+> patches are documented in [upgrade-1.8.md](upgrade-1.8.md).
+
 *Created 2026-09-23 · last updated 2026-09-23*
 
 For the NL-BIOMERO maintainers, from SURF.

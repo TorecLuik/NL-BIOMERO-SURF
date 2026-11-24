@@ -226,6 +226,13 @@ if [[ "${FAILURES}" -gt 0 ]]; then
   echo "Preflight failed with ${FAILURES} blocking problem(s); not deploying." >&2
   exit 1
 fi
+# The selected release pins and persistent configuration must be applied
+# explicitly before deployment. This check never writes or prints secrets.
+if ! sudo -n python3 scripts/upgrade-config.py --check; then
+  echo "Run make upgrade-config before deploying this revision." >&2
+  exit 1
+fi
+
 echo "Preflight passed."
 "${PROJECT_ROOT_DIR}/scripts/check-active-work.sh"
 

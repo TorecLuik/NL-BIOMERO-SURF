@@ -21,7 +21,10 @@
   },
   "PREPROCESSING_CONFIG": {
     "screen_db": {
-      "container": "cellularimagingcf/biomero-converter:latest"
+      "container": "cellularimagingcf/biomero-converter:0.2.5",
+      "extra_params": {
+        "outputformat": "omezarr04"
+      }
     },
     "screen_db_to_tiff": {
       "container": "cellularimagingcf/cimagexpresstoometiff:v0.7",
@@ -30,13 +33,17 @@
       }
     },
     "dataset_leica_uuid": {
-      "container": "cellularimagingcf/convertleica-docker:v1.5.0",
+      "container": "cellularimagingcf/biomero-converter:0.2.5",
       "extra_params": {
-        "image_uuid": "{UUID}"
+        "image_uuid": "{UUID}",
+        "outputformat": "omezarr04"
       }
     },
     "incucyte_archive": {
-      "container": "cellularimagingcf/biomero-converter:latest"
+      "container": "cellularimagingcf/biomero-converter:0.2.5",
+      "extra_params": {
+        "outputformat": "omezarr04"
+      }
     }
   },
   "group_mappings": {

@@ -1,0 +1,106 @@
+# SURF preparation for 1.8
+
+*Created 2026-11-23 · last updated 2026-11-23*
+
+Coordination: [NL-BIOMERO#131](https://github.com/NL-BioImaging/NL-BIOMERO/issues/131).
+Branch `surf/prep-1.8` starts at production baseline
+`447f898bdacf1f39e0ed032ad53f08896b179714`. This is preparation of the existing
+2.8.2 deployment; beta.16 arrives through the separate integration branch.
+No container restart or runtime configuration render is part of this work.
+
+## Preserve administrator Slurm settings
+
+The template now captures the live configuration, including cisegmentation
+v0.6.4, cideconvolve v3.3.0, cidenoise v0.1.0, their resource requests, and the
+plate/Zarr/dual-mode UI lists. Existing versions and resource requests remain
+unchanged. Project paths retain `${SPIDER_PROJECT}` parameterization.
+
+Validation renders with envsubst in memory using only SPIDER_USER and
+SPIDER_PROJECT from .env, then compares parsed INI sections and all keys/values
+against the runtime file: **7 sections, 110 settings match**. The live file
+remains unchanged, SHA256
+`f292c9eef1c0194135162d6e669ad961818154734163ac250acff287c717e6e7`.
+Comments/formatting are deliberately not compared. `make config` and `make gpu`
+provide the effective running-client baseline without submission.
+
+Preserved assignments requiring separate execution review:
+
+- StarDist and StarDist5D now inherit MIG GPU requests from the live settings.
+  Historical tests documented missing CUDA 10/cuDNN 7 dependencies in these
+  containers. Do not infer GPU usability from allocation alone.
+- Cellpose and deconvolve_plate retain explicit full-A100 partition/GRES, but
+  the administrator removed their explicit use_gpu entries. Preserve that
+  distinction: resource allocation alone does not prove --nv injection.
+- cisegmentation, cideconvolve and cidenoise inherit the live MIG default.
+  GPU compatibility and complete effective CPU/memory requests need selected
+  integration tests; this preparation does not submit jobs.
+
+## Backup repair
+
+The 2026-11-23 service journal identifies the actual failure:
+`tar: omero/Files/Dir-005: file changed as we read it`. Tar exited 1 while
+archiving the live repository; set -e stopped the script before secrets,
+checksums and COMPLETE. Preserve that incomplete set as evidence.
+
+The existing backup script now retries the OMERO archive up to three times
+only when tar exits 1 and every nonempty stderr line is the confirmed
+"file changed as we read it" diagnostic. Other exit-1 cases, empty or mixed
+diagnostics, and fatal errors stop immediately. Each attempt recreates the
+archive and keeps its stderr in the private backup directory. Success requires
+a subsequent exit 0; repeated changes leave an incomplete set without COMPLETE.
+The completion marker remains after all dumps, archives and checksum generation.
+Shell syntax and eight simulated success/failure cases pass, including
+unrecognized/mixed/empty diagnostics and retry exhaustion. Live validation uses
+make backup and make backup-verify.
+
+Nightly captures still consist of independent database dumps, OMERO repository
+and configuration archives. They are not an atomic recovery point or a tested
+restore. L-Drive (including linked source/result pixels) is persistent production
+storage and remains excluded. Same-volume backups do not protect against loss
+of the attached volume; a migration needs a separately planned consistent
+recovery point covering L-Drive and off-volume protection.
+
+## October tracking investigation
+
+Task `65b93787-896b-4048-9f44-05115fb3b650` is an unfinished
+SLURM_Import_Results.py task created on 2026-10-14 at 09:45:19 UTC. Its event
+stream contains TaskCreated and TaskStarted, with no terminal task event.
+Its parent workflow `579506e7-ac77-4a3c-a3e9-d8b8f9e3ef67` (stardist5d)
+recorded WorkflowFailed at 09:45:23 UTC that day and remains FAILED at 50%.
+The preceding compute task completed: Slurm job 41518475 has COMPLETED/0:0
+in sacct. OMERO jobs 3745 and 3746 reached Error at 09:45:23 and 09:45:22 UTC;
+the parent error records an SSH protocol-banner failure during SlurmClient
+initialization in the result-import script. Current checks show zero open
+imports and zero jobs in the Spider queue.
+
+Disposition: stale child-task tracking under a terminal failed parent, not
+current compute work. No tracking or event records were changed. The existing
+active-work gate correctly continues to flag the missing terminal task event.
+If a correction is approved, reconcile the OMERO import failure evidence and
+append a truthful terminal failure via WorkflowTracker.fail_task; preserve
+history and do not directly edit the projection or fabricate successful output.
+The integration must address terminal child-task recording on parent failure.
+
+## Validation handoff — 2026-11-23, 16:10 CET
+
+- Slurm preservation commit: `84eb511e98aa77fb7d0ea70b7d8af3f7d990a628`.
+- Initial bounded-retry repair: `b867a0e5fb3feb383a1a8a58108f529a1460397e`;
+  superseded by strict diagnostic matching in
+  `e7a013f92a14295faede95fec9fb97beeffedb37`.
+- PASS: make backup and make backup-verify with the strict revision. New set:
+  `/data/surf-biomero-storage/backups/nightly/20261123-160951`, 36 MiB,
+  COMPLETE present, all six required files present, checksums match, all three
+  dump tables of contents and both archives readable. No retry was required
+  in this live capture; retry/error handling was exercised in simulation.
+- Earlier validation set `20261123-160817` also passed verification. It and the
+  failed `20261123-151653` set are retained; no backup cleanup was performed.
+- PASS: 11/11 long-running services remain running; runtime Slurm checksum is
+  unchanged. The original biomero-config.json newline-only modification is
+  preserved and excluded from commits.
+- WARN: one stale child task remains visible to make active-work; zero open
+  imports and zero Spider queue jobs. No database correction was performed.
+- WARN: same-volume recovery exposure and L-Drive exclusion remain. The prior
+  failed systemd service result remains historical evidence; invoking make
+  backup does not reset it. Confirm the next scheduled timer run succeeds.
+- NOT TESTED: restore consistency/recovery time, off-volume recovery, GPU
+  execution and beta.16 integration. No upgrade, restart or quiescence occurred.

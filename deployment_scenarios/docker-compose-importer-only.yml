@@ -19,7 +19,11 @@ services:
     image: "cellularimagingcf/omeroweb:${NL_BIOMERO_VERSION:-latest}"
     environment:
       OMEROHOST: ${EXTERNAL_OMERO_HOST}
+      BIOMERO_ZARR_VIEWER_ENABLED: ${BIOMERO_ZARR_VIEWER_ENABLED:-false}
+      BIOMERO_ZARR_VIEWER_SOURCE_ROOT: ${BIOMERO_ZARR_VIEWER_SOURCE_ROOT:-}
+      CONFIG_omero_web_zarr__viewer_max__metadata__bytes: "${BIOMERO_ZARR_MAX_METADATA_BYTES:-4194304}"
       OMEROPORT: ${EXTERNAL_OMERO_PORT:-4064}
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/web/OMERO.web/var/slurm-config.ini
       CONFIG_omero_web_login__logo: "https://cembo.eu/wp-content/uploads/2021/04/Amsterdam-UMC.png"
       CONFIG_omero_scripts_timeout: ${OMERO_SCRIPTS_TIMEOUT}
       CONFIG_omero_web_session__expire__at__browser__close: "${OMERO_WEB_SESSION_EXPIRE_AT_BROWSER_CLOSE}"
@@ -31,6 +35,9 @@ services:
       # External OMERO credentials
       ROOTPASS: ${EXTERNAL_OMERO_PASSWORD}
       IMPORTER_ENABLED: "TRUE"
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      BIOMERO_DETACHED_WORKFLOWS: ${BIOMERO_DETACHED_WORKFLOWS:-false}
       ANALYZER_ENABLED: "FALSE"
     networks:
       - importer-network
@@ -58,13 +65,11 @@ services:
 
   biomero-importer:
     image: "cellularimagingcf/biomero-importer:${BIOMERO_IMPORTER_VERSION:-latest}"
-    privileged: true
     profiles:
       - "IMPORTER_ENABLED"
-    devices:
-      - "/dev/fuse:/dev/fuse"
     security_opt:
       - "label=disable"
+      - "seccomp=unconfined"
     environment:
       OMERO_HOST: ${EXTERNAL_OMERO_HOST}
       OMERO_PORT: ${EXTERNAL_OMERO_PORT:-4064}
@@ -72,12 +77,18 @@ services:
       OMERO_PASSWORD: ${EXTERNAL_OMERO_PASSWORD}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       ADI_RUN_MIGRATIONS: ${ADI_RUN_MIGRATIONS}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      BIOMERO_SHALLOW_ZARR_WORKERS: ${BIOMERO_SHALLOW_ZARR_WORKERS:-4}
     networks:
       - importer-network
     volumes:
       - "../web/L-Drive:/data"
       - "../config/biomero-importer:/auto-importer/config:ro"
       - "../logs/biomero-importer:/auto-importer/logs"
+      - "biomero-importer-containers:/home/autoimportuser/.local/share/containers"
+    tmpfs:
+      - /tmp
     user: "${OMERO_CONTAINER_USER}"
     logging:
       driver: "json-file"
@@ -90,3 +101,4 @@ networks:
 
 volumes:
   database-biomero:
+  biomero-importer-containers:

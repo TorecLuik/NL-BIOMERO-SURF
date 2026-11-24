@@ -1,28 +1,8 @@
 # Slurm Integration and GPU Policy
 
-How this deployment drives Spider/Slurm through BIOMERO, and the one runtime
-patch it still carries.
-
-## Runtime Patch
-
-`biomeroworker/patch_biomero_runtime.py` injects
-`biomeroworker/patches/generated_job_postprocess.py` into
-`biomero/slurm_client.py`, appending `set -eo pipefail` and
-`_nl_biomero_verify_outputs` to descriptor-generated job scripts.
-
-It exists because a workflow container can print a traceback, exit zero, and
-leave `data/out` empty. Without the check, BIOMERO enters import and hangs
-around 90%. Failures instead surface as:
-
-```text
-ERROR: Workflow output directory does not exist
-ERROR: Workflow completed without producing files
-```
-
-Applied in both the worker and web images, because OMERO.biomero submits
-analyzer jobs from the web process. It is idempotent and raises if its anchor is
-missing. If it fails after a version bump, check whether upstream verifies
-outputs itself and delete the patch rather than re-anchoring it.
+The release supplies result-import guards and generated-output validation.
+The former site patch files are removed. See
+[the integration handoff](../../../../../deployment_docs/upgrade-1.8.md).
 
 ## Upstream Configuration
 
@@ -65,7 +45,7 @@ image-pull jobs omit `--partition` so Spider routes them to the normal default
 partition.
 
 `scripts/render-slurm-config.sh` renders `web/slurm-config-template.ini` into
-`web/slurm-config.ini`, substituting `SPIDER_USER` and `SPIDER_PROJECT` and
+`SLURM_CONFIG_HOST_PATH` on the volume as an explicit reset, substituting `SPIDER_USER` and `SPIDER_PROJECT` and
 setting mode 0666 because OMERO.biomero writes that file from `omeroweb` as
 uid 999.
 

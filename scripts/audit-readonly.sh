@@ -11,15 +11,14 @@ compose() { sudo -n docker compose "$@"; }
 
 printf 'Changes performed: None — read-only audit\n'
 if python3 scripts/check-storage-mount.py; then :; else failures=$((failures+1)); fi
-for file in docker-compose.yml opensearch-compose.yml; do
-  if sudo -n docker compose -f "$file" config --quiet >/dev/null 2>&1; then pass "$file resolves"; else fail "$file does not resolve"; fi
-done
+if compose config --quiet >/dev/null 2>&1; then pass 'core Compose with SURF override resolves'; else fail 'core Compose with SURF override does not resolve'; fi
+if compose -f opensearch-compose.yml config --quiet >/dev/null 2>&1; then pass 'logging Compose resolves'; else fail 'logging Compose does not resolve'; fi
 branch="$(git -c safe.directory="$PWD" branch --show-current 2>/dev/null)"
 commit="$(git -c safe.directory="$PWD" rev-parse --short HEAD 2>/dev/null)"
 upstream="$(git -c safe.directory="$PWD" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)"
 printf 'Git: branch=%s commit=%s upstream=%s\n' "${branch:-unknown}" "${commit:-unknown}" "${upstream:-none}"
 if [[ -z "$(git -c safe.directory="$PWD" status --porcelain 2>/dev/null)" ]]; then pass 'working tree clean'; else warn 'working tree has local changes (inspect before editing or staging)'; fi
-expected=(database database-biomero omeroserver omeroworker-1 biomeroworker omeroweb biomero-importer metabase opensearch opensearch-dashboards fluent-bit)
+expected=(database database-biomero omeroserver omeroworker-1 biomeroworker omeroweb zarrviewer-nginx biomero-importer metabase opensearch opensearch-dashboards fluent-bit)
 running="$(compose ps --status running --format '{{.Service}}' 2>/dev/null)"
 for service in "${expected[@]}"; do
   if grep -qx "$service" <<<"$running"; then pass "container running: $service"; else fail "container unavailable: $service"; fi

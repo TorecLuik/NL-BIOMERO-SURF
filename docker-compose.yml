@@ -1,5 +1,8 @@
 # Brings up all OMERO nodes on _one_ host computer, but multiple containers
 
+# Version 3 is the newest version of the Compose file format
+version: "3"
+
 # Define all the services: database, omero server, omero web
 services:
   # Name of our database, referenced in omero_db_host
@@ -10,17 +13,14 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     # Define named network to communicate with other containers
     networks:
       - omero
     # Define named volumes to persist data on host after shutdown
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/database:/var/lib/postgresql/data"
-      # - .\backup_and_restore\omero-2025-07-24-14-06-06-pg16:/var/lib/postgresql/data
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "database:${POSTGRES_DATA_LOCATION}"
+      # - .\backup_and_restore\omero-2025-07-24-14-06-06-pg16:${POSTGRES_DATA_LOCATION}
 
   database-biomero:
     # Define a prebuilt Postgres image with a version
@@ -29,19 +29,18 @@ services:
     environment:
       POSTGRES_USER: ${BIOMERO_POSTGRES_USER}
       POSTGRES_DB: ${BIOMERO_POSTGRES_DB}
-      POSTGRES_PASSWORD: ${BIOMERO_POSTGRES_PASSWORD:?set BIOMERO_POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_PASSWORD: ${BIOMERO_POSTGRES_PASSWORD}
     # Define named network to communicate with other containers
     networks:
       - omero
     # Define named volumes to persist data on host after shutdown
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/database-biomero:/var/lib/postgresql/data"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "database-biomero:${POSTGRES_DATA_LOCATION}"
 
   # Name of our omero server, referenced in omero_master_host
   omeroserver:
+    security_opt:
+      - "label=level:s0"
     # This container uses the tag for the latest server release of OMERO 5
     # To upgrade to the next major release, increment the major version number
     # image: "openmicroscopy/omero-server:5"
@@ -50,7 +49,8 @@ services:
       context: ./
       dockerfile: ./server/Dockerfile
       args:
-        BIOMERO_VERSION: ${BIOMERO_VERSION}
+        BIOMERO_SCRIPTS_VERSION: ${BIOMERO_SCRIPTS_VERSION}
+        LABEL2ROIS_VERSION: ${LABEL2ROIS_VERSION}
         OMERO_ZARR_PIXEL_BUFFER_VERSION: ${OMERO_ZARR_PIXEL_BUFFER_VERSION}
     # Define environment variables for use in the container.
     # 'nodedescriptors' assigns roles to all the containers
@@ -68,25 +68,30 @@ services:
         biomeroworker:Processor-0
       CONFIG_omero_master_host: omeroserver
       CONFIG_omero_sessions_timeout: ${OMERO_SESSIONS_TIMEOUT}
-      ROOTPASS: ${OMERO_ROOT_PASSWORD:?set OMERO_ROOT_PASSWORD in .env (see .env.example)}
+      ROOTPASS: ${OMERO_ROOT_PASSWORD}
     # Define named network to communicate with other containers
     networks:
       - omero
     # Map ports to ports on the host machine, to connect remotely
     ports:
       - "4063:4063"
-      - "4064:4064"
+      - "${OMERO_PORT}:${OMERO_PORT}"
     # Define named volume and map a folder from the host machine
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
-      - "./logs/omeroserver:/opt/omero/server/OMERO.server/var/log"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "${OMERO_DATA_PATH}:${OMERO_SERVER_DATA_LOCATION}"
+      - "${INPLACE_STORAGE_HOST_PATH}:${IMPORT_MOUNT_PATH}"
+      - "${INPLACE_STORAGE_HOST_PATH}/uploads:${UPLOADER_DESTINATION_DIR}"
+      - "${LOGS_HOST_PATH}/omeroserver:${OMERO_SERVER_LOGGING_LOCATION}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   # Name of our worker node, can be anything
   omeroworker-1:
+    security_opt:
+      - "label=level:s0"
     # We build this image locally in the ./worker folder
     build: ./worker
     # Define variables for use in the container.
@@ -100,15 +105,20 @@ services:
       - omero
     # Named volume to share data access and persist data
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
-      - "./logs/omeroworker-1:/opt/omero/server/OMERO.server/var/log"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "${OMERO_DATA_PATH}:${OMERO_SERVER_DATA_LOCATION}"
+      - "${INPLACE_STORAGE_HOST_PATH}:${IMPORT_MOUNT_PATH}"
+      - "${INPLACE_STORAGE_HOST_PATH}/uploads:${UPLOADER_DESTINATION_DIR}"
+      - "${LOGS_HOST_PATH}/omeroworker-1:${OMERO_SERVER_LOGGING_LOCATION}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   # Define our processor worker
   biomeroworker:
+    security_opt:
+      - "label=level:s0"
     # Build this image locally from current map './'
     # This way we can share file access from Dockerfile in './worker-gpu'
     # Uses args to provide variables from '.env' file to the Dockerfile
@@ -117,13 +127,14 @@ services:
       dockerfile: ./biomeroworker/Dockerfile
       args:
         BIOMERO_VERSION: ${BIOMERO_VERSION}
-        BIOMERO_IMPORTER_VERSION: ${BIOMERO_IMPORTER_VERSION}
+        BIOMERO_SCRIPTS_VERSION: ${BIOMERO_SCRIPTS_VERSION}
     # Define variables for use in the container.
     # WORKER_NAME is used in the omero/ice node description
     # logging_level doesn't work, but should increase logging
     environment:
       CONFIG_omero_master_host: omeroserver
       OMERO_WORKER_NAME: biomeroworker
+      BIOMERO_SLURM_CONFIG_FILE: ${BIOMERO_CONFIG_LOCATION}/slurm-config.ini
       CONFIG_omero_logging_level: ${OMERO_LOGGING_LEVEL}
       CONFIG_omero_sessions_timeout: ${OMERO_SESSIONS_TIMEOUT}
       CONFIG_omero_scripts_timeout: ${OMERO_SCRIPTS_TIMEOUT}
@@ -131,52 +142,45 @@ services:
       SQLALCHEMY_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       IMPORTER_ENABLED: ${IMPORTER_ENABLED}
-      # Keep BIOMERO's default multi-day sacct range narrow enough for the
-      # target Slurm cluster; pass the
-      # narrowed query window into subprocess-launched OMERO scripts.
-      BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME}
-      # Used by the runtime BIOMERO patch for effective GPU jobs only. CPU-only
-      # jobs omit --partition and use Spider's normal/default partition.
-      BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
-      # Read only the config the deploy renders and mounts. Without this,
-      # BIOMERO merges a search path of default locations (/etc, /OMERO, ~)
-      # under it, so a stray file in any of them could supply settings, and
-      # the Admin panel asks for it to stop removed settings reappearing from
-      # the layered config.
-      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/server/slurm-config.ini
-      BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
-      BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}
-      BIOMERO_APPTAINER_TMPDIR: ${BIOMERO_APPTAINER_TMPDIR:-}
-      BIOMERO_APPTAINER_CACHEDIR: ${BIOMERO_APPTAINER_CACHEDIR:-}
-      BIOMERO_PULL_CPUS: ${BIOMERO_PULL_CPUS}
-      BIOMERO_PULL_MEM: ${BIOMERO_PULL_MEM}
+      OMERO_USER: root
+      OMERO_PASSWORD: ${OMERO_ROOT_PASSWORD}
+      # Run workflows detached from the requesting OMERO session: the script
+      # queues the run and the supervisor in this processor executes it.
+      BIOMERO_DETACHED_WORKFLOWS: ${BIOMERO_DETACHED_WORKFLOWS:-false}
+      BIOMERO_MAX_ACTIVE_WORKFLOWS: ${BIOMERO_MAX_ACTIVE_WORKFLOWS:-4}
+      BIOMERO_SUPERVISOR_POLL_SECONDS: ${BIOMERO_SUPERVISOR_POLL_SECONDS:-10}
+      BIOMERO_SUPERVISOR_STARTUP_GRACE_SECONDS: ${BIOMERO_SUPERVISOR_STARTUP_GRACE_SECONDS:-60}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      IMPORT_MOUNT_PATH: ${IMPORT_MOUNT_PATH}
+      OMERO_BIOMERO_CONFIG_FILE: ${BIOMERO_CONFIG_LOCATION}/biomero-config.json
+      OMERO_BIOMERO_GROUP_MAPPINGS_FILE: ${BIOMERO_CONFIG_LOCATION}/group-mappings.json
     # Named network to communicate with other containers
     networks:
       - omero
     # Named volume to share data access and persist data
     # Forward host SSH setup to container
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
-      # Spider SSH material, repo-local and separate from the login user's keys.
-      # .ssh-worker is deploy-local-stack.sh's group-readable copy of .ssh: the
-      # container reads the key as "other", while OpenSSH refuses a group-
-      # readable key on the host, so the two cannot share one directory.
-      - "./.ssh-worker:/tmp/.ssh:ro"
-      # Rendered from web/slurm-config-template.ini by every deploy, so it is
-      # repository state rather than volume state. The admin UI can write it,
-      # but those edits are not preserved: fold a wanted change into the
-      # template instead.
-      - "./web/slurm-config.ini:/opt/omero/server/slurm-config.ini:rw"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
-      - "./config/biomero-importer:/opt/omero/server/config-importer:ro"
-      - "./web/biomero-config.json:/opt/omero/server/biomero-config.json:ro"
-      - "./logs/biomeroworker:/opt/omero/server/OMERO.server/var/log"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "${OMERO_DATA_PATH}:${OMERO_SERVER_DATA_LOCATION}"
+      - "${SSH_HOST_PATH}:/tmp/.ssh:ro"
+      # Canonical file shared with OMERO.biomero's writable config mount.
+      - "${SLURM_CONFIG_HOST_PATH:-./web/slurm-config.ini}:${BIOMERO_CONFIG_LOCATION}/slurm-config.ini:ro"
+      - "${INPLACE_STORAGE_HOST_PATH}:${IMPORT_MOUNT_PATH}"
+      - "${INPLACE_STORAGE_HOST_PATH}/uploads:${UPLOADER_DESTINATION_DIR}"
+      - "${BIOMERO_IMPORTER_CONFIG_HOST_PATH}:${BIOMERO_CONFIG_LOCATION}/config-importer:ro"
+      - "${BIOMERO_CONFIG_HOST_PATH}:${BIOMERO_CONFIG_LOCATION}/biomero-config.json:ro"
+      - "${GROUP_MAPPINGS_HOST_PATH}:${BIOMERO_CONFIG_LOCATION}/group-mappings.json:ro"
+      - "${LOGS_HOST_PATH}/biomeroworker:${OMERO_SERVER_LOGGING_LOCATION}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   # Service for the omero.web UI
   omeroweb:
+    security_opt:
+      - "label=level:s0"
     #image: "openmicroscopy/omero-web-standalone:5"
     build:
       context: ./
@@ -184,134 +188,139 @@ services:
       args:
         OMERO_BIOMERO_VERSION: ${OMERO_BIOMERO_VERSION}
         OMERO_FORMS_VERSION: ${OMERO_FORMS_VERSION}
-        BIOMERO_VERSION: ${BIOMERO_VERSION}
-        BIOMERO_IMPORTER_VERSION: ${BIOMERO_IMPORTER_VERSION}
+        BIOMERO_ZARR_VIEWER_VERSION: ${BIOMERO_ZARR_VIEWER_VERSION}
     environment:
       OMEROHOST: omeroserver
+      BIOMERO_ZARR_VIEWER_ENABLED: ${BIOMERO_ZARR_VIEWER_ENABLED:-false}
+      BIOMERO_ZARR_VIEWER_SOURCE_ROOT: ${BIOMERO_ZARR_VIEWER_SOURCE_ROOT:-}
+      CONFIG_omero_web_zarr__viewer_max__metadata__bytes: "${BIOMERO_ZARR_MAX_METADATA_BYTES:-4194304}"
       ROOTPASS: ${OMERO_ROOT_PASSWORD}
+      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/web/OMERO.web/var/slurm-config.ini
       CONFIG_omero_scripts_timeout: ${OMERO_SCRIPTS_TIMEOUT}
       CONFIG_omero_web_session__expire__at__browser__close: "${OMERO_WEB_SESSION_EXPIRE_AT_BROWSER_CLOSE}"
       CONFIG_omero_web_session__cookie__age: ${OMERO_WEB_SESSION_COOKIE_AGE}
       ENV: ${OMERO_WEB_ENV}
-      OMERO_BIOMERO_CONFIG_FILE: /opt/omero/web/OMERO.web/var/biomero-config.json
+      OMERO_BIOMERO_CONFIG_FILE: ${OMERO_BIOMERO_CONFIG_FILE}
+      OMERO_BIOMERO_GROUP_MAPPINGS_FILE: ${OMERO_BIOMERO_GROUP_MAPPINGS_FILE}
       METABASE_SITE_URL: ${METABASE_SITE_URL}
-      METABASE_SECRET_KEY: ${METABASE_SECRET_KEY:?set METABASE_SECRET_KEY in .env (see .env.example)}
+      METABASE_SECRET_KEY: ${METABASE_SECRET_KEY}
       METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID: ${METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID}
       METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID: ${METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       IMPORT_MOUNT_PATH: ${IMPORT_MOUNT_PATH}
       FORMS_MASTER_USER: ${FORMS_MASTER_USER}
-      FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD:?set FORMS_MASTER_PASSWORD in .env (see .env.example)}
+      FORMS_MASTER_PASSWORD: ${FORMS_MASTER_PASSWORD}
       IMPORTER_ENABLED: ${IMPORTER_ENABLED}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      BIOMERO_DETACHED_WORKFLOWS: ${BIOMERO_DETACHED_WORKFLOWS:-false}
       ANALYZER_ENABLED: ${ANALYZER_ENABLED}
-      CONFIG_omero_web_csrf__trusted__origins: ${OMERO_CSRF_TRUSTED_ORIGINS}
-      # Keep analyzer status/job accounting aligned with the worker-side
-      # sacct range override.
-      BIOMERO_SACCT_START_TIME: ${BIOMERO_SACCT_START_TIME}
-      BIOMERO_INJECT_GPU_FLAG: ${BIOMERO_INJECT_GPU_FLAG:-true}
-      # Read only the config the deploy renders and mounts. Without this,
-      # BIOMERO merges a search path of default locations (/etc, /OMERO, ~)
-      # under it, so a stray file in any of them could supply settings, and
-      # the Admin panel asks for it to stop removed settings reappearing from
-      # the layered config.
-      BIOMERO_SLURM_CONFIG_FILE: /opt/omero/web/OMERO.web/var/slurm-config.ini
-      BIOMERO_ENV_FILE_SUBMISSION: ${BIOMERO_ENV_FILE_SUBMISSION:-true}
-      BIOMERO_IMAGE_PULL_VIA_SBATCH: ${BIOMERO_IMAGE_PULL_VIA_SBATCH:-true}
-      BIOMERO_APPTAINER_TMPDIR: ${BIOMERO_APPTAINER_TMPDIR:-}
-      BIOMERO_APPTAINER_CACHEDIR: ${BIOMERO_APPTAINER_CACHEDIR:-}
+      UPLOADER_DESTINATION_DIR: ${UPLOADER_DESTINATION_DIR}
     # Named network to communicate with other containers
     networks:
       - omero
-    # Loopback only: nginx on the host is the public entry point, and binding
-    # every interface would leave the Research Cloud security group as the only
-    # thing between the internet and an unproxied OMERO.web.
-    ports:
-      - "127.0.0.1:4080:4080"
+    # Browser traffic enters through the Nginx frontend below. Keeping
+    # Gunicorn internal ensures Open With and viewer byte requests share one
+    # origin and that X-Accel-Redirect responses are handled by Nginx.
     volumes:
-      # See the biomeroworker mount: rendered per deploy, not volume state.
-      - "./web/slurm-config.ini:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
-      - "./web/biomero-config.json:/opt/omero/web/OMERO.web/var/biomero-config.json:rw"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data:rw"
-      - "./logs/omeroweb:/opt/omero/web/OMERO.web/var/log"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "${SLURM_CONFIG_HOST_PATH:-./web/slurm-config.ini}:/opt/omero/web/OMERO.web/var/slurm-config.ini:rw"
+      - "${BIOMERO_CONFIG_HOST_PATH}:${OMERO_BIOMERO_CONFIG_FILE}:rw"
+      - "${GROUP_MAPPINGS_HOST_PATH}:${OMERO_BIOMERO_GROUP_MAPPINGS_FILE}:rw"
+      - "${INPLACE_STORAGE_HOST_PATH}:${IMPORT_MOUNT_PATH}:rw"
+      - "${INPLACE_STORAGE_HOST_PATH}/uploads:${UPLOADER_DESTINATION_DIR}:rw"
+      - "${LOGS_HOST_PATH}/omeroweb:/opt/omero/web/OMERO.web/var/log"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Browser-facing OMERO.web endpoint and authorized physical OME-Zarr reads.
+  zarrviewer-nginx:
+    image: nginx:alpine
+    ports:
+      - "${BIOMERO_WEB_HOST_PORT:-4080}:4080"
+    networks:
+      - omero
+    volumes:
+      - "./nginx/zarrviewer.conf:/etc/nginx/nginx.conf:ro"
+      - "${INPLACE_STORAGE_HOST_PATH}:/data:ro"
+    depends_on:
+      - omeroweb
 
   metabase:
     image: metabase/metabase@sha256:f7b5dc52c21aaa2dca910a450e7e6119a975090ce9fc80726aa0742882ca176c
     container_name: metabase
     hostname: metabase
     environment:
-      # Postgres application database. H2 was the upstream default but is not
-      # recommended for production: it is a single file on a bind mount, and an
-      # empty directory left at MB_DB_FILE sends H2 into a permanent lock-retry
-      # loop that fills the disk. See the expert skill, "Metabase File Ownership".
-      MB_DB_TYPE: postgres
-      MB_DB_HOST: database-biomero
-      MB_DB_PORT: 5432
-      MB_DB_DBNAME: metabase
-      MB_DB_USER: ${BIOMERO_POSTGRES_USER}
-      MB_DB_PASS: ${BIOMERO_POSTGRES_PASSWORD}
+      MB_DB_FILE: ${METABASE_DATA_LOCATION}/metabase.db
       MB_USER: ${METABASE_USER}
-      MB_PASSWORD: ${METABASE_PASSWORD:?set METABASE_PASSWORD in .env (see .env.example)}
-      MB_SITE_URL: ${METABASE_SITE_URL}
-      MB_ENABLE_EMBEDDING: "true"
-      MB_ENABLE_EMBEDDING_STATIC: "true"
-      MB_EMBEDDING_SECRET_KEY: ${METABASE_SECRET_KEY}
+      MB_PASSWORD: ${METABASE_PASSWORD}
     networks:
       - omero
     ports:
-      - "127.0.0.1:3000:3000" # loopback only; reached through nginx /metabase
-    depends_on:
-      - database-biomero
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "3000:3000" # Expose Metabase on port 3000
+    volumes:
+      - "${METABASE_DATA_HOST_PATH}:${METABASE_DATA_LOCATION}" # Mount existing H2 db
 
   biomero-importer:
     build:
       context: ./biomero-importer
       dockerfile: ./Dockerfile
-    privileged: true
+      args:
+        BIOMERO_IMPORTER_VERSION: ${BIOMERO_IMPORTER_VERSION}
     profiles:
       - "IMPORTER_ENABLED"
-    devices:
-      - "/dev/fuse:/dev/fuse"
     security_opt:
       - "label=disable"
+      - "seccomp=unconfined"
     environment:
       OMERO_HOST: omeroserver
       OMERO_USER: ${OMERO_IMPORTER_USER}
-      OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD:?set OMERO_IMPORTER_PASSWORD in .env (see .env.example)}
+      OMERO_PASSWORD: ${OMERO_ROOT_PASSWORD}
       OMERO_PORT: ${OMERO_PORT}
       INGEST_TRACKING_DB_URL: postgresql+psycopg2://${BIOMERO_POSTGRES_USER}:${BIOMERO_POSTGRES_PASSWORD}@database-biomero:5432/${BIOMERO_POSTGRES_DB}
       ADI_RUN_MIGRATIONS: ${ADI_RUN_MIGRATIONS}
-      # The importer stamps Alembic to head only when it created the tables in
-      # that same process. If a first start creates them and then dies for an
-      # unrelated reason, the tables exist with no version table, and every
-      # later start replays the migrations against a schema already at head and
-      # dies on "column description of relation imports already exists" -- with
-      # nothing to recover it. Stamping is safe here because the importer owns
-      # this database: it is the documented way to adopt Alembic on a schema
-      # that already matches. See upstream-suggestions.md, item 11.
-      ADI_ALLOW_AUTO_STAMP: ${ADI_ALLOW_AUTO_STAMP:-1}
+      BIOMERO_SHALLOW_ZARR: ${BIOMERO_SHALLOW_ZARR:-false}
+      BIOMERO_REMOTE_SHALLOW_ZARR: ${BIOMERO_REMOTE_SHALLOW_ZARR:-true}
+      BIOMERO_SHALLOW_ZARR_WORKERS: ${BIOMERO_SHALLOW_ZARR_WORKERS:-4}
+      IMPORT_MOUNT_PATH: ${IMPORT_MOUNT_PATH}
+      OMERO_BIOMERO_CONFIG_FILE: /auto-importer/managed-config/biomero-config.json
+      OMERO_BIOMERO_GROUP_MAPPINGS_FILE: /auto-importer/managed-config/group-mappings.json
     networks:
       - omero
     volumes:
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/omero:/OMERO"
-      - "${OMERO_DATA_PATH:?OMERO_DATA_PATH must be set}/L-Drive:/data"
-      - "./config/biomero-importer:/auto-importer/config:ro"
-      - "./logs/biomero-importer:/auto-importer/logs"
-    extends:
-      file: logging-defaults.yml
-      service: default-logging
+      - "${OMERO_DATA_PATH}:${OMERO_SERVER_DATA_LOCATION}"
+      - "${INPLACE_STORAGE_HOST_PATH}:${IMPORT_MOUNT_PATH}"
+      - "${INPLACE_STORAGE_HOST_PATH}/uploads:${UPLOADER_DESTINATION_DIR}"
+      - "${BIOMERO_IMPORTER_CONFIG_HOST_PATH}:/auto-importer/config:ro"
+      - "${BIOMERO_CONFIG_HOST_PATH}:/auto-importer/managed-config/biomero-config.json:ro"
+      - "${GROUP_MAPPINGS_HOST_PATH}:/auto-importer/managed-config/group-mappings.json:ro"
+      - "${LOGS_HOST_PATH}/biomero-importer:/auto-importer/logs"
+      - "biomero-importer-containers:/home/autoimportuser/.local/share/containers"
+    tmpfs:
+      - /tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     user: "${OMERO_CONTAINER_USER}"
-
 
 # Define the network(s) to communicate between containers
 networks:
   omero:
 
-# Data lives at ${OMERO_DATA_PATH} on the host, set in .env.
-# On a Research Cloud workspace this is the mountpoint of an attached storage
-# volume (/data/<volume-name>), so the data survives the workspace.
+# Define the named volume(s) to persist data to the host computer
+# Mount restored data to the named volumes with external: true and name: <volume_name>
+volumes:
+  database:
+    # external: true
+    # name: nl-biomero_database16 # If you upgraded from 11 to 16, use the restored db name here
+  database-biomero:
+    # external: true
+    # name: biomero-2025-07-24-14-06-06-pg16 # Restored data
+  omero:
+    # external: true
+    # name: omero-server-2025-07-29_12-09-40-UTC #  Restored data
+  biomero-importer-containers:
