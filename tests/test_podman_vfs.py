@@ -29,6 +29,28 @@ def docker(*arguments: str, check: bool = True) -> subprocess.CompletedProcess:
     )
 
 
+def apparmor_enabled(options: list[str]) -> bool:
+    """Recognize Docker security-option names with optional profile fields."""
+    return any("name=apparmor" in option.split(",") for option in options)
+
+
+class DockerSecurityOptionsTests(unittest.TestCase):
+    """Accept Docker's bare and profile-qualified AppArmor reports."""
+
+    def test_apparmor_detection(self) -> None:
+        cases = [
+            (["name=apparmor"], True),
+            (["name=apparmor,profile=default"], True),
+            (["name=seccomp,profile=builtin", "name=apparmor,profile=default"], True),
+            (["name=seccomp,profile=builtin", "name=cgroupns"], False),
+            (["name=apparmor-other"], False),
+            ([], False),
+        ]
+        for options, expected in cases:
+            with self.subTest(options=options):
+                self.assertEqual(apparmor_enabled(options), expected)
+
+
 class PodmanVfsTests(unittest.TestCase):
     """Exercise the site security options with fresh disposable container stores."""
 
@@ -89,7 +111,7 @@ if __name__ == "__main__":
                         help="Fail instead of skipping the negative control (used in CI)")
     args = parser.parse_args()
     options = json.loads(docker("info", "--format", "{{json .SecurityOptions}}").stdout)
-    PodmanVfsTests.apparmor_available = "name=apparmor" in options
+    PodmanVfsTests.apparmor_available = apparmor_enabled(options)
     if args.require_apparmor and not PodmanVfsTests.apparmor_available:
         parser.error("Docker must have AppArmor enabled for this regression")
     PodmanVfsTests.image = args.image
