@@ -197,6 +197,9 @@ class ComposeIntegrationTests(unittest.TestCase):
             self.assertEqual(len(config), 1)
             self.assertTrue(config[0]["source"].replace("\\", "/").endswith("/config/group-mappings.json"))
         self.assertNotIn("ports", services["omeroweb"])
+        self.assertEqual(services["biomero-importer"]["entrypoint"], [
+            "/opt/conda/envs/auto-import-env/bin/python", "-m", "biomero_importer.main",
+        ])
         for name in ("zarrviewer-nginx", "metabase"):
             self.assertEqual(len(services[name]["ports"]), 1)
             self.assertEqual(services[name]["ports"][0]["host_ip"], "127.0.0.1")

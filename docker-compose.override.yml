@@ -97,6 +97,9 @@ services:
     extends: {file: logging-defaults.yml, service: default-logging}
 
   biomero-importer:
+    # Temporary until the pinned importer image includes BIOMERO.importer#66.
+    # Conda PID 1 does not deliver Docker's SIGTERM to the application's handler.
+    entrypoint: ["/opt/conda/envs/auto-import-env/bin/python", "-m", "biomero_importer.main"]
     environment:
       OMERO_PASSWORD: ${OMERO_IMPORTER_PASSWORD:?set OMERO_IMPORTER_PASSWORD}
     volumes: !override

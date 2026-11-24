@@ -26,6 +26,21 @@ core/importer pins together, without the old dependency-conflict workaround.
 The empty-ROI-list and generated-output site patches are removed in favor
 of the release implementations; validate those behaviors in pipeline tests.
 
+The importer service temporarily selects the environment's Python executable
+directly as its entrypoint. Rehearsal found that the released image's Conda
+PID 1 swallowed SIGTERM; direct Python reached readiness and stopped cleanly.
+The upstream fix is tracked in
+[BIOMERO.importer#66](https://github.com/NL-BioImaging/BIOMERO.importer/issues/66).
+This site override keeps the rehearsed component pins; remove it after adopting
+an importer release with the fixed image entrypoint. Signal forwarding does
+not guarantee that an active import finishes within Docker's stop grace period.
+
+After applying this follow-up to the isolated rehearsal, verify the resolved
+entrypoint, application readiness and idle `docker compose stop biomero-importer`
+without overriding the stop timeout. Require exit zero and the application's
+shutdown logs. Do not reuse live data or submit imports for this idle check;
+active-import draining/recovery remains a separately selected acceptance test.
+
 `OMERO_DATA_PATH` still means the volume root. Database files, `/OMERO` and
 `/data` retain their existing host paths. The viewer adds an internal nginx
 service on loopback port 4080, preserving HTTPS information from the host
