@@ -129,6 +129,13 @@ Stop there and report the candidate SHA, configuration plan, restore evidence
 and remaining blockers. A passed configuration test is not permission to
 restart the public service.
 
+The active-work check treats detached launcher records separately: a marked
+launcher whose source workflow has finished is reported as a terminal control
+record. It is retained unchanged. Launchers for nonterminal workflows and all
+unfinished execution/import tasks still block `--require-idle`; an unreadable
+classification retains the raw unfinished count. Spider jobs are checked
+independently. This does not reconcile or hide stale execution tasks.
+
 ## Agreed maintenance window
 
 After operator approval and resolving the active-work gate:
