@@ -197,6 +197,13 @@ class ComposeIntegrationTests(unittest.TestCase):
             self.assertEqual(len(config), 1)
             self.assertTrue(config[0]["source"].replace("\\", "/").endswith("/config/group-mappings.json"))
         self.assertNotIn("ports", services["omeroweb"])
+        importer = services["biomero-importer"]
+        self.assertFalse(importer.get("privileged", False))
+        self.assertFalse(importer.get("cap_add"))
+        self.assertFalse(importer.get("devices"))
+        self.assertEqual(set(importer["security_opt"]), {
+            "label=disable", "seccomp=unconfined", "apparmor=unconfined",
+        })
         for name in ("zarrviewer-nginx", "metabase"):
             self.assertEqual(len(services[name]["ports"]), 1)
             self.assertEqual(services[name]["ports"][0]["host_ip"], "127.0.0.1")
