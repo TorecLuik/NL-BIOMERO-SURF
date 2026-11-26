@@ -41,6 +41,11 @@ instead of repeating every component fix and PR.
 
 ## Make adoption clear
 
+Lead upgrades with pulling the released containers by version: they bundle
+matching, tested component versions and are the recommended route, certainly in
+production. Give the component pins (core, scripts and so on) only as a
+secondary note for sites that build their own images.
+
 For each substantial optional feature, state its actual enablement: deployment
 flag, administrator setting, per-workflow choice or maintenance action. Explain
 enabled demo defaults versus existing-deployment opt-in. For upgrades from an
@@ -52,11 +57,21 @@ re-running Slurm Init to install a new helper image, proxy/storage requirements,
 real migration. State format defaults and existing-data compatibility accurately.
 Link detailed setup instructions instead of reproducing the full runbook.
 
-Link directly to feature-specific online manuals. Verify their paths against the
+Link directly to feature-specific online manuals: give every Major Feature its own short `[docs](...)` link on its heading line, not only a list at the end. Verify their paths against the
 release's documentation configuration: `/latest/` follows stable releases and
 can still show the old manual while drafting; `/master/` carries prerelease
 documentation. Versioned stable URLs become available after the release docs
 build. Check publication and link availability before claiming either is ready.
+
+## Keep it short and look ahead
+
+A stable announcement names only stable versions; a beta in it means a
+dependency still needs its stable release first. Keep Other Improvements to
+one line per item. Instead of a Known Issues list, end with a short
+**Coming next** sneak peek: the main planned work and the open issues that
+will be fixed, each one line with its GitHub link. Do not promise a version or
+timeline; the scope of the next release is still open. Mention a workaround only
+when users may hit the issue before then.
 
 End with the stack comparison from the previous stable release, plus component
 comparisons when useful, following the historical feature-release examples.
