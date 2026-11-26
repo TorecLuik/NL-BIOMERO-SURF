@@ -368,17 +368,6 @@ print('%-28s %s' % ('use_gpu', dict(c.slurm_model_use_gpu)))" \
 spider:
 	$(COMPOSE) exec biomeroworker ssh spider
 
-# The Slurm Init and Slurm Check Setup admin scripts, launched as root from
-# omeroserver with the browser form's defaults; see launch-admin-script.sh.
-# Slurm Init's default rebuilds the analytics views by replaying the event
-# store, which is right after any BIOMERO version change. REBUILD=0 skips that,
-# only for adding workflows without a BIOMERO version change.
-slurm-init:
-	@./scripts/launch-admin-script.sh SLURM_Init_environment.py $(if $(filter 0,$(REBUILD)),'Rebuild Analytics Views (skip if only adding new workflows!)=false',)
-
-slurm-check:
-	@./scripts/launch-admin-script.sh SLURM_check_setup.py
-
 # Snellius integration exists but this deployment targets Spider, so no
 # `snellius` SSH host is configured. Add one to .ssh/config and mirror the
 # Spider settings in slurm-config-template.ini before using this.
@@ -390,6 +379,17 @@ snellius:
 		echo "This deployment targets Spider. To bring Snellius back, add a Host"; \
 		echo "block to .ssh/config and point slurm-config-template.ini at it."; \
 	fi
+
+# The Slurm Init and Slurm Check Setup admin scripts, launched as the OMERO root
+# user in omeroserver with the browser form's defaults; see launch-admin-script.sh.
+# Slurm Init's default rebuilds the analytics views by replaying the event
+# store, which is right after any BIOMERO version change. REBUILD=0 skips that,
+# only for adding workflows without a BIOMERO version change.
+slurm-init:
+	@./scripts/launch-admin-script.sh SLURM_Init_environment.py $(if $(filter 0,$(REBUILD)),'Rebuild Analytics Views (skip if only adding new workflows!)=false',)
+
+slurm-check:
+	@./scripts/launch-admin-script.sh SLURM_check_setup.py
 
 # -- databases --------------------------------------------------------------
 

@@ -78,15 +78,21 @@ make slurm-init         # Slurm Init, rebuilding the analytics views
 make slurm-init REBUILD=0
 ```
 
-Each logs in to OMERO as root inside `omeroserver` with `ROOTPASS`, which the
-container sets from `OMERO_ROOT_PASSWORD` and never prints, finds the script ID
-and launches it. See `scripts/launch-admin-script.sh`.
+Each logs in as the OMERO root user inside `omeroserver` with `ROOTPASS`, which
+the container sets from `OMERO_ROOT_PASSWORD` and never prints, finds the script
+ID and launches it. See `scripts/launch-admin-script.sh`.
+
+A zero exit status only means the launch ran: `omero` also returns 0 when the
+script fails or rejects its inputs. Read the script's Message output and any
+stderr block it prints.
 
 Slurm Init's default also rebuilds the analytics views: it replays them from
 the event store, which is not a reset of stored history. Keep the default after
 any BIOMERO version change. Only when adding workflows without a BIOMERO
 version change, use `REBUILD=0`, which launches it with
-`Rebuild Analytics Views (skip if only adding new workflows!)=false`.
+`Rebuild Analytics Views (skip if only adding new workflows!)=false`. `omero`
+ignores unknown input names, so when `BIOMERO_SCRIPTS_VERSION` changes, check
+that this name still matches the script's input in biomero-scripts.
 
 Run this and other deployment commands as the owner of `.ssh/` or through
 `sudo`, and never open or print the keys. See upstream
