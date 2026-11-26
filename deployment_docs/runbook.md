@@ -70,26 +70,29 @@ the dashboards from `metabase/dashboards.json`:
 ### Running Slurm Init from the Command Line
 
 The admin scripts **Slurm Init** and **Slurm Check Setup** also run without the
-browser. With no arguments, `omero script launch` uses the same defaults as the
-browser form. `ROOTPASS` is set in the container from `OMERO_ROOT_PASSWORD`;
-never print it.
+browser, with the same defaults as the browser form:
 
 ```bash
-sudo docker compose exec omeroserver bash -l
-omero login -s localhost -u root -w "$ROOTPASS"
-omero script list | grep -E 'SLURM_(Init_environment|check_setup)'   # script IDs
-omero script launch <id>
-omero logout
+make slurm-check        # Slurm Check Setup
+make slurm-init         # Slurm Init, rebuilding the analytics views
+make slurm-init REBUILD=0
 ```
+
+Each logs in as the OMERO root user inside `omeroserver` with `ROOTPASS`, which
+the container sets from `OMERO_ROOT_PASSWORD` and never prints, finds the script
+ID and launches it. See `scripts/launch-admin-script.sh`.
+
+A zero exit status only means the launch ran: `omero` also returns 0 when the
+script fails or rejects its inputs. Read the script's Message output and any
+stderr block it prints.
 
 Slurm Init's default also rebuilds the analytics views: it replays them from
 the event store, which is not a reset of stored history. Keep the default after
 any BIOMERO version change. Only when adding workflows without a BIOMERO
-version change, launch it with the rebuild off:
-
-```bash
-omero script launch <init-id> 'Rebuild Analytics Views (skip if only adding new workflows!)=false'
-```
+version change, use `REBUILD=0`, which launches it with
+`Rebuild Analytics Views (skip if only adding new workflows!)=false`. `omero`
+ignores unknown input names, so when `BIOMERO_SCRIPTS_VERSION` changes, check
+that this name still matches the script's input in biomero-scripts.
 
 Run this and other deployment commands as the owner of `.ssh/` or through
 `sudo`, and never open or print the keys. See upstream
@@ -209,13 +212,6 @@ mishandles GitHub's HTTP/2 `103 Early Hints` responses and reports the
 following `401` as an auth failure, even for public repositories.
 `make provision` sets `git config --system http.version HTTP/1.1`; on a new VM,
 set it by hand before the first clone.
-
-**OMERO.web answered 502 after a deploy recreated `omeroweb`.**
-`zarrviewer-nginx` kept the old container address until it was restarted.
-`nginx/zarrviewer-surf.conf` now resolves `omeroweb` per request. Compose does
-not reload a changed config file, so after the first deploy that includes this
-change, run `sudo docker compose up -d --force-recreate zarrviewer-nginx` once
-(`sudo docker compose restart zarrviewer-nginx` also works).
 
 **L-Drive is world-writable.** Several container users write to it, so
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
