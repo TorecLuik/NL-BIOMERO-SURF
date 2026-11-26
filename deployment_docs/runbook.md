@@ -1,6 +1,6 @@
 # Production Runbook
 
-*Created 2026-09-23 · last updated 2026-11-23*
+*Created 2026-09-23 · last updated 2026-11-26*
 
 How the production deployment at
 `https://surfbiomero.biomero-data-ch.src.surf-hosted.nl` is laid out, how to
@@ -69,26 +69,26 @@ the dashboards from `metabase/dashboards.json`:
 
 ### Running Slurm Init from the Command Line
 
-The admin scripts **SLURM Init environment** and **SLURM check setup** also run
-without the browser. With no arguments, `omero script launch` uses the same
-defaults as the browser form. `ROOTPASS` is set in the container from
-`OMERO_ROOT_PASSWORD`; never print it.
+The admin scripts **Slurm Init** and **Slurm Check Setup** also run without the
+browser. With no arguments, `omero script launch` uses the same defaults as the
+browser form. `ROOTPASS` is set in the container from `OMERO_ROOT_PASSWORD`;
+never print it.
 
 ```bash
 sudo docker compose exec omeroserver bash -l
 omero login -s localhost -u root -w "$ROOTPASS"
-omero script list            # note the IDs of the two scripts
+omero script list | grep -E 'SLURM_(Init_environment|check_setup)'   # script IDs
 omero script launch <id>
 omero logout
 ```
 
-SLURM Init's default also rebuilds the analytics views, which drops and
-rebuilds those tables. Rebuild them only when the core release changes the
-views or projections (check the core diff). Otherwise keep "Init Slurm" on and
-launch with the rebuild off:
+Slurm Init's default also rebuilds the analytics views: it replays them from
+the event store, which is not a reset of stored history. Keep the default after
+any BIOMERO version change. Only when adding workflows without a BIOMERO
+version change, launch it with the rebuild off:
 
 ```bash
-omero script launch <init-id> "Rebuild Analytics Views (skip if only adding new workflows!)=false"
+omero script launch <init-id> 'Rebuild Analytics Views (skip if only adding new workflows!)=false'
 ```
 
 Run this and other deployment commands as the owner of `.ssh/` or through
@@ -214,7 +214,8 @@ set it by hand before the first clone.
 `zarrviewer-nginx` kept the old container address until it was restarted.
 `nginx/zarrviewer-surf.conf` now resolves `omeroweb` per request. Compose does
 not reload a changed config file, so after the first deploy that includes this
-change, run `sudo docker compose up -d --force-recreate zarrviewer-nginx` once.
+change, run `sudo docker compose up -d --force-recreate zarrviewer-nginx` once
+(`sudo docker compose restart zarrviewer-nginx` also works).
 
 **L-Drive is world-writable.** Several container users write to it, so
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
