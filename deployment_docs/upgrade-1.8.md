@@ -1,6 +1,6 @@
 # SURF release integration and server handoff
 
-*Created 2026-11-23 · last updated 2026-11-23*
+*Created 2026-11-23 · last updated 2026-11-26*
 
 This is the candidate upgrade from `surf/prep-1.8` to NL-BIOMERO
 `v1.8.0-beta.16`. It implements the code/configuration part of
@@ -8,6 +8,8 @@ This is the candidate upgrade from `surf/prep-1.8` to NL-BIOMERO
 It is not evidence of a deployed or accepted upgrade. SURF preparation and
 the last running baseline are recorded in [prep-1.8.md](prep-1.8.md).
 The broader upstream production proposal remains #132.
+The transition to stable `v1.8.0` is tracked in
+[NL-BIOMERO#134](https://github.com/NL-BioImaging/NL-BIOMERO/issues/134).
 
 ## How the branch follows upstream
 
@@ -18,10 +20,10 @@ The existing Make targets load both files. Do not select only the upstream
 file with `-f docker-compose.yml`: that omits the SURF layer. Compose must
 support `!override` (introduced in 2.24.4); check `docker compose version`.
 
-The component set is pinned in `.env.example`: core `2.9.0b33`, scripts
-`v2.9.0-beta.33`, OMERO.biomero `1.7.0b20`, importer `1.5.0-beta.15`,
+The component set is pinned in `.env.example`: core `2.9.0`, scripts
+`v2.9.0`, OMERO.biomero `1.7.0`, importer `1.5.0`,
 viewer `0.8.2` and Zarr pixel buffer `0.7.2`. The importer gitlink selects
-`0f461a7a43731545297cc1f40a6413c1e418b277`. Web and worker install the same
+`45d0279cd8798755209e9eaf1f4a941e5295c95e`. Web and worker install the same
 core/importer pins together, without the old dependency-conflict workaround.
 The empty-ROI-list and generated-output site patches are removed in favor
 of the release implementations; validate those behaviors in pipeline tests.
@@ -107,7 +109,7 @@ and any preserved custom preprocessing recipes before testing feature coverage.
 
 First validate the published candidate without changing the running checkout:
 
-1. Fetch `surf/upgrade-1.8` into a separate worktree and record its full SHA.
+1. Fetch `upgrade-1.8.0` into a separate worktree and record its full SHA.
    Check Compose compatibility and run the configuration tests there:
    `python3 -m unittest discover -s tests -p test_surf_upgrade.py -v`.
 2. From that worktree run
