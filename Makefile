@@ -12,7 +12,7 @@ WORKER_PY   := /opt/omero/server/venv3/bin/python
 
 # Services are addressed as make logs/omeroweb, so stop make from treating the
 # service name as a missing file target.
-.PHONY: help provision init-env init upgrade-config render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor audit backup-verify active-work set-host adopt-volume new-key show-key logs-auth install-services backup docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
+.PHONY: help provision init-env init upgrade-config render-config logs-retention metabase-dashboards export-metabase-dashboards deploy doctor audit backup-verify active-work set-host adopt-volume new-key show-key logs-auth install-services backup slurm-init slurm-check docs-dates reference-data up down ps build rebuild restart logs check smoke gpu config spider snellius psql psql-biomero
 .DEFAULT_GOAL := help
 
 help:
@@ -63,6 +63,8 @@ help:
 	@echo "Cluster"
 	@echo "  make spider             ssh to Spider from inside the worker"
 	@echo "  make snellius           ssh to Snellius (needs an ssh host first)"
+	@echo "  make slurm-init         run Slurm Init; REBUILD=0 skips the analytics view rebuild"
+	@echo "  make slurm-check        run Slurm Check Setup with its defaults"
 
 # -- setup ------------------------------------------------------------------
 
@@ -365,6 +367,17 @@ print('%-28s %s' % ('use_gpu', dict(c.slurm_model_use_gpu)))" \
 # submit jobs rather than the host's own SSH setup.
 spider:
 	$(COMPOSE) exec biomeroworker ssh spider
+
+# The Slurm Init and Slurm Check Setup admin scripts, launched as root from
+# omeroserver with the browser form's defaults; see launch-admin-script.sh.
+# Slurm Init's default rebuilds the analytics views by replaying the event
+# store, which is right after any BIOMERO version change. REBUILD=0 skips that,
+# only for adding workflows without a BIOMERO version change.
+slurm-init:
+	@./scripts/launch-admin-script.sh SLURM_Init_environment.py $(if $(filter 0,$(REBUILD)),'Rebuild Analytics Views (skip if only adding new workflows!)=false',)
+
+slurm-check:
+	@./scripts/launch-admin-script.sh SLURM_check_setup.py
 
 # Snellius integration exists but this deployment targets Spider, so no
 # `snellius` SSH host is configured. Add one to .ssh/config and mirror the

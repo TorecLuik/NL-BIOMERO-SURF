@@ -307,6 +307,9 @@ if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.
   # a full volume.
   "${PROJECT_ROOT_DIR}/scripts/apply-opensearch-retention.sh" || true
 fi
+# A viewer proxy that stays up through a deploy never loads a changed config and
+# can keep stale upstream addresses, so recreate it on every deploy.
+sudo docker compose up -d --force-recreate zarrviewer-nginx
 sudo docker compose ps
 if [[ "${START_LOG_STACK}" != "0" && -f "${PROJECT_ROOT_DIR}/opensearch-compose.yml" ]]; then
   sudo docker compose -f opensearch-compose.yml ps
