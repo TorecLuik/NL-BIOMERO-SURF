@@ -63,7 +63,7 @@ class ConfigurationUpgradeTests(unittest.TestCase):
     def test_dry_plan_preserves_secrets_settings_and_legacy_files(self):
         changes, keys = self.plan()
         env = UPGRADE.read_environment(changes[self.root / ".env"])
-        self.assertEqual(env["BIOMERO_VERSION"], "2.9.0b33")
+        self.assertEqual(env["BIOMERO_VERSION"], "2.9.0")
         self.assertEqual(env["POSTGRES_PASSWORD"], "keep-this-test-value")
         self.assertEqual(env["OMERO_ROOT_PASSWORD"], "keep-root-test-value")
         self.assertEqual(env["SITE_ONLY_SETTING"], "preserve")
