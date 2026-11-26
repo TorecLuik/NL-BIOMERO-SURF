@@ -82,6 +82,15 @@ omero script launch <id>
 omero logout
 ```
 
+SLURM Init's default also rebuilds the analytics views, which drops and
+rebuilds those tables. Rebuild them only when the core release changes the
+views or projections (check the core diff). Otherwise keep "Init Slurm" on and
+launch with the rebuild off:
+
+```bash
+omero script launch <init-id> "Rebuild Analytics Views (skip if only adding new workflows!)=false"
+```
+
 Run this and other deployment commands as the owner of `.ssh/` or through
 `sudo`, and never open or print the keys. See upstream
 [permissions-and-deployment.md](https://github.com/NL-BioImaging/NL-BIOMERO/blob/master/.agents/skills/omero-biomero-expert/references/permissions-and-deployment.md).
