@@ -155,8 +155,9 @@ After operator approval and resolving the active-work gate:
    Run `git submodule update --init --recursive`, `make check`, and
    `make deploy`. Do not use reset/clean to force the checkout transition.
 3. Run the release's Slurm Init for the existing Spider paths and inspect its
-   completion/download results. Do not reset tracking projections or stored
-   histories as a routine upgrade step. Exercise old history replay on the
+   completion/download results. For the command-line route, see
+   [runbook.md](runbook.md#running-slurm-init-from-the-command-line). Do not
+   reset tracking projections or stored histories as a routine upgrade step. Exercise old history replay on the
    restored copy first; record any migration required by the pinned components.
 4. Run `make smoke`, `make doctor`, `make config` and `make gpu`. Expect the
    additional viewer service. Check web login, authorized Zarr access, admin

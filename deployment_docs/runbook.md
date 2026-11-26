@@ -67,6 +67,25 @@ only the Slurm job cards are unfiltered. That is not missing data. To rebuild
 the dashboards from `metabase/dashboards.json`:
 `scripts/restore-metabase-dashboards.sh --force`, then `make up`.
 
+### Running Slurm Init from the Command Line
+
+The admin scripts **SLURM Init environment** and **SLURM check setup** also run
+without the browser. With no arguments, `omero script launch` uses the same
+defaults as the browser form. `ROOTPASS` is set in the container from
+`OMERO_ROOT_PASSWORD`; never print it.
+
+```bash
+sudo docker compose exec omeroserver bash -l
+omero login -s localhost -u root -w "$ROOTPASS"
+omero script list            # note the IDs of the two scripts
+omero script launch <id>
+omero logout
+```
+
+Run this and other deployment commands as the owner of `.ssh/` or through
+`sudo`, and never open or print the keys. See upstream
+[permissions-and-deployment.md](https://github.com/NL-BioImaging/NL-BIOMERO/blob/master/.agents/skills/omero-biomero-expert/references/permissions-and-deployment.md).
+
 ## Boot and Shutdown
 
 `nl-biomero.service` runs `make up` at boot once the volume is mounted, and
@@ -181,6 +200,12 @@ mishandles GitHub's HTTP/2 `103 Early Hints` responses and reports the
 following `401` as an auth failure, even for public repositories.
 `make provision` sets `git config --system http.version HTTP/1.1`; on a new VM,
 set it by hand before the first clone.
+
+**OMERO.web answered 502 after a deploy recreated `omeroweb`.**
+`zarrviewer-nginx` kept the old container address until it was restarted.
+`nginx/zarrviewer-surf.conf` now resolves `omeroweb` per request. Compose does
+not reload a changed config file, so after the first deploy that includes this
+change, run `sudo docker compose up -d --force-recreate zarrviewer-nginx` once.
 
 **L-Drive is world-writable.** Several container users write to it, so
 `make deploy` sets `0777`. Any account on the VM can modify user data; only CO
