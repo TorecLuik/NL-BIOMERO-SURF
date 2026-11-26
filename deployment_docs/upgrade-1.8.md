@@ -154,10 +154,14 @@ After operator approval and resolving the active-work gate:
    checkout to the exact reviewed candidate, preserving unrelated local edits.
    Run `git submodule update --init --recursive`, `make check`, and
    `make deploy`. Do not use reset/clean to force the checkout transition.
-3. Run the release's Slurm Init for the existing Spider paths and inspect its
-   completion/download results. Do not reset tracking projections or stored
-   histories as a routine upgrade step. Exercise old history replay on the
-   restored copy first; record any migration required by the pinned components.
+3. Run the release's Slurm Init for the existing Spider paths with its
+   defaults, which rebuild the analytics views after the BIOMERO version
+   change, and inspect its completion/download results. For the command-line
+   route, see
+   [runbook.md](runbook.md#running-slurm-init-from-the-command-line). Do not
+   reset tracking projections or stored histories as a routine upgrade step.
+   Exercise old history replay on the restored copy first; record any
+   migration required by the pinned components.
 4. Run `make smoke`, `make doctor`, `make config` and `make gpu`. Expect the
    additional viewer service. Check web login, authorized Zarr access, admin
    configuration persistence, dashboards and unchanged existing image pixels.
